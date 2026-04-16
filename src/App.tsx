@@ -138,8 +138,8 @@ interface FirestoreErrorInfo {
   }
 }
 
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
+function buildFirestoreErrorInfo(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
+  return {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
       userId: auth.currentUser?.uid,
@@ -156,9 +156,27 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
     },
     operationType,
     path
-  }
+  };
+}
+
+// Use for direct operations (create, update, delete) where failure should propagate
+function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
   console.error('Firestore Error: ', JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
+}
+
+// Use for onSnapshot listener error callbacks - logs only, does not throw
+// (listeners fire before auth is ready, so permission errors are expected)
+function handleListenerError(error: unknown, operationType: OperationType, path: string | null) {
+  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
+  // Only log permission errors at warn level since they're expected before auth
+  const msg = errInfo.error;
+  if (msg.includes('permission') || msg.includes('Permission')) {
+    console.warn('Firestore listener permission denied (user may not be authenticated yet):', path);
+  } else {
+    console.error('Firestore Listener Error:', JSON.stringify(errInfo));
+  }
 }
 type View = 'login' | 'home' | 'dashboard' | 'referral' | 'workstation' | 'finance' | 'support' | 'folder-a' | 'folder-b' | 'folder-c' | 'folder-d' | 'leaderboard' | 'spin' | 'profile' | 'salary-sheet' | 'admin' | 'settings' | 'ads-earn' | 'mobile-banking' | 'otp-buy-sell' | 'mobile-recharge' | 'drive-offer' | 'ecommerce' | 'dollar-sell' | 'dollar-buy' | 'social-hub' | 'subscription-boosting' | 'account-activation' | 'gaming' | 'ludo-earn' | 'smm-panel' | 'top-news' | 'social-job';
 
@@ -604,9 +622,9 @@ export default function App() {
               name: firebaseUser.displayName || 'User',
               email: firebaseUser.email || '',
             };
-            setDoc(userRef, newUser).catch(e => handleFirestoreError(e, OperationType.WRITE, `users/${firebaseUser.uid}`));
+            setDoc(userRef, newUser).catch(e => handleListenerError(e, OperationType.WRITE, `users/${firebaseUser.uid}`));
           }
-        }, (e) => handleFirestoreError(e, OperationType.GET, `users/${firebaseUser.uid}`));
+        }, (e) => handleListenerError(e, OperationType.GET, `users/${firebaseUser.uid}`));
         
         setIsAuthReady(true);
         return () => unsubscribeUser();
@@ -650,91 +668,91 @@ export default function App() {
         setReferralCommissionRate(data.referralCommissionRate || 5);
         setReferralActivationBonus(data.referralActivationBonus || 20);
       }
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'settings/global'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'settings/global'));
 
     // Sync Dynamic Tasks
     const tasksRef = collection(db, 'tasks');
     const unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
       const tasksList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
       setDynamicTasks(tasksList);
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'tasks'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'tasks'));
 
     // Sync Submissions
     const gmailUnsubscribe = onSnapshot(collection(db, 'gmailSubmissions'), (snap) => {
       setGmailSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as GmailSubmission)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'gmailSubmissions'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'gmailSubmissions'));
 
     const microjobUnsubscribe = onSnapshot(collection(db, 'microjobSubmissions'), (snap) => {
       setMicrojobSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as MicrojobSubmission)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'microjobSubmissions'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'microjobSubmissions'));
 
     const taskUnsubscribe = onSnapshot(collection(db, 'taskSubmissions'), (snap) => {
       setTaskSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as TaskSubmission)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'taskSubmissions'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'taskSubmissions'));
 
     const subRequestsUnsubscribe = onSnapshot(collection(db, 'subscriptionRequests'), (snap) => {
       setSubscriptionRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SubscriptionRequest)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'subscriptionRequests'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'subscriptionRequests'));
 
     const withdrawalUnsubscribe = onSnapshot(collection(db, 'withdrawals'), (snap) => {
       setWithdrawals(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as any)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'withdrawals'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'withdrawals'));
 
     const dollarBuyUnsubscribe = onSnapshot(collection(db, 'dollarBuyRequests'), (snap) => {
       setDollarBuyRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DollarBuyRequest)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'dollarBuyRequests'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'dollarBuyRequests'));
 
     const messageUnsubscribe = onSnapshot(collection(db, 'messages'), (snap) => {
       setUserMessages(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserMessage)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'messages'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'messages'));
 
     const rechargeUnsubscribe = onSnapshot(collection(db, 'rechargeRequests'), (snap) => {
       setRechargeRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as RechargeRequest)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'rechargeRequests'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'rechargeRequests'));
 
     const driveOffersUnsubscribe = onSnapshot(collection(db, 'driveOffers'), (snap) => {
       setDriveOffers(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DriveOffer)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'driveOffers'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'driveOffers'));
 
     const driveOfferRequestsUnsubscribe = onSnapshot(collection(db, 'driveOfferRequests'), (snap) => {
       setDriveOfferRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DriveOfferRequest)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'driveOfferRequests'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'driveOfferRequests'));
 
     const productsUnsubscribe = onSnapshot(collection(db, 'products'), (snap) => {
       setProducts(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'products'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'products'));
 
     const productOrdersUnsubscribe = onSnapshot(collection(db, 'productOrders'), (snap) => {
       setProductOrders(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as ProductOrder)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'productOrders'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'productOrders'));
 
     const ludoTournamentsUnsubscribe = onSnapshot(collection(db, 'ludoTournaments'), (snap) => {
       setLudoTournaments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as LudoTournament)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'ludoTournaments'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'ludoTournaments'));
 
     const ludoSubmissionsUnsubscribe = onSnapshot(collection(db, 'ludoSubmissions'), (snap) => {
       setLudoSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as LudoSubmission)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'ludoSubmissions'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'ludoSubmissions'));
 
     const socialSubmissionsUnsubscribe = onSnapshot(collection(db, 'socialSubmissions'), (snap) => {
       setAllSocialSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SocialSubmission)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'socialSubmissions'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'socialSubmissions'));
 
     const smmOrdersUnsubscribe = onSnapshot(collection(db, 'smmOrders'), (snap) => {
       setSmmOrders(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SmmOrder)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'smmOrders'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'smmOrders'));
 
     const usersUnsubscribe = onSnapshot(collection(db, 'users'), (snap) => {
       setAllUsers(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserProfile)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'users'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'users'));
 
     const newsUnsubscribe = onSnapshot(query(collection(db, 'newsPosts'), orderBy('timestamp', 'desc')), (snap) => {
       setNewsPosts(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as NewsPost)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'newsPosts'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'newsPosts'));
 
     const uploadsUnsubscribe = onSnapshot(query(collection(db, 'uploads'), orderBy('timestamp', 'desc')), (snap) => {
       setAllUploads(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as GlobalUpload)));
-    }, (e) => handleFirestoreError(e, OperationType.GET, 'uploads'));
+    }, (e) => handleListenerError(e, OperationType.GET, 'uploads'));
 
     return () => {
       unsubscribeAuth();
