@@ -1127,7 +1127,7 @@ export default function App() {
 
   // --- Views ---
 
-  const LoginView = () => (
+  const loginView = (
     <div className="min-h-screen flex flex-col items-center justify-center p-8 relative overflow-hidden bg-[#fcfaf7]">
       {/* Animated Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full">
@@ -1667,7 +1667,7 @@ export default function App() {
     </div>
   );
 
-  const HomeView = () => (
+  const homeView = (
     <div className="min-h-screen pb-32 bg-slate-50">
       {/* Top Bar */}
       <div className="px-6 pt-12 flex justify-between items-center mb-6">
@@ -2364,7 +2364,7 @@ export default function App() {
     );
   };
 
-  const WorkStationView = () => (
+  const workStationView = (
     <div className="min-h-screen pb-32">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -3966,7 +3966,7 @@ export default function App() {
     );
   };
 
-  const LeaderboardView = () => (
+  const leaderboardView = (
     <div className="min-h-screen pb-32">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -4084,7 +4084,7 @@ export default function App() {
     );
   };
 
-  const MobileBankingView = () => (
+  const mobileBankingView = (
     <div className="min-h-screen pb-32 bg-slate-50">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -5046,7 +5046,7 @@ export default function App() {
     );
   };
 
-  const SocialHubView = () => (
+  const socialHubView = (
     <div className="min-h-screen pb-32 bg-slate-50">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -5487,7 +5487,7 @@ export default function App() {
     );
   };
 
-  const OtpBuySellView = () => (
+  const otpBuySellView = (
     <div className="min-h-screen pb-32 bg-slate-50">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -5788,7 +5788,7 @@ export default function App() {
     );
   };
 
-  const GamingView = () => (
+  const gamingView = (
     <div className="min-h-screen bg-slate-50 pb-32">
       <div className="bg-gradient-to-br from-violet-600 to-purple-700 pt-12 pb-24 px-6 rounded-b-[40px] shadow-2xl relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-full opacity-10">
@@ -9765,7 +9765,7 @@ export default function App() {
     );
   };
 
-  const ProfileView = () => (
+  const profileView = (
     <div className="min-h-screen pb-32">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -9846,7 +9846,7 @@ export default function App() {
     </div>
   );
 
-  const SalarySheetView = () => (
+  const salarySheetView = (
     <div className="min-h-screen pb-32">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -9891,7 +9891,7 @@ export default function App() {
     </div>
   );
 
-  const SettingsView = () => (
+  const settingsView = (
     <div className="min-h-screen pb-32">
       <div className="p-6 pt-12">
         <div className="flex items-center gap-4 mb-8">
@@ -10107,36 +10107,36 @@ export default function App() {
 
       <AnimatePresence mode="wait">
         {isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
-        {view === 'login' && <LoginView key="login" />}
-        {view === 'home' && <HomeView key="home" />}
+        {view === 'login' && loginView}
+        {view === 'home' && homeView}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
         {view === 'referral' && <ReferralView key="referral" />}
         {view === 'top-news' && <TopNewsView key="top-news" />}
-        {view === 'workstation' && <WorkStationView key="workstation" />}
+        {view === 'workstation' && workStationView}
         {view === 'finance' && <FinanceView key="finance" />}
         {view === 'support' && <SupportView key="support" />}
         {view === 'folder-a' && <FolderAView key="folder-a" />}
         {view === 'folder-b' && <FolderBView key="folder-b" />}
         {view === 'folder-c' && <FolderCView key="folder-c" />}
         {view === 'folder-d' && <FolderDView key="folder-d" />}
-        {view === 'leaderboard' && <LeaderboardView key="leaderboard" />}
+        {view === 'leaderboard' && leaderboardView}
         {view === 'spin' && <SpinView key="spin" />}
-        {view === 'profile' && <ProfileView key="profile" />}
-        {view === 'salary-sheet' && <SalarySheetView key="salary-sheet" />}
+        {view === 'profile' && profileView}
+        {view === 'salary-sheet' && salarySheetView}
         {view === 'admin' && <AdminView key="admin" />}
-        {view === 'settings' && <SettingsView key="settings" />}
-        {view === 'mobile-banking' && <MobileBankingView key="mobile-banking" />}
-        {view === 'otp-buy-sell' && <OtpBuySellView key="otp-buy-sell" />}
+        {view === 'settings' && settingsView}
+        {view === 'mobile-banking' && mobileBankingView}
+        {view === 'otp-buy-sell' && otpBuySellView}
         {view === 'mobile-recharge' && <MobileRechargeView key="mobile-recharge" />}
         {view === 'drive-offer' && <DriveOfferView key="drive-offer" />}
         {view === 'ecommerce' && <EcommerceView key="ecommerce" />}
         {view === 'dollar-sell' && <DollarSellView key="dollar-sell" />}
         {view === 'dollar-buy' && <DollarBuyView key="dollar-buy" />}
-        {view === 'social-hub' && <SocialHubView key="social-hub" />}
+        {view === 'social-hub' && socialHubView}
         {view === 'subscription-boosting' && <SubscriptionBoostingView key="subscription-boosting" />}
         {view === 'smm-panel' && <SmmPanelView key="smm-panel" />}
         {view === 'account-activation' && <AccountActivationView key="account-activation" />}
-        {view === 'gaming' && <GamingView key="gaming" />}
+        {view === 'gaming' && gamingView}
         {view === 'ludo-earn' && <LudoEarnView key="ludo-earn" />}
         {view === 'social-job' && <SocialJobView key="social-job" />}
       </AnimatePresence>
