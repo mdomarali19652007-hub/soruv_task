@@ -19,18 +19,22 @@ const firebaseConfig = useEnv
       measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || '',
     }
   : {
-      apiKey: fallbackConfig.apiKey,
-      authDomain: fallbackConfig.authDomain,
-      projectId: fallbackConfig.projectId,
-      storageBucket: fallbackConfig.storageBucket,
-      messagingSenderId: fallbackConfig.messagingSenderId,
-      appId: fallbackConfig.appId,
-      measurementId: fallbackConfig.measurementId,
+      apiKey: fallbackConfig.apiKey || '',
+      authDomain: fallbackConfig.authDomain || '',
+      projectId: fallbackConfig.projectId || '',
+      storageBucket: fallbackConfig.storageBucket || '',
+      messagingSenderId: fallbackConfig.messagingSenderId || '',
+      appId: fallbackConfig.appId || '',
+      measurementId: fallbackConfig.measurementId || '',
     };
 
 const firestoreDatabaseId = useEnv
   ? import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || ''
-  : fallbackConfig.firestoreDatabaseId;
+  : fallbackConfig.firestoreDatabaseId || '';
+
+if (!firebaseConfig.apiKey) {
+  console.error('Firebase API key is missing. Set VITE_FIREBASE_API_KEY env var or check firebase-applet-config.json');
+}
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
