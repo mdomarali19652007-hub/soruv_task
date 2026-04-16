@@ -1,0 +1,336 @@
+// ===============================================================
+// Assumed Data Model
+// ===============================================================
+//
+// Collection: users
+// Document ID: userId (from Auth)
+// Fields:
+//   - name: string (required)
+//   - email: string (required)
+//   - age: number (required)
+//   - referralCode: string (optional)
+//   - mainBalance: number (required, default 0)
+//   - totalEarned: number (required, default 0)
+//   - pendingPayout: number (required, default 0)
+//   - rank: string (Bronze, Silver, Gold, Diamond)
+//   - dailyClaimed: boolean (required)
+//   - notifications: array of objects
+//   - adWatches: array of objects
+//
+// Collection: withdrawals
+// Document ID: withdrawalId
+// Fields:
+//   - userId: string (required)
+//   - amount: number (required)
+//   - method: string (required)
+//   - status: string (pending, approved, rejected)
+//   - date: string (required)
+//   - reason: string (optional)
+//
+// Collection: gmailSubmissions
+// Document ID: submissionId
+// Fields:
+//   - userId: string (required)
+//   - email: string (required)
+//   - status: string (pending, approved, rejected)
+//   - date: string (required)
+//   - reward: number (required)
+//   - reason: string (optional)
+//
+// Collection: microjobSubmissions
+// Document ID: submissionId
+// Fields:
+//   - userId: string (required)
+//   - microjobId: string (required)
+//   - link: string (required)
+//   - screenshot: string (required)
+//   - status: string (pending, approved, rejected)
+//   - reward: number (required)
+//   - date: string (required)
+//   - reason: string (optional)
+//
+// Collection: taskSubmissions
+// Document ID: submissionId
+// Fields:
+//   - userId: string (required)
+//   - taskType: string (required)
+//   - userName: string (required)
+//   - screenshot: string (required)
+//   - status: string (pending, approved, rejected)
+//   - reward: number (required)
+//   - taskId: string (required)
+//   - date: string (required)
+//   - reason: string (optional)
+//
+// Collection: settings
+// Document ID: global
+// Fields:
+//   - globalNotice: string
+//   - isMaintenance: boolean
+//   - minWithdrawal: number
+//   - spinCost: number
+//   - dailyReward: number
+//   - activeFolders: array of strings
+//   - enabledFeatures: array of strings
+//   - gmailPassword: string
+//   - gmailReward: number
+//   - adReward: number
+//   - dailyAdLimit: number
+//   - totalPaid: number
+//   - activeWorkerCount: number
+//   - gen1Rate: number
+//   - gen2Rate: number
+//   - gen3Rate: number
+//
+// ===============================================================
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+         (request.auth.token.email == "soruvislam51@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['name', 'email', 'age']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
+             data.age is number && data.age >= 13 && data.age < 120;
+    }
+
+    function isValidWithdrawal(data) {
+      return data.keys().hasAll(['userId', 'amount', 'method', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.method is string &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidGmailSubmission(data) {
+      return data.keys().hasAll(['userId', 'email', 'status', 'date', 'reward']) &&
+             data.userId == request.auth.uid &&
+             data.email is string &&
+             data.status == 'pending' &&
+             data.reward is number &&
+             data.date is string;
+    }
+
+    function isValidMicrojobSubmission(data) {
+      return data.keys().hasAll(['userId', 'microjobId', 'link', 'screenshot', 'status', 'date', 'reward']) &&
+             data.userId == request.auth.uid &&
+             data.status == 'pending' &&
+             data.reward is number &&
+             data.date is string;
+    }
+
+    function isValidTaskSubmission(data) {
+      return data.keys().hasAll(['userId', 'taskType', 'userName', 'screenshot', 'status', 'date', 'reward', 'taskId']) &&
+             data.userId == request.auth.uid &&
+             data.status == 'pending' &&
+             data.reward is number &&
+             data.taskId is string &&
+             data.date is string;
+    }
+
+    function isValidRechargeRequest(data) {
+      return data.keys().hasAll(['userId', 'phone', 'operator', 'amount', 'type', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.phone is string &&
+             data.operator is string &&
+             data.amount is number && data.amount > 0 &&
+             data.type in ['Prepaid', 'Postpaid'] &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidDriveOfferRequest(data) {
+      return data.keys().hasAll(['userId', 'driveOfferId', 'phone', 'amount', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.driveOfferId is string &&
+             data.phone is string &&
+             data.amount is number && data.amount > 0 &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidProduct(data) {
+      return data.keys().hasAll(['name', 'price', 'image']) &&
+             data.name is string && data.name.size() > 0 &&
+             data.price is number && data.price > 0 &&
+             data.image is string && isValidUrl(data.image);
+    }
+
+    function isValidProductOrder(data) {
+      return data.keys().hasAll(['userId', 'productId', 'address', 'phone', 'amount', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.productId is string &&
+             data.address is string && data.address.size() > 0 &&
+             data.phone is string &&
+             data.amount is number && data.amount > 0 &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidSmmOrder(data) {
+      return data.keys().hasAll(['userId', 'service', 'link', 'amount', 'quantity', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.quantity is number && data.quantity > 0 &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidLudoTournament(data) {
+      return data.keys().hasAll(['title', 'entryFee', 'prizePool', 'status']) &&
+             data.title is string && data.title.size() > 0 &&
+             data.entryFee is number && data.entryFee >= 0 &&
+             data.prizePool is number && data.prizePool >= 0 &&
+             data.status in ['open', 'ongoing', 'completed', 'closed'];
+    }
+
+    function isValidLudoSubmission(data) {
+      return data.keys().hasAll(['userId', 'tournamentId', 'screenshot', 'status', 'date', 'ludoUsername']) &&
+             data.userId == request.auth.uid &&
+             data.tournamentId is string &&
+             data.ludoUsername is string && data.ludoUsername.size() > 0 &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidUpload(data) {
+      return data.keys().hasAll(['userId', 'url', 'timestamp', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.url is string &&
+             data.timestamp is number &&
+             data.date is string;
+    }
+
+    // ===============================================================
+    // Rules
+    // ===============================================================
+
+    match /uploads/{uploadId} {
+      allow read: if isAdmin();
+      allow create: if isAuthenticated() && isValidUpload(request.resource.data);
+      allow update, delete: if isAdmin();
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow create: if isOwner(userId) && isValidUser(request.resource.data);
+      allow update: if (isOwner(userId) && isValidUser(request.resource.data)) || isAdmin();
+    }
+
+    match /withdrawals/{withdrawalId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidWithdrawal(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /gmailSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidGmailSubmission(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /microjobSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidMicrojobSubmission(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /taskSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidTaskSubmission(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /rechargeRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidRechargeRequest(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /driveOffers/{offerId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /driveOfferRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidDriveOfferRequest(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /messages/{messageId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAdmin();
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /products/{productId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+    }
+
+    match /productOrders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidProductOrder(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /smmOrders/{orderId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidSmmOrder(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /ludoTournaments/{tournamentId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidLudoTournament(request.resource.data);
+      allow update: if isAuthenticated(); // Allow users to join (update playerIds)
+      allow delete: if isAdmin();
+    }
+
+    match /ludoSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidLudoSubmission(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "name": "Top Earning",
+  "description": "Empower Your Wallet with Top Earning. Earn through micro-freelancing, social media tasks, and digital assets.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
