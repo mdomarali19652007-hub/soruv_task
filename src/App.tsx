@@ -97,6 +97,7 @@ import {
 } from 'firebase/auth';
 import { db, auth, storage } from './firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { sanitizeAndTrim } from './utils/sanitize';
 
 interface GlobalUpload {
   id: string;
@@ -470,7 +471,8 @@ export default function App() {
     password: '', 
     confirmPassword: '', 
     refCode: '', 
-    country: 'Bangladesh' 
+    country: 'Bangladesh',
+    age: '' 
   });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -529,7 +531,7 @@ export default function App() {
   const [userMessages, setUserMessages] = useState<UserMessage[]>([]);
   const [allUploads, setAllUploads] = useState<GlobalUpload[]>([]);
   const [dynamicTasks, setDynamicTasks] = useState<{ id: string; title: string; reward: number; desc: string; link: string; category: 'micro' | 'social' }[]>([]);
-  const [gmailPassword, setGmailPassword] = useState('smarttask@2026');
+  const [gmailPassword, setGmailPassword] = useState('');
   const [gmailReward, setGmailReward] = useState(10.00);
   const [adReward, setAdReward] = useState(0.40);
   const [dailyAdLimit, setDailyAdLimit] = useState(5);
@@ -877,7 +879,7 @@ export default function App() {
         email: regData.email,
         phone: regData.phone,
         country: regData.country,
-        age: 0,
+        age: parseInt(regData.age) || 18,
         referralCode: '',
         referredBy: referrerId,
       };
@@ -1011,8 +1013,8 @@ export default function App() {
     try {
       const userRef = doc(db, 'users', user.id);
       await updateDoc(userRef, {
-        mainBalance: user.mainBalance + dailyReward,
-        totalEarned: user.totalEarned + dailyReward,
+        mainBalance: increment(dailyReward),
+        totalEarned: increment(dailyReward),
         dailyClaimed: true
       });
       confetti({ particleCount: 100, spread: 70 });
@@ -1037,8 +1039,8 @@ export default function App() {
       try {
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - spinCost + win,
-          totalEarned: user.totalEarned + win
+          mainBalance: increment(-spinCost + win),
+          totalEarned: increment(win)
         });
         
         setIsSpinning(false);
@@ -1054,10 +1056,11 @@ export default function App() {
   const sendGlobalMessage = async () => {
     if (!chatMessage.trim()) return;
     try {
+      const sanitizedMessage = sanitizeAndTrim(chatMessage, 1000);
       await addDoc(collection(db, 'messages'), {
         userId: user.id,
-        userName: user.name,
-        text: chatMessage,
+        userName: sanitizeAndTrim(user.name, 100),
+        text: sanitizedMessage,
         sender: 'user',
         date: new Date().toLocaleTimeString()
       });
@@ -2471,8 +2474,8 @@ export default function App() {
         
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - val,
-          pendingPayout: user.pendingPayout + val
+          mainBalance: increment(-val),
+          pendingPayout: increment(val)
         });
 
         setLastWithdrawal(withdrawalData);
@@ -4153,7 +4156,7 @@ export default function App() {
         // Deduct balance
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - amt
+          mainBalance: increment(-amt)
         });
 
         setLastRecharge(rechargeData);
@@ -4372,7 +4375,7 @@ export default function App() {
         // Deduct balance
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - selectedOffer.price
+          mainBalance: increment(-selectedOffer.price)
         });
 
         setLastOffer(offerData);
@@ -4606,7 +4609,7 @@ export default function App() {
 
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - deliveryFee
+          mainBalance: increment(-deliveryFee)
         });
 
         await addDoc(collection(db, 'productOrders'), orderData);
@@ -4882,7 +4885,7 @@ export default function App() {
         
         const userRef = doc(db, 'users', user.id);
         await updateDoc(userRef, {
-          mainBalance: user.mainBalance - totalPrice
+          mainBalance: increment(-totalPrice)
         });
 
         setLastBuy(buyData);
@@ -5530,8 +5533,8 @@ export default function App() {
         try {
           const userRef = doc(db, 'users', user.id);
           await updateDoc(userRef, {
-            mainBalance: user.mainBalance + adReward,
-            totalEarned: user.totalEarned + adReward,
+            mainBalance: increment(adReward),
+            totalEarned: increment(adReward),
             adWatches: newAdWatches
           });
           confetti({ particleCount: 50, spread: 60 });

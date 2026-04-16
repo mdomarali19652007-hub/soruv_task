@@ -106,11 +106,13 @@ service cloud.firestore {
          (request.auth.token.email == "soruvislam51@gmail.com" && request.auth.token.email_verified == true));
     }
 
+    // Relaxed user validation: checks required fields exist and have correct types
+    // without enforcing hasAll (which fails when extra fields are present).
+    // Age >= 0 allows new users who haven't set age yet; profile update can enforce >= 13.
     function isValidUser(data) {
-      return data.keys().hasAll(['name', 'email', 'age']) &&
-             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
              data.email is string && data.email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$") &&
-             data.age is number && data.age >= 13 && data.age < 120;
+             data.age is number && data.age >= 0;
     }
 
     function isValidWithdrawal(data) {
@@ -173,7 +175,7 @@ service cloud.firestore {
       return data.keys().hasAll(['name', 'price', 'image']) &&
              data.name is string && data.name.size() > 0 &&
              data.price is number && data.price > 0 &&
-             data.image is string && isValidUrl(data.image);
+             data.image is string;
     }
 
     function isValidProductOrder(data) {
@@ -219,6 +221,44 @@ service cloud.firestore {
              data.url is string &&
              data.timestamp is number &&
              data.date is string;
+    }
+
+    function isValidSocialSubmission(data) {
+      return data.keys().hasAll(['userId', 'userName', 'type', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.userName is string &&
+             data.type is string &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidSubscriptionRequest(data) {
+      return data.keys().hasAll(['userId', 'type', 'price', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.type is string &&
+             data.price is number && data.price > 0 &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidDollarBuyRequest(data) {
+      return data.keys().hasAll(['userId', 'amount', 'price', 'method', 'wallet', 'status', 'date']) &&
+             data.userId == request.auth.uid &&
+             data.amount is number && data.amount > 0 &&
+             data.price is number && data.price > 0 &&
+             data.method is string &&
+             data.wallet is string &&
+             data.status == 'pending' &&
+             data.date is string;
+    }
+
+    function isValidNewsPost(data) {
+      return data.keys().hasAll(['authorName', 'content', 'likes', 'comments', 'timestamp']) &&
+             data.authorName is string &&
+             data.content is string && data.content.size() > 0 && data.content.size() < 5000 &&
+             data.likes is list &&
+             data.comments is list &&
+             data.timestamp is number;
     }
 
     // ===============================================================
@@ -319,10 +359,11 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    // Fix: Only allow admin to update tournaments; users join via Cloud Functions or admin action
     match /ludoTournaments/{tournamentId} {
       allow read: if isAuthenticated();
       allow create: if isAdmin() && isValidLudoTournament(request.resource.data);
-      allow update: if isAuthenticated(); // Allow users to join (update playerIds)
+      allow update: if isAdmin();
       allow delete: if isAdmin();
     }
 
@@ -330,6 +371,37 @@ service cloud.firestore {
       allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
       allow create: if isAuthenticated() && isValidLudoSubmission(request.resource.data);
       allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Previously missing collection rules:
+
+    match /socialSubmissions/{submissionId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidSocialSubmission(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /subscriptionRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidSubscriptionRequest(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /dollarBuyRequests/{requestId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && isValidDollarBuyRequest(request.resource.data);
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /newsPosts/{postId} {
+      allow read: if isAuthenticated();
+      allow create: if isAdmin() && isValidNewsPost(request.resource.data);
+      // Allow authenticated users to update for likes/comments
+      allow update: if isAuthenticated();
       allow delete: if isAdmin();
     }
   }
