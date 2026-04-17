@@ -73,7 +73,13 @@ CREATE TABLE IF NOT EXISTS settings (
   "rechargeCommissionRate" NUMERIC DEFAULT 20,
   "activationDuration" INTEGER DEFAULT 30,
   "referralCommissionRate" NUMERIC DEFAULT 5,
-  "referralActivationBonus" NUMERIC DEFAULT 20
+  "referralActivationBonus" NUMERIC DEFAULT 20,
+  "telegramLink" TEXT DEFAULT 'https://t.me/BDTKING999',
+  "facebookLink" TEXT DEFAULT 'https://facebook.com',
+  "whatsappLink" TEXT DEFAULT 'https://wa.me/8801700000000',
+  "showWelcomeAnimation" BOOLEAN DEFAULT TRUE,
+  "rulesText" TEXT DEFAULT 'Welcome to Top Earning! Please follow our rules.',
+  "smmPrices" JSONB DEFAULT '{}'::jsonb
 );
 
 INSERT INTO settings (id) VALUES ('global') ON CONFLICT (id) DO NOTHING;

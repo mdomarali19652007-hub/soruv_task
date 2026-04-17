@@ -687,6 +687,12 @@ export default function App() {
       setActivationDuration(data.activationDuration || 30);
       setReferralCommissionRate(data.referralCommissionRate || 5);
       setReferralActivationBonus(data.referralActivationBonus || 20);
+      setTelegramLink(data.telegramLink || 'https://t.me/BDTKING999');
+      setFacebookLink(data.facebookLink || 'https://facebook.com');
+      setWhatsappLink(data.whatsappLink || 'https://wa.me/8801700000000');
+      setShowWelcomeAnimation(data.showWelcomeAnimation ?? true);
+      setRulesText(data.rulesText || 'Welcome to Top Earning! Please follow our rules.');
+      setSmmPrices(data.smmPrices || {});
     });
     unsubs.push(unsubSettings);
 
@@ -10072,7 +10078,7 @@ export default function App() {
         </div>
       )}
 
-      <AnimatePresence mode="wait">
+      {isAuthReady && <AnimatePresence mode="wait">
         {isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
         {view === 'login' && !isLoggedIn && loginView}
         {view === 'home' && homeView}
@@ -10106,10 +10112,10 @@ export default function App() {
         {view === 'gaming' && gamingView}
         {view === 'ludo-earn' && <LudoEarnView key="ludo-earn" />}
         {view === 'social-job' && <SocialJobView key="social-job" />}
-      </AnimatePresence>
+      </AnimatePresence>}
 
       {/* Bottom Navigation - hide on login view and email verification */}
-      {isLoggedIn && view !== 'login' && !needsEmailVerification && (
+      {isAuthReady && isLoggedIn && view !== 'login' && !needsEmailVerification && (
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-4 z-50">
           <div className="glass rounded-[32px] p-2 flex justify-between items-center border border-white/40 shadow-2xl">
             {[
