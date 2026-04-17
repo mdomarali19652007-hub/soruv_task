@@ -368,6 +368,14 @@ CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "users_update" ON users FOR UPDATE USING (auth.uid() = id OR is_admin());
 CREATE POLICY "users_delete" ON users FOR DELETE USING (is_admin());
 
+-- RPC function for referral code validation (bypasses RLS so unauthenticated users can validate codes)
+CREATE OR REPLACE FUNCTION validate_referral_code(code TEXT)
+RETURNS TABLE(user_id UUID) AS $$
+BEGIN
+  RETURN QUERY SELECT id FROM users WHERE "numericId" = code LIMIT 1;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- Settings: public read (maintenance mode must be visible before login), admin write
 CREATE POLICY "settings_select" ON settings FOR SELECT USING (true);
 CREATE POLICY "settings_insert" ON settings FOR INSERT WITH CHECK (is_admin());
