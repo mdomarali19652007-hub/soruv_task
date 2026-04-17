@@ -20,6 +20,16 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
+// Check for common URL encoding issues in the password
+if (databaseUrl.includes('%') && !databaseUrl.includes('%25') && !databaseUrl.match(/%[0-9A-Fa-f]{2}/)) {
+  console.warn(
+    '\n[Auth Warning] DATABASE_URL may have an unescaped % in the password.\n' +
+    'If your Supabase password contains special characters like %, @, #, etc.,\n' +
+    'they must be URL-encoded. For example: % becomes %25, @ becomes %40\n' +
+    'Current value starts with: ' + databaseUrl.substring(0, 40) + '...\n'
+  );
+}
+
 /**
  * Better Auth server instance.
  *
