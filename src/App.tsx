@@ -2101,8 +2101,12 @@ export default function App() {
           <div className="glass-card mb-8 relative overflow-hidden group border-white/40 shadow-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all" />
             <div className="flex items-center gap-5 relative z-10">
-              <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl neon-border">
-                <User className="w-10 h-10 text-white" />
+              <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl neon-border overflow-hidden">
+                {(user as any).profilePic ? (
+                  <img src={(user as any).profilePic} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <User className="w-10 h-10 text-white" />
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900">{user.name}</h3>
@@ -5239,15 +5243,44 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Screenshot URL</label>
-                <input
-                  type="text"
-                  value={screenshot}
-                  onChange={(e) => setScreenshot(e.target.value)}
-                  placeholder="Paste Screenshot Link"
-                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
-                />
-                <p className="text-[8px] font-bold text-slate-400 mt-1 ml-2 uppercase">Upload to imgbb.com and paste link here</p>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Screenshot Proof</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="social-job-screenshot"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const url = await uploadMedia(file);
+                        setScreenshot(url);
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Upload failed');
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="social-job-screenshot"
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-8 cursor-pointer hover:border-indigo-500 transition-all"
+                  >
+                    {screenshot ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase">Screenshot Ready</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <ImageIcon className="w-8 h-8 text-slate-300" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Select from Gallery</span>
+                      </div>
+                    )}
+                  </label>
+                  {screenshot && (
+                    <p className="text-[8px] text-slate-400 mt-2 truncate px-2">URL: {screenshot}</p>
+                  )}
+                </div>
               </div>
 
               <button
@@ -6196,21 +6229,39 @@ export default function App() {
                     />
                   </div>
 
-                  <div className="relative group">
-                    <Camera className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+                  <div className="relative">
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={e => {
+                      className="hidden"
+                      id="ludo-screenshot-upload"
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => setScreenshotUrl(reader.result as string);
-                          reader.readAsDataURL(file);
+                        if (!file) return;
+                        try {
+                          const url = await uploadMedia(file);
+                          setScreenshotUrl(url);
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : 'Upload failed');
                         }
                       }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-orange-500 transition-all"
                     />
+                    <label
+                      htmlFor="ludo-screenshot-upload"
+                      className="w-full flex items-center justify-center gap-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 cursor-pointer hover:border-orange-500 transition-all"
+                    >
+                      {screenshotUrl ? (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase">Screenshot Uploaded</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Camera className="w-5 h-5 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Screenshot</span>
+                        </div>
+                      )}
+                    </label>
                   </div>
                   {screenshotUrl && (
                     <div className="relative w-full h-32 rounded-2xl overflow-hidden border border-slate-200">
@@ -7066,7 +7117,7 @@ export default function App() {
 
     const [newTask, setNewTask] = useState({ title: '', reward: 0, desc: '', link: '', category: 'micro' as 'micro' | 'social' | 'gmail' | 'premium' });
     const [newDriveOffer, setNewDriveOffer] = useState({ title: '', operator: 'GP', price: 0, description: '' });
-    const [newProduct, setNewProduct] = useState({ name: '', price: 0, description: '', category: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', price: 0, description: '', category: '', image: '' });
 
     const saveChanges = async () => {
       try {
@@ -7351,8 +7402,8 @@ export default function App() {
         return;
       }
       try {
-        await insertRow('products', { ...newProduct, image: '' });
-        setNewProduct({ name: '', price: 0, description: '', category: '' });
+        await insertRow('products', { ...newProduct });
+        setNewProduct({ name: '', price: 0, description: '', category: '', image: '' });
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.CREATE, 'products');
@@ -8527,14 +8578,58 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image URL (Optional)</label>
-                        <input
-                          type="text"
-                          value={newNews.imageUrl}
-                          onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500"
-                          placeholder="https://example.com/image.jpg"
-                        />
+                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image (Optional)</label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              id="news-image-upload"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const url = await uploadMedia(file);
+                                  setNewNews(prev => ({ ...prev, imageUrl: url }));
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Upload failed');
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="news-image-upload"
+                              className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-5 cursor-pointer hover:border-blue-500 transition-all"
+                            >
+                              {newNews.imageUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                  <span className="text-[10px] font-bold text-emerald-600 uppercase">Image Ready</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <ImageIcon className="w-5 h-5 text-slate-300" />
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Image from Gallery</span>
+                                </div>
+                              )}
+                            </label>
+                          </div>
+                          {newNews.imageUrl && (
+                            <div className="flex items-center gap-2">
+                              <p className="text-[8px] text-slate-400 truncate flex-1">{newNews.imageUrl}</p>
+                              <button onClick={() => setNewNews(prev => ({ ...prev, imageUrl: '' }))} className="text-rose-500 hover:text-rose-600">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          <input
+                            type="text"
+                            value={newNews.imageUrl}
+                            onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                            placeholder="Or paste image URL manually"
+                          />
+                        </div>
                       </div>
                       <button
                         onClick={postNews}
@@ -9439,6 +9534,43 @@ export default function App() {
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
                     />
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Product Image</label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          id="product-image-upload"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const url = await uploadMedia(file);
+                              setNewProduct(prev => ({ ...prev, image: url }));
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Upload failed');
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor="product-image-upload"
+                          className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 cursor-pointer hover:border-pink-500 transition-all"
+                        >
+                          {newProduct.image ? (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span className="text-[10px] font-bold text-emerald-600 uppercase">Image Uploaded</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <ImageIcon className="w-4 h-4 text-slate-300" />
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Product Image</span>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={addProduct}
@@ -9669,11 +9801,34 @@ export default function App() {
         <div className="flex flex-col items-center mb-10">
           <div className="w-28 h-28 rounded-full bg-gradient-to-br from-indigo-400 to-violet-600 p-1 mb-4 shadow-xl relative group">
             <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
-              <User className="w-14 h-14 text-indigo-500 group-hover:scale-110 transition-all" />
+              {(user as any).profilePic ? (
+                <img src={(user as any).profilePic} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <User className="w-14 h-14 text-indigo-500 group-hover:scale-110 transition-all" />
+              )}
             </div>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
+            <label htmlFor="profile-pic-upload" className="absolute -bottom-1 -right-1 w-8 h-8 bg-indigo-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg cursor-pointer hover:bg-indigo-600 transition-colors">
+              <Camera className="w-3.5 h-3.5 text-white" />
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              id="profile-pic-upload"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const url = await uploadImage(file, 'profile');
+                  if (url) {
+                    await updateRow('users', user.id, { profilePic: url });
+                  }
+                } catch (err) {
+                  console.error('Profile photo upload failed:', err);
+                  alert('Failed to upload profile photo. Please try again.');
+                }
+              }}
+            />
           </div>
           <h3 className="text-xl font-black text-slate-900 tracking-tight">{user.name}</h3>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{user.id}</p>
