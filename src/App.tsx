@@ -764,18 +764,25 @@ export default function App() {
     }
 
     try {
-      // First check if referral code is valid
-      
-      
-      const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
-      
-      if (!refSnap || refSnap.length === 0) {
-        alert('Invalid Referral Code. Registration requires a valid code.');
-        return;
-      }
+      // Check if referral code is valid (or allow first user without one)
+      let referrerId = '';
 
-      const referrerDoc = refSnap[0];
-      const referrerId = referrerDoc.id;
+      if (regData.refCode) {
+        const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
+        if (!refSnap || refSnap.length === 0) {
+          alert('Invalid Referral Code. Please enter a valid code.');
+          return;
+        }
+        referrerId = refSnap[0].id;
+      } else {
+        // Allow registration without referral code only if no users exist (first user bootstrap)
+        const existingUsers = await getRows('users');
+        if (existingUsers && existingUsers.length > 0) {
+          alert('Referral Code is required. Please enter a valid referral code.');
+          return;
+        }
+        // First user - no referral needed
+      }
 
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: regData.email,
@@ -807,8 +814,10 @@ export default function App() {
 
       await upsertRow('users', newUser as any);
 
-      // Increment gen1 count for referrer immediately
-      await incrementField('users', referrerId, 'gen1Count', 1);
+      // Increment gen1 count for referrer immediately (skip if no referrer)
+      if (referrerId) {
+        await incrementField('users', referrerId, 'gen1Count', 1);
+      }
 
       setNeedsEmailVerification(true);
       alert('Registration successful! Please check your email for verification.');
