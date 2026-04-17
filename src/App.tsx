@@ -554,6 +554,13 @@ export default function App() {
     window.scrollTo(0, 0);
   }, [view]);
 
+  // --- Redirect authenticated users away from login view ---
+  useEffect(() => {
+    if (isAuthReady && isLoggedIn && view === 'login' && !needsEmailVerification) {
+      setView('home');
+    }
+  }, [isAuthReady, isLoggedIn, view, needsEmailVerification]);
+
   // --- Login Animation ---
   useEffect(() => {
     if (isLoggedIn && view === 'home') {
@@ -575,7 +582,13 @@ export default function App() {
       if (session?.user) {
         const supaUser = session.user;
         setIsLoggedIn(true);
-        setNeedsEmailVerification(!supaUser.email_confirmed_at);
+        const emailNotVerified = !supaUser.email_confirmed_at;
+        setNeedsEmailVerification(emailNotVerified);
+
+        // Auto-navigate away from login when authenticated
+        if (!emailNotVerified) {
+          setView(prev => prev === 'login' ? 'home' : prev);
+        }
 
         // Subscribe to user profile
         const unsubUser = subscribeToRow<UserProfile>('users', supaUser.id, async (data) => {
@@ -9975,9 +9988,19 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      {/* Loading state while auth initializes */}
+      {!isAuthReady && (
+        <div className="fixed inset-0 z-[500] bg-[#fcfaf7] flex flex-col items-center justify-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6 animate-pulse">
+            <Wallet className="w-8 h-8 text-white" />
+          </div>
+          <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Loading...</p>
+        </div>
+      )}
+
       <AnimatePresence mode="wait">
         {isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
-        {view === 'login' && loginView}
+        {view === 'login' && !isLoggedIn && loginView}
         {view === 'home' && homeView}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
         {view === 'referral' && <ReferralView key="referral" />}
@@ -10011,8 +10034,8 @@ export default function App() {
         {view === 'social-job' && <SocialJobView key="social-job" />}
       </AnimatePresence>
 
-      {/* Bottom Navigation */}
-      {isLoggedIn && (
+      {/* Bottom Navigation - hide on login view and email verification */}
+      {isLoggedIn && view !== 'login' && !needsEmailVerification && (
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-4 z-50">
           <div className="glass rounded-[32px] p-2 flex justify-between items-center border border-white/40 shadow-2xl">
             {[
