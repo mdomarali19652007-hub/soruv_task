@@ -6978,6 +6978,7 @@ export default function App() {
     const [adminTotalPaid, setAdminTotalPaid] = useState(totalPaid);
     const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
     const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'recharge' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads'>('gmail');
+    const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
     const [isUploading, setIsUploading] = useState(false);
     const [userSearch, setUserSearch] = useState('');
     const [referralSearch, setReferralSearch] = useState('');
@@ -7274,11 +7275,15 @@ export default function App() {
     };
 
     const handleWithdrawAction = async (id: string, action: 'approved' | 'rejected') => {
-      const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : undefined;
+      // Prevent double-clicks
+      if (processingIds.has(id)) return;
+      setProcessingIds(prev => new Set(prev).add(id));
+
+      const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : '';
 
       try {
         // admin op: withdrawals
-        await updateRow('withdrawals', id, { status: action, reason });
+        await updateRow('withdrawals', id, { status: action, reason: reason || '' });
 
         const w = withdrawals.find(w => w.id === id);
         if (w) {
@@ -7308,14 +7313,24 @@ export default function App() {
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `withdrawals/${id}`);
+      } finally {
+        setProcessingIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
     };
 
     const handleRechargeAction = async (id: string, action: 'approved' | 'rejected') => {
-      const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
+      // Prevent double-clicks
+      if (processingIds.has(id)) return;
+      setProcessingIds(prev => new Set(prev).add(id));
+
+      const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : '';
       try {
-        // admin op: rechargeRequests
-        await updateRow('rechargeRequests', id, { status: action, reason });
+        // admin op: rechargeRequests - use empty string instead of undefined for reason
+        await updateRow('rechargeRequests', id, { status: action, reason: reason || '' });
 
         const r = rechargeRequests.find(r => r.id === id);
         if (r) {
@@ -7346,6 +7361,12 @@ export default function App() {
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `rechargeRequests/${id}`);
+      } finally {
+        setProcessingIds(prev => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
       }
     };
 
@@ -9026,8 +9047,8 @@ export default function App() {
                             </div>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => handleWithdrawAction(w.id, 'approved')} className="p-2 bg-emerald-500/20 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"><Check className="w-4 h-4" /></button>
-                            <button onClick={() => handleWithdrawAction(w.id, 'rejected')} className="p-2 bg-rose-500/20 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+                            <button onClick={() => handleWithdrawAction(w.id, 'approved')} disabled={processingIds.has(w.id)} className={`p-2 bg-emerald-500/20 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(w.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(w.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                            <button onClick={() => handleWithdrawAction(w.id, 'rejected')} disabled={processingIds.has(w.id)} className={`p-2 bg-rose-500/20 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all ${processingIds.has(w.id) ? 'opacity-50 cursor-not-allowed' : ''}`}><X className="w-4 h-4" /></button>
                           </div>
                         </div>
                       ))
@@ -9054,8 +9075,8 @@ export default function App() {
                             <p className="text-[10px] text-slate-400">{r.operator} • {r.phone} • {r.type}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => handleRechargeAction(r.id, 'approved')} className="p-2 bg-emerald-500/20 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"><Check className="w-4 h-4" /></button>
-                            <button onClick={() => handleRechargeAction(r.id, 'rejected')} className="p-2 bg-rose-500/20 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+                            <button onClick={() => handleRechargeAction(r.id, 'approved')} disabled={processingIds.has(r.id)} className={`p-2 bg-emerald-500/20 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(r.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                            <button onClick={() => handleRechargeAction(r.id, 'rejected')} disabled={processingIds.has(r.id)} className={`p-2 bg-rose-500/20 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}><X className="w-4 h-4" /></button>
                           </div>
                         </div>
                       ))
@@ -9389,8 +9410,8 @@ export default function App() {
                             <p className="text-[10px] text-slate-400">{r.operator} • {r.phone} • {r.type}</p>
                           </div>
                           <div className="flex gap-2">
-                            <button onClick={() => handleRechargeAction(r.id, 'approved')} className="p-2 bg-emerald-500/20 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all"><Check className="w-4 h-4" /></button>
-                            <button onClick={() => handleRechargeAction(r.id, 'rejected')} className="p-2 bg-rose-500/20 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all"><X className="w-4 h-4" /></button>
+                            <button onClick={() => handleRechargeAction(r.id, 'approved')} disabled={processingIds.has(r.id)} className={`p-2 bg-emerald-500/20 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(r.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                            <button onClick={() => handleRechargeAction(r.id, 'rejected')} disabled={processingIds.has(r.id)} className={`p-2 bg-rose-500/20 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}><X className="w-4 h-4" /></button>
                           </div>
                         </div>
                       ))
