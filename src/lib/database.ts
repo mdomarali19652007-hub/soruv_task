@@ -72,26 +72,98 @@ export async function deleteRow(table: string, id: string) {
 /** Atomic increment of a numeric column (equivalent to Firestore increment()) */
 export async function incrementField(table: string, id: string, column: string, amount: number) {
   const { error } = await supabase.rpc('increment_field', {
-    table_name: table,
-    row_id: id,
-    column_name: column,
-    amount: amount
+    p_table: table,
+    p_id: id,
+    p_column: column,
+    p_amount: amount
   });
   if (error) {
-    // Fallback: read-modify-write (less safe but works without RPC function)
-    const row = await getRow(table, id);
-    if (row) {
-      await updateRow(table, id, { [column]: (row[column] || 0) + amount });
-    }
+    // Do NOT fall back to read-modify-write -- that pattern is vulnerable to race conditions.
+    // If the RPC function is not available, surface the error so it can be fixed at the DB level.
+    throw new Error(`incrementField failed for ${table}.${column}: ${error.message}`);
   }
 }
 
 /** Increment multiple fields atomically */
 export async function incrementFields(table: string, id: string, increments: Record<string, number>) {
-  // Try each increment
   for (const [column, amount] of Object.entries(increments)) {
     await incrementField(table, id, column, amount);
   }
+}
+
+// ============================================================
+// Secure Server-Side Financial Operations (RPC wrappers)
+// ============================================================
+
+/** Submit a withdrawal via server-side validation and atomic balance deduction */
+export async function submitWithdrawal(
+  userId: string,
+  amount: number,
+  method: string,
+  accountNumber: string
+): Promise<string> {
+  const { data, error } = await supabase.rpc('submit_withdrawal', {
+    p_user_id: userId,
+    p_amount: amount,
+    p_method: method,
+    p_account_number: accountNumber
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
+/** Admin: approve or reject a withdrawal */
+export async function processWithdrawal(
+  withdrawalId: string,
+  action: 'approved' | 'rejected',
+  reason: string = ''
+): Promise<void> {
+  const { error } = await supabase.rpc('process_withdrawal', {
+    p_withdrawal_id: withdrawalId,
+    p_action: action,
+    p_reason: reason
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Admin: approve or reject a deposit/recharge request */
+export async function processDeposit(
+  requestId: string,
+  action: 'approved' | 'rejected',
+  reason: string = ''
+): Promise<void> {
+  const { error } = await supabase.rpc('process_deposit', {
+    p_request_id: requestId,
+    p_action: action,
+    p_reason: reason
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Activate account via server-side fee deduction and referral bonus */
+export async function activateAccount(userId: string): Promise<void> {
+  const { error } = await supabase.rpc('activate_account', {
+    p_user_id: userId
+  });
+  if (error) throw new Error(error.message);
+}
+
+/** Claim daily reward via server-side validation */
+export async function claimDailyReward(userId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('claim_daily_reward', {
+    p_user_id: userId
+  });
+  if (error) throw new Error(error.message);
+  return data as number;
+}
+
+/** Process spin via server-side validation and random prize */
+export async function processSpin(userId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('process_spin', {
+    p_user_id: userId
+  });
+  if (error) throw new Error(error.message);
+  return data as number;
 }
 
 // ============================================================

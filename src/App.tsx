@@ -80,9 +80,15 @@ import {
   incrementFields,
   subscribeToTable,
   subscribeToRow,
-  uploadFile
+  uploadFile,
+  submitWithdrawal,
+  processWithdrawal,
+  processDeposit,
+  activateAccount,
+  claimDailyReward,
+  processSpin
 } from './lib/database';
-import { sanitizeAndTrim } from './utils/sanitize';
+import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface GlobalUpload {
@@ -1017,14 +1023,10 @@ export default function App() {
   const claimDaily = async () => {
     if (user.dailyClaimed) return;
     try {
-      const userRef_id = user.id;
-      await updateRow('users', userRef_id, {
-        mainBalance: dailyReward,
-        totalEarned: dailyReward,
-        dailyClaimed: true
-      });
+      // Use server-side RPC for atomic daily reward claim
+      const reward = await claimDailyReward(user.id);
       confetti({ particleCount: 100, spread: 70 });
-      alert(`Claimed ৳ ${dailyReward.toFixed(2)}!`);
+      alert(`Claimed ৳ ${reward.toFixed(2)}!`);
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `users/${user.id}`);
     }
@@ -1039,15 +1041,9 @@ export default function App() {
     setResult(null);
 
     setTimeout(async () => {
-      const prizes = [0, 0.5, 1, 2, 5, 10, 0, 0.2];
-      const win = prizes[Math.floor(Math.random() * prizes.length)];
-
       try {
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -spinCost + win,
-          totalEarned: win
-        });
+        // Use server-side RPC for atomic spin with server-side randomness
+        const win = await processSpin(user.id);
 
         setIsSpinning(false);
         setResult(win > 0 ? `৳ ${win.toFixed(2)}` : 'Better Luck Next Time!');
@@ -2482,34 +2478,31 @@ export default function App() {
         setError('Please select a withdrawal method');
         return;
       }
-      if (!accountNumber.trim()) {
+      const sanitizedAccount = sanitizeAccountNumber(accountNumber);
+      if (!sanitizedAccount) {
         setError('Please enter your account number');
+        return;
+      }
+      // Validate mobile wallet number format for bKash/Nagad
+      if (!isValidMobileWallet(sanitizedAccount)) {
+        setError('Please enter a valid 11-digit Bangladeshi mobile number');
         return;
       }
 
       await handleSubmission(async () => {
-        const withdrawalData = {
+        // Use server-side RPC for atomic withdrawal with validation
+        await submitWithdrawal(user.id, val, method, sanitizedAccount);
+
+        setLastWithdrawal({
           userId: user.id,
           amount: val,
           receiveAmount: val - fee,
           fee: fee,
-          method: `${method} (${accountNumber})`,
-          status: 'pending' as const,
+          method: `${method} (${sanitizedAccount})`,
+          status: 'pending',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
-          timestamp: Date.now(),
-          transactionId: 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase()
-        };
-
-        await insertRow('withdrawals', withdrawalData);
-
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -val,
-          pendingPayout: val
         });
-
-        setLastWithdrawal(withdrawalData);
         setAmount('');
         setMethod(null);
         setAccountNumber('');
@@ -2572,13 +2565,13 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              {withdrawals.length === 0 ? (
+              {withdrawals.filter(w => w.userId === user.id).length === 0 ? (
                 <div className="text-center py-20 opacity-50">
                   <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">No transaction logs</p>
                 </div>
               ) : (
-                withdrawals.map(w => (
+                withdrawals.filter(w => w.userId === user.id).map(w => (
                   <div key={w.id} className="glass-card border-white/40 shadow-sm">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -3124,7 +3117,7 @@ export default function App() {
       }
       await handleSubmission(async () => {
         const newSub: MicrojobSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           microjobId: selectedTask.title,
           userName: submission.userName,
@@ -3407,7 +3400,7 @@ export default function App() {
       }
       await handleSubmission(async () => {
         const newSub: TaskSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           taskType: selectedTask.title,
           userName: proof.userName,
@@ -3667,7 +3660,7 @@ export default function App() {
       if (!email.trim()) return;
       await handleSubmission(async () => {
         const newSub: GmailSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           email,
           status: 'pending',
@@ -4194,7 +4187,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'REC-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('REC')
         };
         await insertRow('rechargeRequests', rechargeData);
 
@@ -4412,7 +4405,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'DRV-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('DRV')
         };
         await insertRow('driveOfferRequests', offerData);
 
@@ -4647,7 +4640,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          orderId: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          orderId: generateTransactionId('ORD')
         };
 
         const userRef_id = user.id;
@@ -4920,7 +4913,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          orderId: 'BUY-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          orderId: generateTransactionId('BUY')
         };
 
         await insertRow('dollarBuyRequests', buyData);
@@ -5333,20 +5326,31 @@ export default function App() {
         setError('Wallet address/ID required');
         return;
       }
+      // Balance check for dollar sell (Medium #10)
+      const totalTk = parseFloat(amount) * dollarSellRate;
+      if (totalTk > user.mainBalance) {
+        setError('Insufficient balance for this dollar sell amount');
+        return;
+      }
 
       await handleSubmission(async () => {
         const sellData = {
           userId: user.id,
-          amount: parseFloat(amount) * dollarSellRate,
-          method: `Dollar Sell (${method}) - ${wallet}`,
+          amount: totalTk,
+          method: `Dollar Sell (${method}) - ${sanitizeAccountNumber(wallet, 60)}`,
           status: 'pending',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'SEL-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('SEL')
         };
 
         await insertRow('withdrawals', sellData);
+        // Deduct balance atomically for dollar sell
+        await incrementFields('users', user.id, {
+          mainBalance: -totalTk,
+          pendingPayout: totalTk
+        });
         setLastSell(sellData);
         setStep('success');
       }, 'Dollar sell request submitted successfully!');
@@ -5681,46 +5685,8 @@ export default function App() {
       }
 
       await handleSubmission(async () => {
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + activationDuration);
-
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -activationFee,
-          isActive: true,
-          activationDate: new Date().toISOString(),
-          activationExpiry: expiryDate.toISOString(),
-          notifications: [
-            {
-              id: Date.now().toString(),
-              text: `Account Activated! Your account is now active until ${expiryDate.toLocaleDateString()}.`,
-              date: new Date().toISOString().split('T')[0]
-            },
-            ...user.notifications
-          ]
-        });
-
-        // Referral Bonus on Activation
-        if (user.referredBy) {
-          const referrerRef_id = user.referredBy;
-          const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
-          if (referrerData) {
-            await updateRow('users', referrerRef_id, {
-              mainBalance: referralActivationBonus,
-              totalEarned: referralActivationBonus,
-              referralActiveCount: 1,
-              notifications: [
-                {
-                  id: Date.now().toString(),
-                  text: `Referral Activation Bonus! You earned ৳ ${referralActivationBonus} from ${user.name}'s activation.`,
-                  date: new Date().toISOString().split('T')[0]
-                },
-                ...referrerData.notifications
-              ]
-            });
-          }
-        }
-
+        // Use server-side RPC for atomic activation with fee deduction and referral bonus
+        await activateAccount(user.id);
         setShowSuccess(true);
       }, 'Account activated successfully!');
     };
@@ -6300,7 +6266,7 @@ export default function App() {
 
       try {
         setIsSubmitting(true);
-        const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+        const orderId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
 
         // Deduct balance
         const userRef_id = user.id;
@@ -6559,7 +6525,7 @@ export default function App() {
 
       await handleSubmission(async () => {
         const newReq: SubscriptionRequest = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           type,
           email: type === 'youtube' ? email : undefined,
@@ -7083,18 +7049,11 @@ export default function App() {
             if (referrerData) {
               const commission = (amount * referralCommissionRate) / 100;
               if (commission > 0) {
-                await updateRow('users', referrerRef_id, {
+                // Use atomic increment for balance fields
+                await incrementFields('users', referrerRef_id, {
                   mainBalance: commission,
                   totalEarned: commission,
-                  totalCommission: commission,
-                  notifications: [
-                    {
-                      id: Date.now().toString(),
-                      text: `Referral Commission! You earned ৳ ${commission.toFixed(2)} from ${userData.name}'s ${source}.`,
-                      date: new Date().toISOString().split('T')[0]
-                    },
-                    ...referrerData.notifications
-                  ]
+                  totalCommission: commission
                 });
               }
             }
@@ -7170,14 +7129,12 @@ export default function App() {
           if (s) {
             const reward = s.reward || gmailReward;
             const userRef_id = s.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
-              });
-              await processReferralCommission(s.userId, reward, 'Gmail Submission');
-            }
+            // Use atomic increment instead of read-modify-write
+            await incrementFields('users', userRef_id, {
+              mainBalance: reward,
+              totalEarned: reward
+            });
+            await processReferralCommission(s.userId, reward, 'Gmail Submission');
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7201,9 +7158,10 @@ export default function App() {
               // Find the task to get the reward
               const task = dynamicTasks.find(t => t.id === s.microjobId || t.title === s.microjobId);
               const reward = task ? task.reward : 5.00;
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
+              // Use atomic increment instead of read-modify-write
+              await incrementFields('users', userRef_id, {
+                mainBalance: reward,
+                totalEarned: reward
               });
               await processReferralCommission(s.userId, reward, 'Microjob');
             }
@@ -7258,14 +7216,12 @@ export default function App() {
           if (s) {
             const reward = s.reward || 2.00;
             const userRef_id = s.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
-              });
-              await processReferralCommission(s.userId, reward, 'Task');
-            }
+            // Use atomic increment instead of read-modify-write
+            await incrementFields('users', userRef_id, {
+              mainBalance: reward,
+              totalEarned: reward
+            });
+            await processReferralCommission(s.userId, reward, 'Task');
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7282,34 +7238,8 @@ export default function App() {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : '';
 
       try {
-        // admin op: withdrawals
-        await updateRow('withdrawals', id, { status: action, reason: reason || '' });
-
-        const w = withdrawals.find(w => w.id === id);
-        if (w) {
-          const userRef_id = w.userId;
-          const userData = await getRow('users', userRef_id) as UserProfile | null;
-          if (userData) {
-            if (action === 'approved') {
-              await updateRow('users', userRef_id, {
-                pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
-                notifications: [
-                  { id: Date.now().toString(), text: `Withdrawal Approved: ৳${w.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            } else {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + w.amount,
-                pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
-                notifications: [
-                  { id: Date.now().toString(), text: `Withdrawal Rejected: ${reason}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
-          }
-        }
+        // Use server-side RPC for atomic withdrawal processing with proper locking
+        await processWithdrawal(id, action, reason);
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `withdrawals/${id}`);
@@ -7329,35 +7259,8 @@ export default function App() {
 
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : '';
       try {
-        // admin op: rechargeRequests - use empty string instead of undefined for reason
-        await updateRow('rechargeRequests', id, { status: action, reason: reason || '' });
-
-        const r = rechargeRequests.find(r => r.id === id);
-        if (r) {
-          const userRef_id = r.userId;
-          const userData = await getRow('users', userRef_id) as UserProfile | null;
-          if (userData) {
-            if (action === 'approved') {
-              // For deposits, we ADD to balance when approved
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.amount,
-                totalEarned: userData.totalEarned + r.amount,
-                notifications: [
-                  { id: Date.now().toString(), text: `Deposit Approved: ৳${r.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            } else {
-              // For deposits, if rejected, we just notify
-              await updateRow('users', userRef_id, {
-                notifications: [
-                  { id: Date.now().toString(), text: `Deposit Rejected: ${reason}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
-          }
-        }
+        // Use server-side RPC for atomic deposit processing with proper locking
+        await processDeposit(id, action, reason);
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `rechargeRequests/${id}`);
@@ -7379,13 +7282,8 @@ export default function App() {
         if (action === 'rejected') {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
-            const userRef_id = r.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.amount
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', r.userId, 'mainBalance', r.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7403,17 +7301,8 @@ export default function App() {
         if (action === 'cancelled') {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
-            const userRef_id = o.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + o.amount,
-                notifications: [
-                  { id: Date.now().toString(), text: `SMM Order Cancelled: ${reason}. Refunded ৳${o.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', o.userId, 'mainBalance', o.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7431,13 +7320,8 @@ export default function App() {
         if (action === 'rejected') {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
-            const userRef_id = r.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.price
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', r.userId, 'mainBalance', r.price);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -9283,14 +9167,11 @@ export default function App() {
                                 onClick={async () => {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
-                                  const userRef_id = s.userId;
-                                  const userData = await getRow('users', userRef_id) as UserProfile | null;
-                                  if (userData) {
-                                    await updateRow('users', userRef_id, {
-                                      mainBalance: userData.mainBalance + tournament.prizePool,
-                                      totalEarned: userData.totalEarned + tournament.prizePool
-                                    });
-                                  }
+                                  // Use atomic increment for prize payout
+                                  await incrementFields('users', s.userId, {
+                                    mainBalance: tournament.prizePool,
+                                    totalEarned: tournament.prizePool
+                                  });
                                   await updateRow('ludoSubmissions', s.id, { status: 'approved' });
                                   alert('Submission Approved & Prize Paid!');
                                 }}
