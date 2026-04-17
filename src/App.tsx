@@ -462,7 +462,10 @@ export default function App() {
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(() => {
+    // Auto-show registration form when visiting with a referral link (?ref=...)
+    return !!new URLSearchParams(window.location.search).get('ref');
+  });
   // Pre-fill referral code from ?ref= URL parameter (from shared referral links)
   const [regData, setRegData] = useState({
     name: '',
@@ -783,19 +786,20 @@ export default function App() {
 
     try {
       // Check if referral code is valid (or allow first user without one)
+      // Uses RPC function to bypass RLS (unauthenticated users can't query the users table directly)
       let referrerId = '';
 
       if (regData.refCode) {
-        const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
-        if (!refSnap || refSnap.length === 0) {
+        const { data: refResult, error: refError } = await supabase.rpc('validate_referral_code', { code: regData.refCode });
+        if (refError || !refResult || refResult.length === 0) {
           alert('Invalid Referral Code. Please enter a valid code.');
           return;
         }
-        referrerId = refSnap[0].id;
+        referrerId = refResult[0].user_id;
       } else {
         // Allow registration without referral code only if no users exist (first user bootstrap)
-        const existingUsers = await getRows('users');
-        if (existingUsers && existingUsers.length > 0) {
+        const { count } = await supabase.from('users').select('id', { count: 'exact', head: true });
+        if (count && count > 0) {
           alert('Referral Code is required. Please enter a valid referral code.');
           return;
         }
