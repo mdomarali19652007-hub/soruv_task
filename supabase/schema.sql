@@ -13,60 +13,24 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
--- Better Auth Tables
--- These are managed by Better Auth but defined here for clarity.
+-- Better Auth Tables (managed by Better Auth CLI)
+--
+-- Run `npx @better-auth/cli@latest migrate` to create/update.
+-- Better Auth creates these tables automatically:
+--   - user        (auth users - id, name, email, role, etc.)
+--   - session     (DB-backed sessions for instant revocation)
+--   - account     (OAuth provider accounts linked to users)
+--   - verification (email verification tokens, password reset tokens)
+--
+-- The app "users" table below is SEPARATE from Better Auth's "user" table.
+-- They share the same id (TEXT) so profiles can be linked, but:
+--   - Better Auth "user": manages authentication (email, password hash, OAuth)
+--   - App "users": manages business data (balance, referrals, tasks, etc.)
+--
+-- DO NOT manually create Better Auth tables. The CLI handles migrations.
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS "ba_user" (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL DEFAULT '',
-  email TEXT NOT NULL UNIQUE,
-  "emailVerified" BOOLEAN DEFAULT FALSE,
-  image TEXT DEFAULT '',
-  role TEXT DEFAULT 'user',
-  banned BOOLEAN DEFAULT FALSE,
-  "banReason" TEXT DEFAULT '',
-  "banExpires" TIMESTAMPTZ,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS "ba_session" (
-  id TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL REFERENCES "ba_user"(id) ON DELETE CASCADE,
-  token TEXT NOT NULL UNIQUE,
-  "expiresAt" TIMESTAMPTZ NOT NULL,
-  "ipAddress" TEXT DEFAULT '',
-  "userAgent" TEXT DEFAULT '',
-  "impersonatedBy" TEXT DEFAULT '',
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS "ba_account" (
-  id TEXT PRIMARY KEY,
-  "userId" TEXT NOT NULL REFERENCES "ba_user"(id) ON DELETE CASCADE,
-  "accountId" TEXT NOT NULL,
-  "providerId" TEXT NOT NULL,
-  "accessToken" TEXT DEFAULT '',
-  "refreshToken" TEXT DEFAULT '',
-  "accessTokenExpiresAt" TIMESTAMPTZ,
-  "refreshTokenExpiresAt" TIMESTAMPTZ,
-  scope TEXT DEFAULT '',
-  "idToken" TEXT DEFAULT '',
-  password TEXT DEFAULT '',
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS "ba_verification" (
-  id TEXT PRIMARY KEY,
-  identifier TEXT NOT NULL,
-  value TEXT NOT NULL,
-  "expiresAt" TIMESTAMPTZ NOT NULL,
-  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
-  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
-);
+-- (Better Auth tables omitted -- managed by CLI)
 
 -- ============================================================
 -- App Tables
@@ -515,10 +479,8 @@ DECLARE
   v_withdrawal RECORD;
   v_user RECORD;
 BEGIN
-  -- Admin check
-  IF NOT is_admin() THEN
-    RAISE EXCEPTION 'Unauthorized: admin access required';
-  END IF;
+  -- NOTE: Admin check is handled at the Express middleware layer (requireAdmin).
+  -- These functions are called via service role key which bypasses RLS.
 
   IF p_action NOT IN ('approved', 'rejected') THEN
     RAISE EXCEPTION 'Invalid action: must be approved or rejected';
@@ -564,10 +526,7 @@ CREATE OR REPLACE FUNCTION process_deposit(
 DECLARE
   v_request RECORD;
 BEGIN
-  -- Admin check
-  IF NOT is_admin() THEN
-    RAISE EXCEPTION 'Unauthorized: admin access required';
-  END IF;
+  -- NOTE: Admin check is handled at the Express middleware layer (requireAdmin).
 
   IF p_action NOT IN ('approved', 'rejected') THEN
     RAISE EXCEPTION 'Invalid action';
@@ -768,7 +727,8 @@ BEGIN
   ])
   LOOP
     EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (true)', tbl || '_sel', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR DELETE USING (is_admin())', tbl || '_del', tbl);
+    -- DELETE operations go through service role key (bypasses RLS)
+    -- No need for is_admin() check since Supabase Auth is not used
   END LOOP;
 END $$;
 
