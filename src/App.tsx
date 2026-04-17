@@ -458,7 +458,7 @@ const SMM_SERVICES = [
 export default function App() {
   const [view, setView] = useState<View>('login');
   const [selectedSocialJob, setSelectedSocialJob] = useState<{ title: string, color: string, icon: any } | null>(null);
-  const [financeStep, setFinanceStep] = useState<'form' | 'success' | 'deposit'>('form');
+  const [financeStep, setFinanceStep] = useState<'form' | 'success' | 'deposit' | 'deposit-success'>('form');
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -668,10 +668,10 @@ export default function App() {
       setDollarSellRate(data.dollarSellRate || 115.00);
       setSpinCost(data.spinCost ?? 2);
       setDailyReward(data.dailyReward ?? 1);
-      setActiveFolders(data.activeFolders || []);
-      setEnabledFeatures(data.enabledFeatures || []);
-      setEnabledSmmServices(data.enabledSmmServices || ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
-      setEnabledCards(data.enabledCards || INCOME_CARDS.map(c => c.title));
+      setActiveFolders(data.activeFolders?.length ? data.activeFolders : ['folder-a', 'folder-b', 'folder-c', 'folder-d']);
+      setEnabledFeatures(data.enabledFeatures?.length ? data.enabledFeatures : ['spin', 'daily-claim', 'leaderboard', 'support', 'ads-earn']);
+      setEnabledSmmServices(data.enabledSmmServices?.length ? data.enabledSmmServices : ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
+      setEnabledCards(data.enabledCards?.length ? data.enabledCards : INCOME_CARDS.map(c => c.title));
       setTotalPaid(data.totalPaid || 550000);
       setActiveWorkerCount(data.activeWorkerCount || 12000);
       setGmailPassword(data.gmailPassword ?? '');
@@ -1037,11 +1037,11 @@ export default function App() {
     confetti({ particleCount: 50, spread: 60 });
   };
 
-  const handleSubmission = async (operation: () => Promise<void>, successMessage: string) => {
+  const handleSubmission = async (operation: () => Promise<void>, successMessage?: string) => {
     setIsSubmitting(true);
     setSubmissionProgress(0);
 
-    const duration = 3000;
+    const duration = 1500;
     const interval = 50;
     const steps = duration / interval;
     let currentStep = 0;
@@ -1052,16 +1052,23 @@ export default function App() {
       if (currentStep >= steps) clearInterval(timer);
     }, interval);
 
-    await new Promise(resolve => setTimeout(resolve, duration));
-
     try {
       await operation();
+      // Wait for progress animation to finish if the operation was fast
+      const elapsed = currentStep * interval;
+      if (elapsed < duration) {
+        await new Promise(resolve => setTimeout(resolve, duration - elapsed));
+      }
+      clearInterval(timer);
       setIsSubmitting(false);
       confetti({ particleCount: 150, spread: 70 });
-      alert(successMessage);
+      // Only show alert if a message is provided (callers can handle their own success UI)
+      if (successMessage) {
+        alert(successMessage);
+      }
     } catch (e) {
-      setIsSubmitting(false);
       clearInterval(timer);
+      setIsSubmitting(false);
       throw e;
     }
   };
@@ -1518,10 +1525,10 @@ export default function App() {
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xl">
-              {Math.ceil((3 * (100 - submissionProgress)) / 100)}s
+              {Math.ceil((1.5 * (100 - submissionProgress)) / 100)}s
             </div>
           </div>
-          <h3 className="text-white font-black text-xl uppercase tracking-[0.3em] mb-2">প্রসেসিং হচ্ছে...</h3>
+          <h3 className="text-white font-black text-xl uppercase tracking-[0.3em] mb-2">Processing...</h3>
           <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">দয়া করে অপেক্ষা করুন</p>
         </motion.div>
       )}
@@ -2405,6 +2412,7 @@ export default function App() {
     const [showHistory, setShowHistory] = useState(false);
     const [error, setError] = useState('');
     const [lastWithdrawal, setLastWithdrawal] = useState<any>(null);
+    const [lastDeposit, setLastDeposit] = useState<any>(null);
 
     const handleWithdraw = async () => {
       if (!user.isActive) {
@@ -2460,7 +2468,7 @@ export default function App() {
         setMethod(null);
         setAccountNumber('');
         setFinanceStep('success');
-      }, 'Withdrawal request submitted successfully!');
+      });
     };
 
     const handleDeposit = async () => {
@@ -2488,16 +2496,18 @@ export default function App() {
           type: 'Prepaid' as const,
           status: 'pending' as const,
           date: new Date().toLocaleDateString(),
+          time: new Date().toLocaleTimeString(),
           timestamp: Date.now()
         };
 
         await insertRow('rechargeRequests', depositData);
 
+        setLastDeposit(depositData);
         setAmount('');
         setMethod(null);
         setAccountNumber('');
-        setFinanceStep('form');
-      }, 'Deposit request submitted! Please ensure you have "Sent Money" to 01774397545. Admin will verify shortly.');
+        setFinanceStep('deposit-success');
+      });
     };
 
     if (showHistory) {
@@ -2564,6 +2574,24 @@ export default function App() {
             { label: 'Date & Time', value: `${lastWithdrawal?.date} | ${lastWithdrawal?.time}` },
             { label: 'Method', value: lastWithdrawal?.method.split(' (')[0] },
             { label: 'Amount (TK)', value: `৳ ${lastWithdrawal?.amount.toFixed(2)}`, color: 'text-indigo-600' }
+          ]}
+        />
+      );
+    }
+
+    if (financeStep === 'deposit-success') {
+      return (
+        <SuccessView
+          title="Deposit Submitted"
+          subtitle="Your deposit is pending admin review"
+          onClose={() => setFinanceStep('form')}
+          colorClass="bg-emerald-500"
+          details={[
+            { label: 'Method', value: lastDeposit?.operator || '' },
+            { label: 'Sender Number', value: lastDeposit?.phone || '' },
+            { label: 'Date & Time', value: `${lastDeposit?.date} | ${lastDeposit?.time}` },
+            { label: 'Amount', value: `৳ ${lastDeposit?.amount?.toFixed(2)}`, color: 'text-emerald-600' },
+            { label: 'Status', value: 'Pending Review', color: 'text-amber-600' }
           ]}
         />
       );
@@ -2720,9 +2748,10 @@ export default function App() {
 
                   <button
                     onClick={handleDeposit}
-                    className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all"
+                    disabled={isSubmitting}
+                    className={`w-full py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl transition-all ${isSubmitting ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white active:scale-95'}`}
                   >
-                    Confirm Deposit
+                    {isSubmitting ? 'Processing...' : 'Confirm Deposit'}
                   </button>
                 </div>
               </div>
