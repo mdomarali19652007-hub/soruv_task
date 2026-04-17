@@ -368,9 +368,11 @@ CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "users_update" ON users FOR UPDATE USING (auth.uid() = id OR is_admin());
 CREATE POLICY "users_delete" ON users FOR DELETE USING (is_admin());
 
--- Settings: all read, admin write
-CREATE POLICY "settings_select" ON settings FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "settings_all" ON settings FOR ALL USING (is_admin());
+-- Settings: public read (maintenance mode must be visible before login), admin write
+CREATE POLICY "settings_select" ON settings FOR SELECT USING (true);
+CREATE POLICY "settings_insert" ON settings FOR INSERT WITH CHECK (is_admin());
+CREATE POLICY "settings_update" ON settings FOR UPDATE USING (is_admin());
+CREATE POLICY "settings_delete" ON settings FOR DELETE USING (is_admin());
 
 -- For each submission/request table: user reads own + admin reads all, user creates own, admin updates/deletes
 -- Using a macro-like pattern for all similar tables

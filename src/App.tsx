@@ -612,42 +612,41 @@ export default function App() {
     });
     unsubs.push(() => authSub.unsubscribe());
 
-    // Sync Global Settings - auto-create default row if missing
-    const unsubSettings = subscribeToRow<any>('settings', 'global', async (data) => {
+    // Sync Global Settings - use defaults when settings row doesn't exist
+    // NOTE: The settings row must be created via SQL migration or admin panel.
+    // The anon role does not have INSERT permission on the settings table.
+    const unsubSettings = subscribeToRow<any>('settings', 'global', (data) => {
       if (!data) {
-        // Settings row doesn't exist yet - create it with defaults
-        await upsertRow('settings', { id: 'global' }).catch(e => console.warn('Failed to create default settings:', e));
+        console.warn('Settings row not found. Using defaults. Run the schema.sql INSERT to create it.');
         return;
       }
-      if (data) {
-        setGlobalNotice(data.globalNotice);
-        setIsMaintenance(data.isMaintenance);
-        setMinWithdrawal(data.minWithdrawal || 55);
-        setWithdrawalFee(data.withdrawalFee || 20);
-        setDollarBuyRate(data.dollarBuyRate || 125.00);
-        setDollarSellRate(data.dollarSellRate || 115.00);
-        setSpinCost(data.spinCost);
-        setDailyReward(data.dailyReward);
-        setActiveFolders(data.activeFolders || []);
-        setEnabledFeatures(data.enabledFeatures || []);
-        setEnabledSmmServices(data.enabledSmmServices || ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
-        setEnabledCards(data.enabledCards || INCOME_CARDS.map(c => c.title));
-        setTotalPaid(data.totalPaid || 550000);
-        setActiveWorkerCount(data.activeWorkerCount || 12000);
-        setGmailPassword(data.gmailPassword);
-        setGmailReward(data.gmailReward || 10.00);
-        setAdReward(data.adReward);
-        setDailyAdLimit(data.dailyAdLimit);
-        setDeliveryFee(data.deliveryFee || 120);
-        setAdminGen1Rate(data.gen1Rate || 20.00);
-        setAdminGen2Rate(data.gen2Rate || 5.00);
-        setAdminGen3Rate(data.gen3Rate || 2.00);
-        setActivationFee(data.activationFee || 25);
-        setRechargeCommissionRate(data.rechargeCommissionRate || 20);
-        setActivationDuration(data.activationDuration || 30);
-        setReferralCommissionRate(data.referralCommissionRate || 5);
-        setReferralActivationBonus(data.referralActivationBonus || 20);
-      }
+      setGlobalNotice(data.globalNotice ?? '');
+      setIsMaintenance(data.isMaintenance ?? false);
+      setMinWithdrawal(data.minWithdrawal || 55);
+      setWithdrawalFee(data.withdrawalFee || 20);
+      setDollarBuyRate(data.dollarBuyRate || 125.00);
+      setDollarSellRate(data.dollarSellRate || 115.00);
+      setSpinCost(data.spinCost ?? 2);
+      setDailyReward(data.dailyReward ?? 1);
+      setActiveFolders(data.activeFolders || []);
+      setEnabledFeatures(data.enabledFeatures || []);
+      setEnabledSmmServices(data.enabledSmmServices || ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
+      setEnabledCards(data.enabledCards || INCOME_CARDS.map(c => c.title));
+      setTotalPaid(data.totalPaid || 550000);
+      setActiveWorkerCount(data.activeWorkerCount || 12000);
+      setGmailPassword(data.gmailPassword ?? '');
+      setGmailReward(data.gmailReward || 10.00);
+      setAdReward(data.adReward ?? 0.40);
+      setDailyAdLimit(data.dailyAdLimit ?? 5);
+      setDeliveryFee(data.deliveryFee || 120);
+      setAdminGen1Rate(data.gen1Rate || 20.00);
+      setAdminGen2Rate(data.gen2Rate || 5.00);
+      setAdminGen3Rate(data.gen3Rate || 2.00);
+      setActivationFee(data.activationFee || 25);
+      setRechargeCommissionRate(data.rechargeCommissionRate || 20);
+      setActivationDuration(data.activationDuration || 30);
+      setReferralCommissionRate(data.referralCommissionRate || 5);
+      setReferralActivationBonus(data.referralActivationBonus || 20);
     });
     unsubs.push(unsubSettings);
 
