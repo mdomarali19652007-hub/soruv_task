@@ -42,6 +42,7 @@ CREATE TABLE IF NOT EXISTS users (
   "suspensionUntil" TEXT DEFAULT '',
   "totalCommission" NUMERIC(12,2) DEFAULT 0,
   "socialSubmissions" JSONB DEFAULT '[]'::jsonb,
+  "profilePic" TEXT DEFAULT '',
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
