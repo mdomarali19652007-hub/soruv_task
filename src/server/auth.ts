@@ -1,11 +1,14 @@
 import { betterAuth } from 'better-auth';
-import { admin } from 'better-auth/plugins';
+import { admin } from 'better-auth/plugins/admin';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Validate DATABASE_URL before initializing Better Auth
+// ============================================================
+// Environment validation
+// ============================================================
+
 const databaseUrl = process.env.DATABASE_URL;
 if (!databaseUrl) {
   console.error(
@@ -23,31 +26,49 @@ if (!databaseUrl) {
   process.exit(1);
 }
 
-/**
- * Better Auth server instance.
- *
- * Uses Supabase Postgres via the `pg` Pool adapter as recommended by Better Auth docs.
- * See: https://better-auth.com/llms.txt/docs/adapters/postgresql.md
- *
- * Environment variables required:
- *   BETTER_AUTH_SECRET        - Secret key for signing sessions/tokens
- *   DATABASE_URL              - Supabase Postgres connection string (direct, not REST API)
- *   BETTER_AUTH_URL           - Public URL of the server (e.g. http://localhost:3000)
- *   GOOGLE_CLIENT_ID          - Google OAuth client ID
- *   GOOGLE_CLIENT_SECRET      - Google OAuth client secret
- */
+const authSecret = process.env.BETTER_AUTH_SECRET;
+if (!authSecret || authSecret.length < 32) {
+  console.error(
+    '\n[Auth Error] BETTER_AUTH_SECRET must be at least 32 characters.\n' +
+    'Generate one with: openssl rand -base64 32\n' +
+    `Current length: ${authSecret?.length || 0}\n`
+  );
+  process.exit(1);
+}
+
+// ============================================================
+// Better Auth server instance
+//
+// Uses Supabase Postgres via the `pg` Pool adapter.
+// Docs: https://better-auth.com/docs/adapters/postgresql
+//
+// After modifying this config or adding plugins, run:
+//   npx @better-auth/cli@latest migrate
+//
+// Verify setup with: GET /api/auth/ok -> { status: "ok" }
+//
+// Environment variables required:
+//   BETTER_AUTH_SECRET        - Min 32 chars. Generate: openssl rand -base64 32
+//   DATABASE_URL              - Supabase Postgres connection string (direct, not REST)
+//   BETTER_AUTH_URL           - Public URL (e.g. http://localhost:3000)
+//   GOOGLE_CLIENT_ID          - Google OAuth client ID
+//   GOOGLE_CLIENT_SECRET      - Google OAuth client secret
+// ============================================================
+
 export const auth = betterAuth({
   database: new Pool({
     connectionString: databaseUrl,
   }),
-  secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-in-production',
+
+  // Only define secret/baseURL if env vars are NOT set (per best practices skill)
+  // Since we validated above, we can pass them directly
+  secret: authSecret,
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   basePath: '/api/auth',
 
   // Email + password authentication
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: false, // We handle verification in-app for now
   },
 
   // Google OAuth
@@ -62,20 +83,21 @@ export const auth = betterAuth({
   session: {
     cookieCache: {
       enabled: true,
-      maxAge: 60 * 5, // 5 min cache
+      maxAge: 60 * 5, // 5 min cache before re-validating from DB
     },
     expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // Update session age every 24 hours
+    updateAge: 60 * 60 * 24, // Refresh session age every 24 hours
   },
 
-  // Admin plugin for user management
+  // Admin plugin for user management (ban, revoke sessions, etc.)
+  // Import from dedicated path for tree-shaking per best practices
   plugins: [
     admin({
       defaultRole: 'user',
     }),
   ],
 
-  // User model additional fields
+  // User model additional fields tracked by Better Auth
   user: {
     additionalFields: {
       role: {
@@ -86,12 +108,10 @@ export const auth = betterAuth({
     },
   },
 
-  // Hooks for user lifecycle events
+  // Database hooks for lifecycle events
   databaseHooks: {
     user: {
       create: {
-        // After Better Auth creates the user, we'll handle app-specific
-        // profile creation in our custom registration endpoint
         after: async (user) => {
           console.log(`[Auth] User created: ${user.id} (${user.email})`);
         },
@@ -106,7 +126,7 @@ export const auth = betterAuth({
     },
   },
 
-  // Trust the proxy headers in production
+  // CSRF trusted origins
   trustedOrigins: [
     process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   ],

@@ -6,6 +6,13 @@ import { adminClient } from 'better-auth/client/plugins';
  *
  * Communicates with the Express server at /api/auth for all auth operations.
  * Session is cookie-based and DB-backed for instant revocation.
+ *
+ * Key method mapping from Supabase Auth:
+ *   supabase.auth.signUp             -> authClient.signUp.email
+ *   supabase.auth.signInWithPassword -> authClient.signIn.email
+ *   supabase.auth.signInWithOAuth    -> authClient.signIn.social
+ *   supabase.auth.signOut            -> authClient.signOut
+ *   supabase.auth.getSession         -> authClient.getSession / useSession
  */
 export const authClient = createAuthClient({
   baseURL: window.location.origin,
@@ -24,9 +31,10 @@ export const {
 
 /**
  * Request a password reset email.
+ * Uses Better Auth's forgetPassword endpoint.
  */
 export async function requestPasswordReset(email: string, redirectTo?: string) {
-  return authClient.requestPasswordReset({
+  return authClient.forgetPassword({
     email,
     redirectTo: redirectTo || `${window.location.origin}/reset-password`,
   });
@@ -34,6 +42,7 @@ export async function requestPasswordReset(email: string, redirectTo?: string) {
 
 /**
  * Complete password reset with token.
+ * Uses Better Auth's resetPassword endpoint.
  */
 export async function completePasswordReset(newPassword: string, token?: string) {
   return authClient.resetPassword({

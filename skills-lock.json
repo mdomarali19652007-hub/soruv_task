@@ -1,6 +1,16 @@
 {
   "version": 1,
   "skills": {
+    "better-auth-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "a4c830509e85557b59339d8d93a4e243e9e59c686e7678854d39230e12c2a6dc"
+    },
+    "create-auth-skill": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "31c027d02dbf1faa37f58191f574b9443143042fb2b684fe32df53ab0270487c"
+    },
     "developing-genkit-dart": {
       "source": "firebase/agent-skills",
       "sourceType": "github",
@@ -15,6 +25,11 @@
       "source": "firebase/agent-skills",
       "sourceType": "github",
       "computedHash": "4d3de47b5be279ab3b0ee6055ae541f28d1cc45f8e8986c0b5df2f8d89f4ea30"
+    },
+    "email-and-password-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "747d7f73bd9e2ec5317b8ef88dc70f97df716d00e3d02de4051feebaa48b062d"
     },
     "firebase-ai-logic": {
       "source": "firebase/agent-skills",
@@ -60,6 +75,16 @@
       "source": "firebase/agent-skills",
       "sourceType": "github",
       "computedHash": "f3e47896a49b76db787f47ee97f8cb2e23c51e4b18a73cd2ded32d6cc8c02869"
+    },
+    "organization-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "79a5a85b43d10e9fe37582b3506b051a33a991817b938f349099baa5ddba21aa"
+    },
+    "two-factor-authentication-best-practices": {
+      "source": "better-auth/skills",
+      "sourceType": "github",
+      "computedHash": "7e297aaf887e11fdc03e52bdbf44974e161e8f7c393170ced7dc66cace4f6d46"
     }
   }
 }
