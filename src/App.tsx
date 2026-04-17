@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  User, 
-  Wallet, 
-  TrendingUp, 
-  Users, 
-  Globe, 
-  ArrowLeft, 
+import {
+  User,
+  Wallet,
+  TrendingUp,
+  Users,
+  Globe,
+  ArrowLeft,
   History,
   CheckCircle,
   CheckCircle2,
@@ -69,18 +69,18 @@ import {
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabase';
-import { 
-  insertRow, 
-  updateRow, 
-  upsertRow, 
-  getRow, 
-  getRows, 
-  deleteRow, 
+import {
+  insertRow,
+  updateRow,
+  upsertRow,
+  getRow,
+  getRows,
+  deleteRow,
   incrementField,
   incrementFields,
-  subscribeToTable, 
+  subscribeToTable,
   subscribeToRow,
-  uploadFile 
+  uploadFile
 } from './lib/database';
 import { sanitizeAndTrim } from './utils/sanitize';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
@@ -457,22 +457,22 @@ const SMM_SERVICES = [
 
 export default function App() {
   const [view, setView] = useState<View>('login');
-  const [selectedSocialJob, setSelectedSocialJob] = useState<{title: string, color: string, icon: any} | null>(null);
+  const [selectedSocialJob, setSelectedSocialJob] = useState<{ title: string, color: string, icon: any } | null>(null);
   const [financeStep, setFinanceStep] = useState<'form' | 'success' | 'deposit'>('form');
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
   // Pre-fill referral code from ?ref= URL parameter (from shared referral links)
-  const [regData, setRegData] = useState({ 
-    name: '', 
-    email: '', 
-    phone: '', 
-    password: '', 
-    confirmPassword: '', 
-    refCode: new URLSearchParams(window.location.search).get('ref') || '', 
+  const [regData, setRegData] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    confirmPassword: '',
+    refCode: new URLSearchParams(window.location.search).get('ref') || '',
     country: 'Bangladesh',
-    age: '' 
+    age: ''
   });
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -547,7 +547,7 @@ export default function App() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState(0);
 
-  const isAdmin = user.email === 'soruvislam51@gmail.com';
+  const isAdmin = user.email === 'shovonali885@gmail.com';
 
   // --- Scroll to Top on View Change ---
   useEffect(() => {
@@ -584,12 +584,12 @@ export default function App() {
             if (data.status === 'suspended' && data.suspensionUntil) {
               const expiry = new Date(data.suspensionUntil);
               if (new Date() > expiry) {
-                await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => {});
+                await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
               }
             }
             // Admin Self-Healing
             if (data.email === 'soruvislam51@gmail.com' && data.status !== 'active') {
-              await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => {});
+              await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
             }
             setUser(data);
           } else {
@@ -680,13 +680,13 @@ export default function App() {
   const uploadImage = async (file: File, context: string = 'general'): Promise<string> => {
     const { data: { user: currentUser } } = await supabase.auth.getUser();
     if (!currentUser) throw new Error('User not authenticated');
-    
+
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${currentUser.id}/${fileName}`;
-    
+
     try {
       const url = await uploadFile(file, filePath);
-      
+
       // Save to uploads table for admin tracking
       await insertRow('uploads', {
         userId: currentUser.id,
@@ -696,7 +696,7 @@ export default function App() {
         timestamp: Date.now(),
         date: new Date().toISOString()
       });
-      
+
       return url;
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'storage/uploads');
@@ -724,15 +724,15 @@ export default function App() {
 
         try {
           const url = await uploadImage(file, context);
-          
+
           if (context === 'profile' && user.id) {
             await updateRow('users', user.id, {
               profilePic: url
             });
           }
-          
-          window.dispatchEvent(new CustomEvent('global-upload-complete', { 
-            detail: { url, context, targetId: target.id } 
+
+          window.dispatchEvent(new CustomEvent('global-upload-complete', {
+            detail: { url, context, targetId: target.id }
           }));
         } catch (error) {
           console.error('Global upload failed:', error);
@@ -794,10 +794,10 @@ export default function App() {
       });
       if (signUpError) throw signUpError;
       if (!signUpData.user) throw new Error('Registration failed');
-      
+
       // Generate unique referral code (numeric ID) - same value for both fields
       const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
-      
+
       const newUser: UserProfile = {
         ...INITIAL_USER,
         id: signUpData.user.id,
@@ -875,7 +875,7 @@ export default function App() {
         options: { redirectTo: window.location.origin }
       });
       if (googleError) throw googleError;
-      
+
       // After OAuth redirect, the onAuthStateChange listener handles user creation
       setShowWelcome(true);
       setView('home');
@@ -908,18 +908,18 @@ export default function App() {
     }
     setIsSpinning(true);
     setResult(null);
-    
+
     setTimeout(async () => {
       const prizes = [0, 0.5, 1, 2, 5, 10, 0, 0.2];
       const win = prizes[Math.floor(Math.random() * prizes.length)];
-      
+
       try {
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
           mainBalance: -spinCost + win,
           totalEarned: win
         });
-        
+
         setIsSpinning(false);
         setResult(win > 0 ? `৳ ${win.toFixed(2)}` : 'Better Luck Next Time!');
         if (win > 0) confetti({ particleCount: 150, spread: 70 });
@@ -958,20 +958,20 @@ export default function App() {
   const handleSubmission = async (operation: () => Promise<void>, successMessage: string) => {
     setIsSubmitting(true);
     setSubmissionProgress(0);
-    
+
     const duration = 3000;
     const interval = 50;
     const steps = duration / interval;
     let currentStep = 0;
-    
+
     const timer = setInterval(() => {
       currentStep++;
       setSubmissionProgress((currentStep / steps) * 100);
       if (currentStep >= steps) clearInterval(timer);
     }, interval);
-    
+
     await new Promise(resolve => setTimeout(resolve, duration));
-    
+
     try {
       await operation();
       setIsSubmitting(false);
@@ -992,27 +992,27 @@ export default function App() {
       <div className="absolute top-0 left-0 w-full h-full">
         <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-[#D4AF37]/10 blur-[120px] rounded-full animate-pulse" />
         <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#C5A028]/5 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-[0.05] pointer-events-none" 
-             style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-[0.05] pointer-events-none"
+          style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
-      
+
       {/* Info Buttons */}
       <div className="absolute top-8 left-0 right-0 px-8 flex justify-center gap-4 z-20">
-        <button 
+        <button
           onClick={() => setShowInfoModal('info')}
           className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
         >
           <Info className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
           <span>Website Info</span>
         </button>
-        <button 
+        <button
           onClick={() => alert('Upcoming Feature!')}
           className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
         >
           <HelpCircle className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
           <span>Help Center</span>
         </button>
-        <button 
+        <button
           onClick={() => setShowInfoModal('freelance')}
           className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
         >
@@ -1021,7 +1021,7 @@ export default function App() {
         </button>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ y: 30, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
@@ -1034,7 +1034,7 @@ export default function App() {
               <Wallet className="w-10 h-10 text-white relative z-10" />
             </div>
             <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-2">Top Earning <span className="text-[#D4AF37]">Elite</span></h1>
-            
+
             {isRegistering ? (
               <div className="text-center">
                 <p className="text-[#D4AF37] font-black text-[10px] uppercase tracking-[0.4em] mb-2">The Future of Digital Work</p>
@@ -1057,44 +1057,44 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="relative group">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="Your Name" 
+                    <input
+                      type="text"
+                      placeholder="Your Name"
                       value={regData.name}
-                      onChange={e => setRegData({...regData, name: e.target.value})}
+                      onChange={e => setRegData({ ...regData, name: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
                     <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="Mobile Number" 
+                    <input
+                      type="text"
+                      placeholder="Mobile Number"
                       value={regData.phone}
-                      onChange={e => setRegData({...regData, phone: e.target.value})}
+                      onChange={e => setRegData({ ...regData, phone: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type="email" 
-                      placeholder="Email Address" 
+                    <input
+                      type="email"
+                      placeholder="Email Address"
                       value={regData.email}
-                      onChange={e => setRegData({...regData, email: e.target.value})}
+                      onChange={e => setRegData({ ...regData, email: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="Password (min 6 digit)" 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password (min 6 digit)"
                       value={regData.password}
-                      onChange={e => setRegData({...regData, password: e.target.value})}
+                      onChange={e => setRegData({ ...regData, password: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
-                    <button 
+                    <button
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#D4AF37] uppercase"
                     >
@@ -1103,29 +1103,29 @@ export default function App() {
                   </div>
                   <div className="relative group">
                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="Again Password" 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Again Password"
                       value={regData.confirmPassword}
-                      onChange={e => setRegData({...regData, confirmPassword: e.target.value})}
+                      onChange={e => setRegData({ ...regData, confirmPassword: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
                     <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="Referral Code (required for new users)" 
+                    <input
+                      type="text"
+                      placeholder="Referral Code (required for new users)"
                       value={regData.refCode}
-                      onChange={e => setRegData({...regData, refCode: e.target.value})}
+                      onChange={e => setRegData({ ...regData, refCode: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
                     <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <select 
+                    <select
                       value={regData.country}
-                      onChange={e => setRegData({...regData, country: e.target.value})}
+                      onChange={e => setRegData({ ...regData, country: e.target.value })}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all appearance-none"
                     >
                       <option value="Bangladesh">Bangladesh</option>
@@ -1135,8 +1135,8 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center gap-3 px-2">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="reg-terms"
                       checked={regAccepted}
                       onChange={e => setRegAccepted(e.target.checked)}
@@ -1148,13 +1148,13 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={handleEmailRegister}
                   className="w-full bg-gradient-to-r from-[#D4AF37] to-[#C5A028] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(212,175,55,0.3)] active:scale-95 transition-all mt-4"
                 >
                   Registered
                 </button>
-                
+
                 <button onClick={() => setIsRegistering(false)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-4 hover:text-[#D4AF37] transition-colors">
                   Existing Member? <span className="text-[#D4AF37] underline">Sign In</span>
                 </button>
@@ -1164,9 +1164,9 @@ export default function App() {
                 <div className="space-y-4">
                   <div className="relative group">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="Number or Email" 
+                    <input
+                      type="text"
+                      placeholder="Number or Email"
                       value={loginEmail}
                       onChange={e => setLoginEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
@@ -1174,14 +1174,14 @@ export default function App() {
                   </div>
                   <div className="relative group">
                     <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
-                    <input 
-                      type={showPassword ? "text" : "password"} 
-                      placeholder="Password" 
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Password"
                       value={loginPassword}
                       onChange={e => setLoginPassword(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
                     />
-                    <button 
+                    <button
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#D4AF37] uppercase"
                     >
@@ -1190,8 +1190,8 @@ export default function App() {
                   </div>
 
                   <div className="flex items-center gap-3 px-2">
-                    <input 
-                      type="checkbox" 
+                    <input
+                      type="checkbox"
                       id="login-terms"
                       checked={loginAccepted}
                       onChange={e => setLoginAccepted(e.target.checked)}
@@ -1203,7 +1203,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={handleEmailLogin}
                   className="w-full bg-gradient-to-r from-[#D4AF37] via-[#C5A028] to-[#D4AF37] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] hover:shadow-[0_25px_50px_-12px_rgba(212,175,55,0.5)] active:scale-[0.98] transition-all mt-4 relative overflow-hidden group"
                 >
@@ -1218,7 +1218,7 @@ export default function App() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-3">
-                  <button 
+                  <button
                     onClick={handleGoogleLogin}
                     className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#D4AF37]/30 hover:text-[#C5A028] transition-all shadow-sm active:scale-95"
                   >
@@ -1226,7 +1226,7 @@ export default function App() {
                     <span>Continue with Google</span>
                   </button>
 
-                  <button 
+                  <button
                     onClick={() => setIsRegistering(true)}
                     className="w-full bg-slate-50 border border-slate-100 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:border-[#D4AF37]/30 hover:text-[#D4AF37] transition-all active:scale-95"
                   >
@@ -1254,14 +1254,14 @@ export default function App() {
       <AnimatePresence>
         {showInfoModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowInfoModal(null)}
               className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -1290,7 +1290,7 @@ export default function App() {
                   <div className="space-y-4 text-right dir-rtl">
                     <p className="text-[#D4AF37] font-black border-b border-[#D4AF37]/10 pb-2">ফ্রিল্যান্সিং ক্যারিয়ার:</p>
                     <p className="font-bold text-slate-700 leading-relaxed">
-                      ফ্রিল্যান্সিং হলো বর্তমান সময়ের সবচেয়ে জনপ্রিয় মুক্ত পেশা। আমাদের প্ল্যাটফর্মে আপনি ছোট ছোট কাজ (Micro Tasks) করে আপনার ফ্রিল্যান্সিং ক্যারিয়ার শুরু করতে পারেন। 
+                      ফ্রিল্যান্সিং হলো বর্তমান সময়ের সবচেয়ে জনপ্রিয় মুক্ত পেশা। আমাদের প্ল্যাটফর্মে আপনি ছোট ছোট কাজ (Micro Tasks) করে আপনার ফ্রিল্যান্সিং ক্যারিয়ার শুরু করতে পারেন।
                     </p>
                     <p className="font-bold text-slate-700 leading-relaxed">
                       ধৈর্য এবং পরিশ্রমের মাধ্যমে আপনি এখান থেকে ভালো অংকের টাকা আয় করতে পারবেন। আজই শুরু করুন আপনার সফলতার যাত্রা!
@@ -1298,7 +1298,7 @@ export default function App() {
                   </div>
                 )}
               </div>
-              <button 
+              <button
                 onClick={() => setShowInfoModal(null)}
                 className="w-full mt-8 bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
               >
@@ -1313,12 +1313,12 @@ export default function App() {
 
   const WelcomeOverlay = () => {
     const [step, setStep] = useState(1);
-    
+
     if (!showWelcome) return null;
 
     return (
       <AnimatePresence mode="wait">
-        <motion.div 
+        <motion.div
           key="overlay"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
@@ -1326,7 +1326,7 @@ export default function App() {
           className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md"
         >
           {step === 1 ? (
-            <motion.div 
+            <motion.div
               key="step1"
               initial={{ scale: 0.8, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -1339,7 +1339,7 @@ export default function App() {
               </div>
               <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tighter uppercase glitch-text" data-text="SMART TASK">SMART TASK</h1>
               <p className="text-[#D4AF37] text-xs font-black uppercase tracking-[0.3em] mb-12">Next-Gen Earning Platform</p>
-              <button 
+              <button
                 onClick={() => setStep(2)}
                 className="w-full py-5 bg-gradient-to-r from-[#D4AF37] to-[#C5A028] text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
               >
@@ -1347,7 +1347,7 @@ export default function App() {
               </button>
             </motion.div>
           ) : (
-            <motion.div 
+            <motion.div
               key="step2"
               initial={{ scale: 0.8, opacity: 0, y: 40 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
@@ -1364,7 +1364,7 @@ export default function App() {
                   {rulesText}
                 </p>
               </div>
-              <button 
+              <button
                 onClick={() => {
                   setShowWelcome(false);
                   sessionStorage.setItem('hasSeenWelcome', 'true');
@@ -1383,7 +1383,7 @@ export default function App() {
   const SubmissionLoader = () => (
     <AnimatePresence>
       {isSubmitting && (
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -1423,21 +1423,21 @@ export default function App() {
     </AnimatePresence>
   );
 
-  const SuccessView = ({ 
-    title, 
-    subtitle, 
-    details, 
-    onClose, 
-    colorClass = "bg-emerald-500" 
-  }: { 
-    title: string; 
-    subtitle: string; 
-    details: { label: string; value: string; color?: string }[]; 
+  const SuccessView = ({
+    title,
+    subtitle,
+    details,
+    onClose,
+    colorClass = "bg-emerald-500"
+  }: {
+    title: string;
+    subtitle: string;
+    details: { label: string; value: string; color?: string }[];
     onClose: () => void;
     colorClass?: string;
   }) => (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="w-full max-w-md glass-card border-slate-200 shadow-2xl overflow-hidden"
@@ -1466,7 +1466,7 @@ export default function App() {
             </p>
           </div>
 
-          <button 
+          <button
             onClick={onClose}
             className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
           >
@@ -1479,7 +1479,7 @@ export default function App() {
 
   const RestrictionScreen = () => (
     <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6 text-center">
-      <motion.div 
+      <motion.div
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         className="glass-card bg-white/10 border-white/20 p-8 max-w-sm w-full"
@@ -1493,7 +1493,7 @@ export default function App() {
         <p className="text-rose-200 text-xs font-bold mb-6 leading-relaxed">
           {user.restrictionReason || 'Your account has been restricted due to a policy violation.'}
         </p>
-        
+
         {user.status === 'suspended' && user.suspensionUntil && (
           <div className="bg-white/5 rounded-2xl p-4 mb-6 border border-white/10">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Suspension Ends</p>
@@ -1504,15 +1504,15 @@ export default function App() {
         )}
 
         <div className="space-y-3">
-          <a 
-            href="https://t.me/smarttask_support" 
-            target="_blank" 
+          <a
+            href="https://t.me/smarttask_support"
+            target="_blank"
             rel="noreferrer"
             className="block w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
           >
             Contact Support
           </a>
-          <button 
+          <button
             onClick={() => {
               supabase.auth.signOut();
               setView('login');
@@ -1550,14 +1550,13 @@ export default function App() {
       {/* Feature 1: Daily Check-in */}
       {(enabledFeatures.includes('daily-claim') || isAdmin) && (
         <div className="px-6 mb-6">
-          <button 
+          <button
             onClick={claimDaily}
             disabled={user.dailyClaimed}
-            className={`w-full p-4 rounded-3xl flex items-center justify-between border transition-all ${
-              user.dailyClaimed 
-              ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed' 
-              : 'bg-gradient-to-r from-indigo-500/10 to-violet-600/10 border-indigo-500/30 text-indigo-600 neon-border'
-            }`}
+            className={`w-full p-4 rounded-3xl flex items-center justify-between border transition-all ${user.dailyClaimed
+                ? 'bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed'
+                : 'bg-gradient-to-r from-indigo-500/10 to-violet-600/10 border-indigo-500/30 text-indigo-600 neon-border'
+              }`}
           >
             <div className="flex items-center gap-3">
               <div className={`p-2 rounded-xl ${user.dailyClaimed ? 'bg-slate-200' : 'bg-indigo-500/20'}`}>
@@ -1581,18 +1580,18 @@ export default function App() {
             <h3 className="text-lg font-black mb-2">Join Our Community</h3>
             <p className="text-xs text-indigo-100 mb-6 leading-relaxed">Get the latest updates, payment proofs, and tips from our official community group.</p>
             <div className="flex gap-3">
-              <a 
-                href={telegramLink} 
-                target="_blank" 
+              <a
+                href={telegramLink}
+                target="_blank"
                 rel="noreferrer"
                 className="flex-1 bg-white text-indigo-600 py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-all"
               >
                 <Send className="w-3 h-3" />
                 Telegram
               </a>
-              <a 
-                href={facebookLink} 
-                target="_blank" 
+              <a
+                href={facebookLink}
+                target="_blank"
                 rel="noreferrer"
                 className="flex-1 bg-white/20 text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 backdrop-blur-sm shadow-lg active:scale-95 transition-all"
               >
@@ -1634,7 +1633,7 @@ export default function App() {
 
       {/* Hero Banner */}
       <div className="p-6 pt-0">
-        <motion.div 
+        <motion.div
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           className="relative overflow-hidden rounded-[40px] p-8 bg-gradient-to-br from-indigo-500 to-violet-700 text-white shadow-2xl neon-border"
@@ -1646,9 +1645,9 @@ export default function App() {
               <button onClick={() => setView('folder-a')} className="bg-white text-indigo-600 px-6 py-3 rounded-2xl font-black text-xs shadow-lg active:scale-95 transition-all">
                 REGISTER NOW
               </button>
-              <a 
-                href="https://t.me/WEB_BOT_LAB" 
-                target="_blank" 
+              <a
+                href="https://t.me/WEB_BOT_LAB"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="bg-white/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-black text-xs active:scale-95 transition-all flex items-center gap-2"
               >
@@ -1689,14 +1688,13 @@ export default function App() {
       {/* Income Grid */}
       <div className="px-6 grid grid-cols-2 gap-4">
         {INCOME_CARDS.map((card, i) => (
-          <motion.button 
+          <motion.button
             key={i}
             whileHover={{ y: -5 }}
             whileTap={{ scale: 0.95 }}
             onClick={() => setView(card.view as View)}
-            className={`glass-card flex flex-col items-center text-center gap-3 group relative overflow-hidden border-white/40 shadow-sm ${
-              (!enabledCards.includes(card.title) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
-            }`}
+            className={`glass-card flex flex-col items-center text-center gap-3 group relative overflow-hidden border-white/40 shadow-sm ${(!enabledCards.includes(card.title) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
+              }`}
             disabled={!enabledCards.includes(card.title) && !isAdmin}
           >
             <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${card.color} flex items-center justify-center shadow-lg group-hover:neon-border transition-all`}>
@@ -1865,11 +1863,10 @@ export default function App() {
 
                 {/* Actions */}
                 <div className="px-2 py-1 flex items-center border-t border-slate-50">
-                  <button 
+                  <button
                     onClick={() => handleLike(post.id)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg transition-colors ${
-                      post.likes.includes(user.id) ? 'text-blue-600' : 'text-slate-600 hover:bg-slate-50'
-                    }`}
+                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg transition-colors ${post.likes.includes(user.id) ? 'text-blue-600' : 'text-slate-600 hover:bg-slate-50'
+                      }`}
                   >
                     <ThumbsUp className={`w-4 h-4 ${post.likes.includes(user.id) ? 'fill-current' : ''}`} />
                     <span className="text-xs font-bold">Like</span>
@@ -1900,14 +1897,14 @@ export default function App() {
 
                   {/* Comment Input */}
                   <div className="flex gap-2 mt-2">
-                    <input 
+                    <input
                       type="text"
                       placeholder="Write a comment..."
                       value={newComment[post.id] || ''}
                       onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
                       className="flex-1 bg-white border border-slate-200 rounded-full px-4 py-2 text-xs outline-none focus:border-blue-500"
                     />
-                    <button 
+                    <button
                       onClick={() => handleComment(post.id)}
                       className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
                     >
@@ -1956,11 +1953,10 @@ export default function App() {
                 <p className="text-xs font-bold text-slate-500 mb-2">{user.id}</p>
                 <div className="flex gap-2">
                   <span className="bg-indigo-500/10 text-indigo-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">{user.rank} Rank</span>
-                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                    user.isActive 
-                    ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' 
-                    : 'bg-rose-500/10 text-rose-600 border-rose-500/20 cursor-pointer'
-                  }`} onClick={() => !user.isActive && setView('account-activation')}>
+                  <span className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${user.isActive
+                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
+                      : 'bg-rose-500/10 text-rose-600 border-rose-500/20 cursor-pointer'
+                    }`} onClick={() => !user.isActive && setView('account-activation')}>
                     {user.isActive ? 'Active' : 'Inactive'}
                   </span>
                 </div>
@@ -2009,7 +2005,7 @@ export default function App() {
 
             <div className="text-center mb-8">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Your Referral Code</p>
-              <div 
+              <div
                 onClick={() => handleCopy(user.numericId)}
                 className="relative inline-flex items-center gap-4 bg-white border-2 border-indigo-100 px-10 py-5 rounded-[32px] cursor-pointer hover:border-indigo-500 transition-all group shadow-sm active:scale-95"
               >
@@ -2017,10 +2013,10 @@ export default function App() {
                 <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
                   <Copy className="w-6 h-6 text-indigo-600" />
                 </div>
-                
+
                 <AnimatePresence>
                   {copied && (
-                    <motion.div 
+                    <motion.div
                       initial={{ opacity: 0, y: 10, x: '-50%' }}
                       animate={{ opacity: 1, y: -60, x: '-50%' }}
                       exit={{ opacity: 0, y: -80, x: '-50%' }}
@@ -2031,8 +2027,8 @@ export default function App() {
                   )}
                 </AnimatePresence>
               </div>
-              
-              <button 
+
+              <button
                 onClick={() => {
                   const link = `${window.location.origin}?ref=${user.numericId}`;
                   handleCopy(link);
@@ -2080,7 +2076,7 @@ export default function App() {
                     <span className="text-[10px] font-bold text-indigo-600">{ach.progress}/{ach.goal}</span>
                   </div>
                   <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-gradient-to-r from-indigo-400 to-violet-600"
                       style={{ width: `${(ach.progress / ach.goal) * 100}%` }}
                     />
@@ -2119,7 +2115,7 @@ export default function App() {
 
   const ReferralView = () => {
     const [copied, setCopied] = useState(false);
-    
+
     const handleCopy = (text: string) => {
       navigator.clipboard.writeText(text);
       setCopied(true);
@@ -2156,7 +2152,7 @@ export default function App() {
                 <div className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black shadow-inner">
                   {user.numericId}
                 </div>
-                <button 
+                <button
                   onClick={() => handleCopy(user.numericId)}
                   className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all"
                 >
@@ -2171,7 +2167,7 @@ export default function App() {
                 <div className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-[10px] text-slate-900 font-bold shadow-inner truncate">
                   {user.referralLink}
                 </div>
-                <button 
+                <button
                   onClick={() => handleCopy(user.referralLink)}
                   className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all"
                 >
@@ -2240,13 +2236,12 @@ export default function App() {
             { id: 'folder-c', title: 'Digital Asset Trading', desc: 'Buy and sell accounts, domains, and more.', count: '24 Assets', color: 'from-emerald-400 to-teal-600' },
             { id: 'folder-d', title: 'Team Management', desc: 'Manage your network and collect bonuses.', count: 'Active', color: 'from-purple-400 to-indigo-600' },
           ].map((item, i) => (
-            <motion.button 
+            <motion.button
               key={i}
               whileTap={{ scale: 0.98 }}
               onClick={() => setView(item.id as View)}
-              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg ${
-                (!activeFolders.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
-              }`}
+              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg ${(!activeFolders.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
+                }`}
               disabled={!activeFolders.includes(item.id) && !isAdmin}
             >
               <div className={`absolute top-0 right-0 w-32 h-full bg-gradient-to-l ${item.color} opacity-5 group-hover:opacity-10 transition-all`} />
@@ -2315,7 +2310,7 @@ export default function App() {
       setError('');
       const val = parseFloat(amount);
       const fee = (val * withdrawalFee) / 100;
-      
+
       if (!val || val < minWithdrawal) {
         setError(`Minimum withdrawal is ৳ ${minWithdrawal}`);
         return;
@@ -2348,7 +2343,7 @@ export default function App() {
         };
 
         await insertRow('withdrawals', withdrawalData);
-        
+
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
           mainBalance: -val,
@@ -2392,7 +2387,7 @@ export default function App() {
         };
 
         await insertRow('rechargeRequests', depositData);
-        
+
         setAmount('');
         setMethod(null);
         setAccountNumber('');
@@ -2432,11 +2427,10 @@ export default function App() {
                           </p>
                         )}
                       </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                        w.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        w.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${w.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          w.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {w.status}
                       </span>
                     </div>
@@ -2455,7 +2449,7 @@ export default function App() {
 
     if (financeStep === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Withdrawal Success"
           subtitle="Your extraction has been logged"
           onClose={() => setFinanceStep('form')}
@@ -2493,14 +2487,14 @@ export default function App() {
                 <p className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em] mb-3 opacity-80">Available for Extraction</p>
                 <h3 className="text-5xl font-black text-white mb-6 drop-shadow-lg">৳ {user.mainBalance.toFixed(2)}</h3>
                 <div className="flex justify-center gap-3">
-                  <button 
+                  <button
                     onClick={() => setFinanceStep('deposit')}
                     className="flex-1 bg-white text-indigo-600 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
                     <PlusCircle className="w-4 h-4" />
                     Deposit
                   </button>
-                  <button 
+                  <button
                     onClick={() => setFinanceStep('form')}
                     className="flex-1 bg-white/20 backdrop-blur-md text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/30 shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
                   >
@@ -2540,8 +2534,8 @@ export default function App() {
                     {error && <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>}
                     <div className="relative">
                       <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">৳</span>
-                      <input 
-                        type="number" 
+                      <input
+                        type="number"
                         value={amount}
                         onChange={e => setAmount(e.target.value)}
                         placeholder="Min ৳ 10"
@@ -2552,24 +2546,24 @@ export default function App() {
 
                   <div>
                     <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Sender Number</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={accountNumber}
                       onChange={e => setAccountNumber(e.target.value)}
                       placeholder="Your bKash/Nagad number"
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm text-slate-900 font-bold outline-none focus:border-emerald-500 focus:bg-white transition-all"
                     />
                   </div>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
-                    <button 
+                    <button
                       onClick={() => setMethod('bKash')}
                       className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'bKash' ? 'border-pink-500 bg-pink-500/5' : 'border-slate-100 bg-slate-50'}`}
                     >
                       <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'bKash' ? 'bg-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'bg-slate-200'}`}>bKash</div>
                       <span className={`text-[10px] font-black uppercase tracking-widest ${method === 'bKash' ? 'text-pink-600' : 'text-slate-500'}`}>bKash</span>
                     </button>
-                    <button 
+                    <button
                       onClick={() => setMethod('Nagad')}
                       className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'Nagad' ? 'border-orange-500 bg-orange-500/5' : 'border-slate-100 bg-slate-50'}`}
                     >
@@ -2586,7 +2580,7 @@ export default function App() {
                           <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">Official Number (Personal)</span>
                           <code className="text-sm font-black text-emerald-600 tracking-widest">01774397545</code>
                         </div>
-                        <button 
+                        <button
                           onClick={() => {
                             navigator.clipboard.writeText('01774397545');
                             confetti({ particleCount: 30, spread: 50 });
@@ -2619,7 +2613,7 @@ export default function App() {
                     </div>
                   </div>
 
-                  <button 
+                  <button
                     onClick={handleDeposit}
                     className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all"
                   >
@@ -2629,138 +2623,138 @@ export default function App() {
               </div>
             ) : (
               <div className="glass-card border-white/40 shadow-lg p-8">
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                  <p className="text-[8px] font-black text-indigo-400 uppercase mb-1">Min Limit</p>
-                  <p className="text-sm font-black text-indigo-700">৳ {minWithdrawal}</p>
+                <div className="grid grid-cols-2 gap-4 mb-8">
+                  <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                    <p className="text-[8px] font-black text-indigo-400 uppercase mb-1">Min Limit</p>
+                    <p className="text-sm font-black text-indigo-700">৳ {minWithdrawal}</p>
+                  </div>
+                  <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                    <p className="text-[8px] font-black text-rose-400 uppercase mb-1">Service Fee</p>
+                    <p className="text-sm font-black text-rose-700">{withdrawalFee}%</p>
+                  </div>
                 </div>
-                <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                  <p className="text-[8px] font-black text-rose-400 uppercase mb-1">Service Fee</p>
-                  <p className="text-sm font-black text-rose-700">{withdrawalFee}%</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-                  <CreditCard className="w-6 h-6" />
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
+                    <CreditCard className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Initiate Extraction</h3>
+                    <p className="text-[10px] text-slate-400 font-bold">Secure payout to your mobile wallet</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Initiate Extraction</h3>
-                  <p className="text-[10px] text-slate-400 font-bold">Secure payout to your mobile wallet</p>
+
+                <div className="mb-8 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
+                  <p className="text-[10px] font-black text-indigo-600 uppercase mb-3">Withdrawal Rules:</p>
+                  <ul className="space-y-2">
+                    <li className="text-[9px] text-slate-600 flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
+                      <span>Minimum withdrawal amount is <span className="font-black">৳ {minWithdrawal}</span>.</span>
+                    </li>
+                    <li className="text-[9px] text-slate-600 flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
+                      <span>A service fee of <span className="font-black text-rose-500">{withdrawalFee}%</span> applies to every transaction (৳ 200 per ৳ 1000).</span>
+                    </li>
+                    <li className="text-[9px] text-slate-600 flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
+                      <span>Payments are processed within <span className="font-black">24 hours</span> of request.</span>
+                    </li>
+                    <li className="text-[9px] text-slate-600 flex items-start gap-2">
+                      <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
+                      <span>Ensure your bKash/Nagad number is correct. We are not responsible for wrong numbers.</span>
+                    </li>
+                  </ul>
                 </div>
-              </div>
 
-              <div className="mb-8 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <p className="text-[10px] font-black text-indigo-600 uppercase mb-3">Withdrawal Rules:</p>
-                <ul className="space-y-2">
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>Minimum withdrawal amount is <span className="font-black">৳ {minWithdrawal}</span>.</span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>A service fee of <span className="font-black text-rose-500">{withdrawalFee}%</span> applies to every transaction (৳ 200 per ৳ 1000).</span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>Payments are processed within <span className="font-black">24 hours</span> of request.</span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>Ensure your bKash/Nagad number is correct. We are not responsible for wrong numbers.</span>
-                  </li>
-                </ul>
-              </div>
+                <div className="space-y-6">
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Amount (৳)</label>
+                    {error && <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>}
+                    <div className="relative">
+                      <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">৳</span>
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={e => setAmount(e.target.value)}
+                        placeholder={`Min ৳ ${minWithdrawal}`}
+                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 pl-8 text-lg text-slate-900 font-black outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                      />
+                    </div>
+                    {parseFloat(amount) >= minWithdrawal && (
+                      <div className="mt-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex justify-between items-center">
+                        <div>
+                          <p className="text-[8px] font-black text-indigo-400 uppercase">Withdrawal Fee ({withdrawalFee}%)</p>
+                          <p className="text-xs font-black text-indigo-600">- ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[8px] font-black text-emerald-400 uppercase">You will receive</p>
+                          <p className="text-sm font-black text-emerald-600">৳ {(parseFloat(amount) - (parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
 
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Amount (৳)</label>
-                  {error && <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>}
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">৳</span>
-                    <input 
-                      type="number" 
-                      value={amount}
-                      onChange={e => setAmount(e.target.value)}
-                      placeholder={`Min ৳ ${minWithdrawal}`}
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 pl-8 text-lg text-slate-900 font-black outline-none focus:border-indigo-500 focus:bg-white transition-all"
+                  <div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Account Number</label>
+                    <input
+                      type="text"
+                      value={accountNumber}
+                      onChange={e => setAccountNumber(e.target.value)}
+                      placeholder="Enter bKash/Nagad number"
+                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm text-slate-900 font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
                     />
                   </div>
-                  {parseFloat(amount) >= minWithdrawal && (
-                    <div className="mt-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex justify-between items-center">
-                      <div>
-                        <p className="text-[8px] font-black text-indigo-400 uppercase">Withdrawal Fee ({withdrawalFee}%)</p>
-                        <p className="text-xs font-black text-indigo-600">- ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</p>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <button
+                      onClick={() => setMethod('bKash')}
+                      className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'bKash' ? 'border-pink-500 bg-pink-500/5' : 'border-slate-100 bg-slate-50'}`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'bKash' ? 'bg-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'bg-slate-200'}`}>bKash</div>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${method === 'bKash' ? 'text-pink-600' : 'text-slate-500'}`}>bKash Wallet</span>
+                      {method === 'bKash' && <div className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full" />}
+                    </button>
+                    <button
+                      onClick={() => setMethod('Nagad')}
+                      className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'Nagad' ? 'border-orange-500 bg-orange-500/5' : 'border-slate-100 bg-slate-50'}`}
+                    >
+                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'Nagad' ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/20' : 'bg-slate-200'}`}>Nagad</div>
+                      <span className={`text-[10px] font-black uppercase tracking-widest ${method === 'Nagad' ? 'text-orange-600' : 'text-slate-500'}`}>Nagad Wallet</span>
+                      {method === 'Nagad' && <div className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />}
+                    </button>
+                  </div>
+
+                  {/* Withdrawal Summary */}
+                  {amount && parseFloat(amount) >= minWithdrawal && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-3"
+                    >
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
+                        <span>Withdrawal Amount</span>
+                        <span className="text-slate-900">৳ {parseFloat(amount).toFixed(2)}</span>
                       </div>
-                      <div className="text-right">
-                        <p className="text-[8px] font-black text-emerald-400 uppercase">You will receive</p>
-                        <p className="text-sm font-black text-emerald-600">৳ {(parseFloat(amount) - (parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</p>
+                      <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-rose-500">
+                        <span>Service Fee ({withdrawalFee}%)</span>
+                        <span>- ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</span>
                       </div>
-                    </div>
+                      <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">You will receive</span>
+                        <span className="text-lg font-black text-emerald-600">৳ {(parseFloat(amount) - (parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</span>
+                      </div>
+                    </motion.div>
                   )}
-                </div>
 
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Account Number</label>
-                  <input 
-                    type="text" 
-                    value={accountNumber}
-                    onChange={e => setAccountNumber(e.target.value)}
-                    placeholder="Enter bKash/Nagad number"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm text-slate-900 font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                  />
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                  <button 
-                    onClick={() => setMethod('bKash')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'bKash' ? 'border-pink-500 bg-pink-500/5' : 'border-slate-100 bg-slate-50'}`}
+                  <button
+                    onClick={handleWithdraw}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-violet-700 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all neon-border"
                   >
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'bKash' ? 'bg-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'bg-slate-200'}`}>bKash</div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${method === 'bKash' ? 'text-pink-600' : 'text-slate-500'}`}>bKash Wallet</span>
-                    {method === 'bKash' && <div className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full" />}
-                  </button>
-                  <button 
-                    onClick={() => setMethod('Nagad')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'Nagad' ? 'border-orange-500 bg-orange-500/5' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'Nagad' ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/20' : 'bg-slate-200'}`}>Nagad</div>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${method === 'Nagad' ? 'text-orange-600' : 'text-slate-500'}`}>Nagad Wallet</span>
-                    {method === 'Nagad' && <div className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />}
+                    Confirm Extraction
                   </button>
                 </div>
-
-                {/* Withdrawal Summary */}
-                {amount && parseFloat(amount) >= minWithdrawal && (
-                  <motion.div 
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-3"
-                  >
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span>Withdrawal Amount</span>
-                      <span className="text-slate-900">৳ {parseFloat(amount).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-rose-500">
-                      <span>Service Fee ({withdrawalFee}%)</span>
-                      <span>- ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</span>
-                    </div>
-                    <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">You will receive</span>
-                      <span className="text-lg font-black text-emerald-600">৳ {(parseFloat(amount) - (parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}</span>
-                    </div>
-                  </motion.div>
-                )}
-
-                <button 
-                  onClick={handleWithdraw}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-violet-700 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all neon-border"
-                >
-                  Confirm Extraction
-                </button>
               </div>
-            </div>
-          )}
+            )}
 
             {/* Withdrawal Rules */}
             <div className="glass-card bg-slate-50 border-slate-200 shadow-sm">
@@ -2828,18 +2822,18 @@ export default function App() {
               <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-md" />
             </div>
             <div className="flex gap-3">
-              <a 
-                href="https://t.me/smarttask_support" 
-                target="_blank" 
+              <a
+                href="https://t.me/smarttask_support"
+                target="_blank"
                 rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600/10 text-indigo-600 border border-indigo-500/20 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600/20 transition-all"
               >
                 <Send className="w-3 h-3" />
                 Telegram
               </a>
-              <a 
-                href="https://wa.me/8801700000000" 
-                target="_blank" 
+              <a
+                href="https://wa.me/8801700000000"
+                target="_blank"
                 rel="noreferrer"
                 className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600/10 text-emerald-600 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-600/20 transition-all"
               >
@@ -2859,11 +2853,10 @@ export default function App() {
           ) : (
             myMessages.map(m => (
               <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-4 rounded-2xl border transition-all ${
-                  m.sender === 'user' 
-                  ? 'bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border-indigo-500/30 text-slate-900 rounded-tr-none shadow-md' 
-                  : 'bg-white border-slate-100 text-slate-600 rounded-tl-none shadow-sm'
-                }`}>
+                <div className={`max-w-[85%] p-4 rounded-2xl border transition-all ${m.sender === 'user'
+                    ? 'bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border-indigo-500/30 text-slate-900 rounded-tr-none shadow-md'
+                    : 'bg-white border-slate-100 text-slate-600 rounded-tl-none shadow-sm'
+                  }`}>
                   <p className="text-sm font-medium leading-relaxed">{m.text}</p>
                   <p className={`text-[8px] mt-2 font-black uppercase tracking-tighter ${m.sender === 'user' ? 'text-indigo-600/60' : 'text-slate-400'}`}>
                     {m.date}
@@ -2876,15 +2869,15 @@ export default function App() {
 
         <div className="p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex-shrink-0 relative z-10">
           <div className="flex gap-3">
-            <input 
-              type="text" 
-              placeholder="Enter message..." 
+            <input
+              type="text"
+              placeholder="Enter message..."
               value={msg}
               onChange={e => setMsg(e.target.value)}
               onKeyPress={e => e.key === 'Enter' && sendMessage()}
               className="flex-grow bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 transition-all placeholder:text-slate-400 shadow-sm"
             />
-            <button 
+            <button
               onClick={sendMessage}
               className="p-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-2xl shadow-xl active:scale-90 transition-all"
             >
@@ -2904,7 +2897,7 @@ export default function App() {
     formData.append('image', file);
     const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
     if (!apiKey) throw new Error('ImgBB API Key is missing. Please add it in settings.');
-    
+
     const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
       method: 'POST',
       body: formData,
@@ -2927,7 +2920,7 @@ export default function App() {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      
+
       setIsUploading(true);
       setMessage(null);
       try {
@@ -2989,11 +2982,10 @@ export default function App() {
                         <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{s.microjobId}</p>
                         <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{s.date}</p>
                       </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                        s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {s.status}
                       </span>
                     </div>
@@ -3009,7 +3001,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Work Submitted"
           subtitle="Microjob proof received"
           onClose={() => setStep('list')}
@@ -3038,9 +3030,9 @@ export default function App() {
                 <h4 className="text-sm font-black text-indigo-600 uppercase">{selectedTask.title}</h4>
                 <p className="text-[10px] text-indigo-500 font-bold">Reward: ৳ {selectedTask.reward.toFixed(2)}</p>
                 {selectedTask.link && (
-                  <a 
-                    href={selectedTask.link} 
-                    target="_blank" 
+                  <a
+                    href={selectedTask.link}
+                    target="_blank"
                     rel="noreferrer"
                     className="mt-3 w-full py-2 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
                   >
@@ -3049,11 +3041,10 @@ export default function App() {
                   </a>
                 )}
               </div>
-              
+
               {message && (
-                <div className={`mb-4 p-3 rounded-xl border flex items-center gap-2 ${
-                  message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
-                }`}>
+                <div className={`mb-4 p-3 rounded-xl border flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
+                  }`}>
                   {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
                   <p className="text-[10px] font-bold uppercase">{message.text}</p>
                 </div>
@@ -3061,22 +3052,22 @@ export default function App() {
 
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Username</label>
-                <input 
-                  type="text" 
-                  placeholder="Your Social Username" 
+                <input
+                  type="text"
+                  placeholder="Your Social Username"
                   value={submission.userName}
-                  onChange={e => setSubmission({...submission, userName: e.target.value})}
+                  onChange={e => setSubmission({ ...submission, userName: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 font-bold outline-none focus:border-indigo-500"
                 />
               </div>
 
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Work Link</label>
-                <input 
-                  type="text" 
-                  placeholder="Your Profile/Post Link" 
+                <input
+                  type="text"
+                  placeholder="Your Profile/Post Link"
                   value={submission.link}
-                  onChange={e => setSubmission({...submission, link: e.target.value})}
+                  onChange={e => setSubmission({ ...submission, link: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 font-bold outline-none focus:border-indigo-500"
                 />
               </div>
@@ -3084,15 +3075,15 @@ export default function App() {
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Screenshot Proof</label>
                 <div className="relative">
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
                     id="screenshot-upload-a"
                     disabled={isUploading}
                   />
-                  <label 
+                  <label
                     htmlFor="screenshot-upload-a"
                     className={`w-full flex items-center justify-center gap-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-8 cursor-pointer hover:border-indigo-500 transition-all ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
@@ -3116,7 +3107,7 @@ export default function App() {
                 </div>
               </div>
 
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
               >
@@ -3171,7 +3162,7 @@ export default function App() {
                   <div className="flex-1 mr-4">
                     <h4 className="text-sm font-black text-slate-900 mb-1">{task.title}</h4>
                     <p className="text-[10px] text-slate-500 mb-2">{task.desc}</p>
-                    <button 
+                    <button
                       onClick={() => {
                         window.open(task.link, '_blank');
                         setSelectedTask(task);
@@ -3185,7 +3176,7 @@ export default function App() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-emerald-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button 
+                    <button
                       onClick={() => { setSelectedTask(task); setStep('submit'); }}
                       className="mt-2 bg-indigo-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
                     >
@@ -3212,7 +3203,7 @@ export default function App() {
     const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      
+
       setIsUploading(true);
       setMessage(null);
       try {
@@ -3252,7 +3243,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Proof Submitted"
           subtitle="Social task logged"
           onClose={() => { setSelectedTask(null); setStep('list'); }}
@@ -3292,11 +3283,10 @@ export default function App() {
                         <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest">{s.taskId}</p>
                         <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{s.date}</p>
                       </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                        s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {s.status}
                       </span>
                     </div>
@@ -3325,9 +3315,9 @@ export default function App() {
                 <h4 className="text-sm font-black text-amber-600 uppercase">{selectedTask.title}</h4>
                 <p className="text-[10px] text-amber-500 font-bold">Reward: ৳ {selectedTask.reward.toFixed(2)}</p>
                 {selectedTask.link && (
-                  <a 
-                    href={selectedTask.link} 
-                    target="_blank" 
+                  <a
+                    href={selectedTask.link}
+                    target="_blank"
                     rel="noreferrer"
                     className="mt-3 w-full py-2 bg-amber-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
                   >
@@ -3338,9 +3328,8 @@ export default function App() {
               </div>
 
               {message && (
-                <div className={`mb-4 p-3 rounded-xl border flex items-center gap-2 ${
-                  message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
-                }`}>
+                <div className={`mb-4 p-3 rounded-xl border flex items-center gap-2 ${message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
+                  }`}>
                   {message.type === 'success' ? <CheckCircle2 className="w-4 h-4" /> : <ShieldAlert className="w-4 h-4" />}
                   <p className="text-[10px] font-bold uppercase">{message.text}</p>
                 </div>
@@ -3348,22 +3337,22 @@ export default function App() {
 
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Username</label>
-                <input 
-                  type="text" 
-                  placeholder="Your Facebook Username" 
+                <input
+                  type="text"
+                  placeholder="Your Facebook Username"
                   value={proof.userName}
-                  onChange={e => setProof({...proof, userName: e.target.value})}
+                  onChange={e => setProof({ ...proof, userName: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 font-bold outline-none focus:border-amber-500"
                 />
               </div>
 
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Work Link</label>
-                <input 
-                  type="text" 
-                  placeholder="Your Profile/Post Link" 
+                <input
+                  type="text"
+                  placeholder="Your Profile/Post Link"
                   value={proof.link}
-                  onChange={e => setProof({...proof, link: e.target.value})}
+                  onChange={e => setProof({ ...proof, link: e.target.value })}
                   className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 font-bold outline-none focus:border-amber-500"
                 />
               </div>
@@ -3371,15 +3360,15 @@ export default function App() {
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Screenshot Proof</label>
                 <div className="relative">
-                  <input 
-                    type="file" 
+                  <input
+                    type="file"
                     accept="image/*"
                     onChange={handleFileChange}
                     className="hidden"
                     id="screenshot-upload-b"
                     disabled={isUploading}
                   />
-                  <label 
+                  <label
                     htmlFor="screenshot-upload-b"
                     className={`w-full flex items-center justify-center gap-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-8 cursor-pointer hover:border-amber-500 transition-all ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
@@ -3402,7 +3391,7 @@ export default function App() {
                   )}
                 </div>
               </div>
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
               >
@@ -3435,17 +3424,17 @@ export default function App() {
     return (
       <div className="min-h-screen pb-32 bg-slate-50">
         <div className="p-6 pt-12">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setView('workstation')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-4">
+              <button onClick={() => setView('workstation')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
+                <ArrowLeft className="w-6 h-6" />
+              </button>
+              <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Social Media">Social Media</h2>
+            </div>
+            <button onClick={() => setShowHistory(true)} className="p-3 glass rounded-2xl text-amber-600">
+              <History className="w-6 h-6" />
             </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Social Media">Social Media</h2>
           </div>
-          <button onClick={() => setShowHistory(true)} className="p-3 glass rounded-2xl text-amber-600">
-            <History className="w-6 h-6" />
-          </button>
-        </div>
           <div className="space-y-4">
             {dynamicTasks.filter(t => t.category === 'social').length === 0 ? (
               <div className="text-center py-20">
@@ -3457,7 +3446,7 @@ export default function App() {
                   <div className="flex-1 mr-4">
                     <h4 className="text-sm font-black text-slate-900 mb-1">{task.title}</h4>
                     <p className="text-[10px] text-slate-500 mb-2">{task.desc}</p>
-                    <button 
+                    <button
                       onClick={() => {
                         window.open(task.link, '_blank');
                         setSelectedTask(task);
@@ -3470,7 +3459,7 @@ export default function App() {
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-emerald-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button 
+                    <button
                       onClick={() => { setSelectedTask(task); }}
                       className="mt-2 bg-indigo-500 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
                     >
@@ -3535,11 +3524,10 @@ export default function App() {
                         <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">{s.taskId}</p>
                         <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{s.date}</p>
                       </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                        s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {s.status}
                       </span>
                     </div>
@@ -3555,7 +3543,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Account Logged"
           subtitle="Gmail submission received"
           onClose={() => setStep('list')}
@@ -3584,9 +3572,9 @@ export default function App() {
                 <h4 className="text-sm font-black text-rose-900 mb-1">{selectedTask?.title || 'Gmail Sale'}</h4>
                 <p className="text-[10px] text-rose-600 font-bold uppercase tracking-widest">Reward: ৳ {(selectedTask ? selectedTask.reward : gmailReward).toFixed(2)}</p>
                 {selectedTask?.link && (
-                  <a 
-                    href={selectedTask.link} 
-                    target="_blank" 
+                  <a
+                    href={selectedTask.link}
+                    target="_blank"
                     rel="noreferrer"
                     className="mt-3 w-full py-2 bg-rose-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
                   >
@@ -3598,15 +3586,15 @@ export default function App() {
               <div className="space-y-4">
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Gmail Address</label>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     value={email}
                     onChange={e => setEmail(e.target.value)}
                     placeholder="example@gmail.com"
                     className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-5 text-sm text-black font-medium outline-none focus:border-indigo-500 shadow-sm"
                   />
                 </div>
-                <button 
+                <button
                   onClick={handleSubmit}
                   className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
                 >
@@ -3662,15 +3650,15 @@ export default function App() {
             <div className="space-y-4">
               <div className="text-left">
                 <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Gmail Address</label>
-                <input 
-                  type="email" 
-                  placeholder="example@gmail.com" 
+                <input
+                  type="email"
+                  placeholder="example@gmail.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl p-4 text-sm text-black font-medium outline-none focus:border-amber-500 shadow-sm" 
+                  className="w-full bg-white border border-slate-200 rounded-xl p-4 text-sm text-black font-medium outline-none focus:border-amber-500 shadow-sm"
                 />
               </div>
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
               >
@@ -3695,7 +3683,7 @@ export default function App() {
                   </div>
                   <div className="text-right">
                     <p className="text-amber-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button 
+                    <button
                       onClick={() => { window.open(task.link, '_blank'); setSelectedTask(task); setStep('submit'); }}
                       className="mt-2 bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-md active:scale-95 transition-all"
                     >
@@ -3717,7 +3705,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Claim Successful"
           subtitle="Premium job logged"
           onClose={() => setStep('list')}
@@ -3747,7 +3735,7 @@ export default function App() {
                 <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Reward: ৳ {selectedTask?.reward.toFixed(2)}</p>
               </div>
               <p className="text-xs text-slate-500 leading-relaxed">By claiming this premium job, you agree to the terms of the network marketing program.</p>
-              <button 
+              <button
                 onClick={() => setStep('success')}
                 className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
               >
@@ -3771,8 +3759,8 @@ export default function App() {
           <div className="grid grid-cols-1 gap-4 mb-8">
             {[
               { gen: '1st Generation', count: 0, rate: `৳ ${adReward.toFixed(2)}`, total: '৳ 0.00', color: 'indigo' },
-              { gen: '2nd Generation', count: 0, rate: `৳ ${(adReward/4).toFixed(2)}`, total: '৳ 0.00', color: 'violet' },
-              { gen: '3rd Generation', count: 0, rate: `৳ ${(adReward/10).toFixed(2)}`, total: '৳ 0.00', color: 'pink' },
+              { gen: '2nd Generation', count: 0, rate: `৳ ${(adReward / 4).toFixed(2)}`, total: '৳ 0.00', color: 'violet' },
+              { gen: '3rd Generation', count: 0, rate: `৳ ${(adReward / 10).toFixed(2)}`, total: '৳ 0.00', color: 'pink' },
             ].map((item, i) => (
               <div key={i} className="glass-card flex justify-between items-center border-white/40 shadow-sm">
                 <div>
@@ -3809,7 +3797,7 @@ export default function App() {
                   </div>
                   <div className="text-right">
                     <p className="text-indigo-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button 
+                    <button
                       onClick={() => { window.open(task.link, '_blank'); setSelectedTask(task); setStep('submit'); }}
                       className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
                     >
@@ -3844,9 +3832,8 @@ export default function App() {
           ].map((player, i) => (
             <div key={i} className={`glass-card flex items-center justify-between shadow-sm ${i < 3 ? 'border-amber-500/40 bg-amber-50/50' : 'border-white/40'}`}>
               <div className="flex items-center gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${
-                  i === 0 ? 'bg-amber-500 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : i === 2 ? 'bg-orange-400 text-white' : 'bg-slate-100 text-slate-500'
-                }`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${i === 0 ? 'bg-amber-500 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : i === 2 ? 'bg-orange-400 text-white' : 'bg-slate-100 text-slate-500'
+                  }`}>
                   {player.rank}
                 </div>
                 <div>
@@ -3891,7 +3878,7 @@ export default function App() {
             <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Spin & Win">Spin & Win</h2>
           </div>
           <div className="flex flex-col items-center justify-center py-12">
-            <motion.div 
+            <motion.div
               animate={isSpinning ? { rotate: 360 * 5 } : {}}
               transition={isSpinning ? { duration: 2, ease: "easeInOut" } : {}}
               className="w-64 h-64 rounded-full border-8 border-amber-500/10 flex items-center justify-center relative mb-12 shadow-2xl bg-white"
@@ -3899,7 +3886,7 @@ export default function App() {
               <div className="absolute inset-0 rounded-full border-4 border-dashed border-amber-500/20 animate-spin-slow" />
               <TrendingUp className="w-20 h-20 text-amber-500" />
             </motion.div>
-            
+
             {result && (
               <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="mb-8 text-center">
                 <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">You Won</p>
@@ -3907,7 +3894,7 @@ export default function App() {
               </motion.div>
             )}
 
-            <button 
+            <button
               onClick={spin}
               disabled={isSpinning}
               className="px-12 py-4 bg-gradient-to-r from-amber-500 to-yellow-600 rounded-2xl font-black text-white shadow-xl active:scale-95 transition-all disabled:opacity-50"
@@ -3958,13 +3945,12 @@ export default function App() {
             { id: 'mobile-recharge', title: 'Mobile Recharge', desc: 'Recharge any mobile number instantly.', icon: <Smartphone className="w-8 h-8" />, color: 'from-indigo-500 to-blue-600' },
             { id: 'drive-offer', title: 'Drive Offer', desc: 'Exclusive internet and talk-time offers.', icon: <Zap className="w-8 h-8" />, color: 'from-amber-500 to-orange-600' },
           ].map((item, i) => (
-            <motion.button 
+            <motion.button
               key={i}
               whileTap={{ scale: 0.98 }}
               onClick={() => setView(item.id as View)}
-              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg p-6 ${
-                (!enabledFeatures.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
-              }`}
+              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg p-6 ${(!enabledFeatures.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
+                }`}
               disabled={!enabledFeatures.includes(item.id) && !isAdmin}
             >
               <div className={`absolute top-0 right-0 w-32 h-full bg-gradient-to-l ${item.color} opacity-5 group-hover:opacity-10 transition-all`} />
@@ -4029,7 +4015,7 @@ export default function App() {
           transactionId: 'REC-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
         await insertRow('rechargeRequests', rechargeData);
-        
+
         // Deduct balance
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
@@ -4067,11 +4053,10 @@ export default function App() {
                         <p className="text-lg font-black text-slate-900 mt-1">৳ {r.amount.toFixed(2)}</p>
                         <p className="text-[10px] font-bold text-slate-500">{r.phone}</p>
                       </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                        r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {r.status}
                       </span>
                     </div>
@@ -4090,7 +4075,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Recharge Requested"
           subtitle="Mobile recharge logged"
           onClose={() => setStep('form')}
@@ -4125,9 +4110,9 @@ export default function App() {
             <div className="space-y-4">
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Mobile Number</label>
-                <input 
-                  type="tel" 
-                  placeholder="01XXXXXXXXX" 
+                <input
+                  type="tel"
+                  placeholder="01XXXXXXXXX"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4138,7 +4123,7 @@ export default function App() {
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Operator</label>
                 <div className="grid grid-cols-3 gap-2">
                   {['GP', 'Robi', 'Banglalink', 'Teletalk', 'Airtel'].map(op => (
-                    <button 
+                    <button
                       key={op}
                       onClick={() => setOperator(op)}
                       className={`py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all border ${operator === op ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg scale-105' : 'bg-white border-slate-100 text-slate-600 hover:border-indigo-500'}`}
@@ -4152,9 +4137,9 @@ export default function App() {
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Amount (৳)</label>
                 {error && <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>}
-                <input 
-                  type="number" 
-                  placeholder="Min ৳ 20" 
+                <input
+                  type="number"
+                  placeholder="Min ৳ 20"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4170,7 +4155,7 @@ export default function App() {
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Type</label>
                 <div className="grid grid-cols-2 gap-3">
                   {['Prepaid', 'Postpaid'].map(t => (
-                    <button 
+                    <button
                       key={t}
                       onClick={() => setType(t as any)}
                       className={`py-4 rounded-2xl text-xs font-black uppercase tracking-widest transition-all border ${type === t ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-white border-slate-100 text-slate-600'}`}
@@ -4182,7 +4167,7 @@ export default function App() {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={handleSubmit}
               className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all mt-4"
             >
@@ -4248,7 +4233,7 @@ export default function App() {
           transactionId: 'DRV-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
         await insertRow('driveOfferRequests', offerData);
-        
+
         // Deduct balance
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
@@ -4288,11 +4273,10 @@ export default function App() {
                           <p className="text-lg font-black text-slate-900 mt-1">৳ {r.amount.toFixed(2)}</p>
                           <p className="text-[10px] font-bold text-slate-500">{r.phone}</p>
                         </div>
-                        <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                          r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                          r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                          'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                        }`}>
+                        <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                            r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                              'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                          }`}>
                           {r.status}
                         </span>
                       </div>
@@ -4312,7 +4296,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Offer Requested"
           subtitle="Drive offer logged"
           onClose={() => setStep('list')}
@@ -4347,15 +4331,15 @@ export default function App() {
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Mobile Number</label>
                 {error && <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>}
-                <input 
-                  type="tel" 
-                  placeholder="01XXXXXXXXX" 
+                <input
+                  type="tel"
+                  placeholder="01XXXXXXXXX"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
                 />
               </div>
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all mt-4"
               >
@@ -4417,7 +4401,7 @@ export default function App() {
                     <p className="text-lg font-black text-emerald-600">৳ {offer.price}</p>
                   </div>
                   <p className="text-[10px] text-slate-500 mb-4 leading-relaxed">{offer.description}</p>
-                  <button 
+                  <button
                     onClick={() => { setSelectedOffer(offer); setStep('submit'); }}
                     className="w-full py-3 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                   >
@@ -4498,7 +4482,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Order Success"
           subtitle="Your transaction has been verified"
           onClose={() => setStep('list')}
@@ -4544,9 +4528,9 @@ export default function App() {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Full Name</label>
-                <input 
-                  type="text" 
-                  placeholder="Enter your name" 
+                <input
+                  type="text"
+                  placeholder="Enter your name"
                   value={name}
                   onChange={e => setName(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4554,9 +4538,9 @@ export default function App() {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Phone Number</label>
-                <input 
-                  type="tel" 
-                  placeholder="01XXXXXXXXX" 
+                <input
+                  type="tel"
+                  placeholder="01XXXXXXXXX"
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4564,8 +4548,8 @@ export default function App() {
               </div>
               <div>
                 <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Shipping Address</label>
-                <textarea 
-                  placeholder="Full Address" 
+                <textarea
+                  placeholder="Full Address"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner resize-none"
@@ -4573,7 +4557,7 @@ export default function App() {
                 />
               </div>
               {error && <p className="text-[10px] font-bold text-rose-500 text-center">{error}</p>}
-              <button 
+              <button
                 onClick={handleSubmit}
                 className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all mt-4"
               >
@@ -4642,12 +4626,11 @@ export default function App() {
                         {o.paymentStatus === 'COD' && (
                           <p className="text-[7px] font-black text-rose-500 uppercase mb-1">COD</p>
                         )}
-                        <span className={`text-[7px] font-black uppercase px-2 py-1 rounded-full ${
-                          o.status === 'delivered' ? 'bg-emerald-100 text-emerald-600' : 
-                          o.status === 'cancelled' ? 'bg-rose-100 text-rose-600' : 
-                          o.status === 'processing' ? 'bg-indigo-100 text-indigo-600' :
-                          'bg-amber-100 text-amber-600'
-                        }`}>
+                        <span className={`text-[7px] font-black uppercase px-2 py-1 rounded-full ${o.status === 'delivered' ? 'bg-emerald-100 text-emerald-600' :
+                            o.status === 'cancelled' ? 'bg-rose-100 text-rose-600' :
+                              o.status === 'processing' ? 'bg-indigo-100 text-indigo-600' :
+                                'bg-amber-100 text-amber-600'
+                          }`}>
                           {o.status}
                         </span>
                       </div>
@@ -4672,7 +4655,7 @@ export default function App() {
               <h2 className="text-2xl font-black text-slate-900">Smart Shop</h2>
             </div>
             <div className="flex gap-2">
-              <button 
+              <button
                 onClick={() => setStep('history')}
                 className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all"
               >
@@ -4703,7 +4686,7 @@ export default function App() {
                   <div className="p-3 flex flex-col flex-1">
                     <h4 className="text-[10px] font-black text-slate-900 uppercase line-clamp-1">{p.name}</h4>
                     <p className="text-xs font-black text-indigo-600 mt-1">৳ {p.price.toFixed(2)}</p>
-                    <button 
+                    <button
                       onClick={() => handleBuy(p)}
                       className="mt-3 w-full py-2 bg-slate-900 text-white rounded-xl font-black text-[8px] uppercase tracking-widest active:scale-95 transition-all"
                     >
@@ -4759,7 +4742,7 @@ export default function App() {
         };
 
         await insertRow('dollarBuyRequests', buyData);
-        
+
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
           mainBalance: -totalPrice
@@ -4772,7 +4755,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Purchase Success"
           subtitle="Dollar buy request logged"
           onClose={() => setView('otp-buy-sell')}
@@ -4806,9 +4789,9 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Dollar Amount ($)</label>
-              <input 
-                type="number" 
-                placeholder="0.00" 
+              <input
+                type="number"
+                placeholder="0.00"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4818,7 +4801,7 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Receive Method</label>
-              <select 
+              <select
                 value={method}
                 onChange={e => setMethod(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4831,9 +4814,9 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Your Wallet Address / Pay ID</label>
-              <input 
-                type="text" 
-                placeholder="Where should we send?" 
+              <input
+                type="text"
+                placeholder="Where should we send?"
                 value={wallet}
                 onChange={e => setWallet(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-indigo-500 shadow-inner"
@@ -4842,7 +4825,7 @@ export default function App() {
 
             {error && <p className="text-[10px] font-bold text-rose-500 text-center">{error}</p>}
 
-            <button 
+            <button
               onClick={handleSubmit}
               className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all mt-4"
             >
@@ -4888,11 +4871,10 @@ export default function App() {
                         <p className="text-xs font-black text-slate-900">${r.amount} via {r.method}</p>
                         <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{r.date}</p>
                       </div>
-                      <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                        r.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
-                        r.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
-                        'bg-amber-100 text-amber-600'
-                      }`}>
+                      <div className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${r.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
+                          r.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
+                            'bg-amber-100 text-amber-600'
+                        }`}>
                         {r.status}
                       </div>
                     </div>
@@ -4916,7 +4898,7 @@ export default function App() {
         </div>
 
         <div className="grid grid-cols-1 gap-4">
-          <div 
+          <div
             onClick={() => {
               confetti({ particleCount: 100, spread: 70 });
               alert('You claimed a FREE gift! +৳ 5.00 added to your balance.');
@@ -4944,8 +4926,8 @@ export default function App() {
             { title: 'Taiping Work', color: 'from-slate-600 to-slate-800', icon: <Keyboard className="w-6 h-6" /> },
             { title: 'Inestragram job', color: 'from-purple-500 to-pink-500', icon: <Instagram className="w-6 h-6" /> },
           ].map((item, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               onClick={() => {
                 setSelectedSocialJob(item);
                 setView('social-job');
@@ -5038,9 +5020,9 @@ export default function App() {
             </div>
 
             {/* Telegram Bot Button */}
-            <a 
-              href="https://t.me/IMADMIN1_BOT" 
-              target="_blank" 
+            <a
+              href="https://t.me/IMADMIN1_BOT"
+              target="_blank"
               rel="noopener noreferrer"
               className="w-full p-4 bg-sky-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg flex items-center justify-center gap-3 active:scale-95 transition-all"
             >
@@ -5053,7 +5035,7 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Payeer Account Number</p>
               <div className="flex items-center justify-between bg-slate-900 p-4 rounded-2xl shadow-inner">
                 <span className="text-xl font-black text-white tracking-widest">{payeerAccount}</span>
-                <button 
+                <button
                   onClick={() => {
                     navigator.clipboard.writeText(payeerAccount);
                     alert('Payeer account copied!');
@@ -5069,11 +5051,11 @@ export default function App() {
             {/* Submission Form */}
             <div className="glass-card p-6 border-white/40 shadow-xl space-y-4">
               <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-2">Submit Proof</h3>
-              
+
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Transaction ID (Trx ID)</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={trxId}
                   onChange={(e) => setTrxId(e.target.value)}
                   placeholder="Enter Transaction ID"
@@ -5083,8 +5065,8 @@ export default function App() {
 
               <div>
                 <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Screenshot URL</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={screenshot}
                   onChange={(e) => setScreenshot(e.target.value)}
                   placeholder="Paste Screenshot Link"
@@ -5093,12 +5075,11 @@ export default function App() {
                 <p className="text-[8px] font-bold text-slate-400 mt-1 ml-2 uppercase">Upload to imgbb.com and paste link here</p>
               </div>
 
-              <button 
+              <button
                 onClick={handleSubmit}
                 disabled={isSubmitting}
-                className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${
-                  isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-r from-indigo-600 to-violet-700 text-white active:scale-95'
-                }`}
+                className={`w-full py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all flex items-center justify-center gap-2 ${isSubmitting ? 'bg-slate-200 text-slate-400' : 'bg-gradient-to-r from-indigo-600 to-violet-700 text-white active:scale-95'
+                  }`}
               >
                 {isSubmitting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                 {isSubmitting ? 'Submitting...' : 'Submit Now'}
@@ -5124,11 +5105,10 @@ export default function App() {
                           <p className="text-[10px] font-black text-slate-900 uppercase">{s.trxId}</p>
                           <p className="text-[8px] text-slate-400 font-bold">{new Date(s.date).toLocaleDateString()}</p>
                         </div>
-                        <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase ${
-                          s.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
-                          s.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
-                          'bg-amber-100 text-amber-600'
-                        }`}>
+                        <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase ${s.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
+                            s.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
+                              'bg-amber-100 text-amber-600'
+                          }`}>
                           {s.status}
                         </span>
                       </div>
@@ -5192,7 +5172,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Submission Received"
           subtitle="Dollar sell request logged"
           onClose={() => setView('otp-buy-sell')}
@@ -5226,9 +5206,9 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Dollar Amount ($)</label>
-              <input 
-                type="number" 
-                placeholder="0.00" 
+              <input
+                type="number"
+                placeholder="0.00"
                 value={amount}
                 onChange={e => setAmount(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-emerald-500 shadow-inner"
@@ -5238,7 +5218,7 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Payment Method</label>
-              <select 
+              <select
                 value={method}
                 onChange={e => setMethod(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-emerald-500 shadow-inner"
@@ -5257,7 +5237,7 @@ export default function App() {
                 <code className="text-xs font-black text-slate-900 break-all">
                   {adminDetails[method as keyof typeof adminDetails]}
                 </code>
-                <button 
+                <button
                   onClick={() => handleCopy(adminDetails[method as keyof typeof adminDetails])}
                   className="p-2 text-indigo-500 hover:bg-indigo-50 rounded-lg transition-all"
                 >
@@ -5269,9 +5249,9 @@ export default function App() {
 
             <div>
               <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Your Wallet Address / Pay ID</label>
-              <input 
-                type="text" 
-                placeholder="Enter your sender details" 
+              <input
+                type="text"
+                placeholder="Enter your sender details"
                 value={wallet}
                 onChange={e => setWallet(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black outline-none focus:border-emerald-500 shadow-inner"
@@ -5280,7 +5260,7 @@ export default function App() {
 
             {error && <p className="text-[10px] font-bold text-rose-500 text-center">{error}</p>}
 
-            <button 
+            <button
               onClick={handleSubmit}
               className="w-full bg-gradient-to-r from-emerald-500 to-teal-600 text-white py-5 rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all mt-4"
             >
@@ -5328,11 +5308,10 @@ export default function App() {
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-black text-emerald-600">৳ {w.amount}</p>
-                        <div className={`mt-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest inline-block ${
-                          w.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
-                          w.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
-                          'bg-amber-100 text-amber-600'
-                        }`}>
+                        <div className={`mt-1 px-2 py-0.5 rounded-full text-[7px] font-black uppercase tracking-widest inline-block ${w.status === 'approved' ? 'bg-emerald-100 text-emerald-600' :
+                            w.status === 'rejected' ? 'bg-rose-100 text-rose-600' :
+                              'bg-amber-100 text-amber-600'
+                          }`}>
                           {w.status}
                         </div>
                       </div>
@@ -5364,8 +5343,8 @@ export default function App() {
             { title: 'TELEGRAM SELL', color: 'from-sky-500 to-blue-600', icon: <Send className="w-6 h-6" /> },
             { title: 'KYC BY SELL', color: 'from-purple-500 to-indigo-600', icon: <ShieldCheck className="w-6 h-6" /> },
           ].map((item, i) => (
-            <div 
-              key={i} 
+            <div
+              key={i}
               onClick={() => item.view && setView(item.view as View)}
               className={`glass-card p-6 flex items-center justify-between border-white/40 shadow-lg group relative overflow-hidden ${item.view ? 'cursor-pointer active:scale-95' : ''} transition-all`}
             >
@@ -5406,7 +5385,7 @@ export default function App() {
         const newCount = todayWatch.count + 1;
         const newAdWatches = user.adWatches.filter(w => w.date !== today);
         newAdWatches.push({ ...todayWatch, count: newCount });
-        
+
         try {
           const userRef_id = user.id;
           await updateRow('users', userRef_id, {
@@ -5431,11 +5410,10 @@ export default function App() {
             </button>
             <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Ads Earn">Ads Earn</h2>
           </div>
-          
+
           {message && (
-            <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${
-              message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
-            }`}>
+            <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
+              }`}>
               {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
               <p className="text-xs font-bold uppercase tracking-widest">{message.text}</p>
             </div>
@@ -5445,7 +5423,7 @@ export default function App() {
             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Today's Progress</p>
             <h3 className="text-4xl font-black text-slate-900 mb-4">{todayWatch.count} / {dailyAdLimit}</h3>
             <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden max-w-[200px] mx-auto">
-              <motion.div 
+              <motion.div
                 initial={{ width: 0 }}
                 animate={{ width: `${(todayWatch.count / dailyAdLimit) * 100}%` }}
                 className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
@@ -5460,21 +5438,20 @@ export default function App() {
             </div>
             <p className="text-xs text-slate-500 mb-6 leading-relaxed">Watch short video ads to earn instant rewards. Each ad pays ৳ {adReward.toFixed(2)}. Watch 10 ads to earn ৳ 4.00.</p>
             <div className="space-y-3">
-              <button 
+              <button
                 onClick={watchAd}
                 disabled={isWatching || todayWatch.count >= dailyAdLimit}
-                className={`w-full py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all ${
-                  isWatching || todayWatch.count >= dailyAdLimit 
-                  ? 'bg-slate-200 text-slate-400' 
-                  : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white'
-                }`}
+                className={`w-full py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all ${isWatching || todayWatch.count >= dailyAdLimit
+                    ? 'bg-slate-200 text-slate-400'
+                    : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white'
+                  }`}
               >
                 {isWatching ? 'WATCHING AD...' : todayWatch.count >= dailyAdLimit ? 'LIMIT REACHED' : 'VIEW ADS'}
               </button>
-              <a 
-                href="https://monetag.com" 
-                target="_blank" 
-                rel="noreferrer" 
+              <a
+                href="https://monetag.com"
+                target="_blank"
+                rel="noreferrer"
                 className="w-full py-3 border border-indigo-200 text-indigo-600 rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all"
               >
                 <ExternalLink className="w-3 h-3" />
@@ -5521,54 +5498,54 @@ export default function App() {
         return;
       }
 
-    await handleSubmission(async () => {
-      const expiryDate = new Date();
-      expiryDate.setDate(expiryDate.getDate() + activationDuration);
+      await handleSubmission(async () => {
+        const expiryDate = new Date();
+        expiryDate.setDate(expiryDate.getDate() + activationDuration);
 
-      const userRef_id = user.id;
-      await updateRow('users', userRef_id, {
-        mainBalance: -activationFee,
-        isActive: true,
-        activationDate: new Date().toISOString(),
-        activationExpiry: expiryDate.toISOString(),
-        notifications: [
-          { 
-            id: Date.now().toString(), 
-            text: `Account Activated! Your account is now active until ${expiryDate.toLocaleDateString()}.`, 
-            date: new Date().toISOString().split('T')[0] 
-          },
-          ...user.notifications
-        ]
-      });
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -activationFee,
+          isActive: true,
+          activationDate: new Date().toISOString(),
+          activationExpiry: expiryDate.toISOString(),
+          notifications: [
+            {
+              id: Date.now().toString(),
+              text: `Account Activated! Your account is now active until ${expiryDate.toLocaleDateString()}.`,
+              date: new Date().toISOString().split('T')[0]
+            },
+            ...user.notifications
+          ]
+        });
 
-      // Referral Bonus on Activation
-      if (user.referredBy) {
-        const referrerRef_id = user.referredBy;
-        const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
-        if (referrerData) {
-          await updateRow('users', referrerRef_id, {
-            mainBalance: referralActivationBonus,
-            totalEarned: referralActivationBonus,
-            referralActiveCount: 1,
-            notifications: [
-              { 
-                id: Date.now().toString(), 
-                text: `Referral Activation Bonus! You earned ৳ ${referralActivationBonus} from ${user.name}'s activation.`, 
-                date: new Date().toISOString().split('T')[0] 
-              },
-              ...referrerData.notifications
-            ]
-          });
+        // Referral Bonus on Activation
+        if (user.referredBy) {
+          const referrerRef_id = user.referredBy;
+          const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
+          if (referrerData) {
+            await updateRow('users', referrerRef_id, {
+              mainBalance: referralActivationBonus,
+              totalEarned: referralActivationBonus,
+              referralActiveCount: 1,
+              notifications: [
+                {
+                  id: Date.now().toString(),
+                  text: `Referral Activation Bonus! You earned ৳ ${referralActivationBonus} from ${user.name}'s activation.`,
+                  date: new Date().toISOString().split('T')[0]
+                },
+                ...referrerData.notifications
+              ]
+            });
+          }
         }
-      }
 
-      setShowSuccess(true);
-    }, 'Account activated successfully!');
-  };
+        setShowSuccess(true);
+      }, 'Account activated successfully!');
+    };
 
     if (showSuccess) {
       return (
-        <SuccessView 
+        <SuccessView
           title="Account Activated!"
           subtitle="You now have full access to withdrawals"
           onClose={() => setView('home')}
@@ -5632,7 +5609,7 @@ export default function App() {
               </div>
             </div>
 
-            <button 
+            <button
               onClick={handleActivate}
               disabled={isActivating}
               className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50"
@@ -5653,7 +5630,7 @@ export default function App() {
           <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl animate-pulse" />
           <div className="absolute bottom-10 right-10 w-40 h-40 bg-white rounded-full blur-3xl animate-pulse delay-700" />
         </div>
-        
+
         <div className="relative z-10">
           <button onClick={() => setView('home')} className="w-10 h-10 glass rounded-xl flex items-center justify-center text-white mb-6 active:scale-90 transition-all">
             <ArrowLeft className="w-5 h-5" />
@@ -5665,7 +5642,7 @@ export default function App() {
 
       <div className="px-6 -mt-12 space-y-6">
         <div className="grid grid-cols-1 gap-4">
-          <button 
+          <button
             onClick={() => setView('ludo-earn')}
             className="glass-card p-6 flex items-center gap-6 border-white/40 shadow-xl group hover:scale-[1.02] transition-all"
           >
@@ -5678,7 +5655,7 @@ export default function App() {
             </div>
             <ChevronRight className="w-6 h-6 text-slate-300 ml-auto group-hover:translate-x-1 transition-transform" />
           </button>
-          
+
           <div className="glass-card p-6 flex items-center gap-6 border-white/40 shadow-xl opacity-60 grayscale">
             <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white shadow-lg">
               <Gamepad2 className="w-8 h-8" />
@@ -5708,7 +5685,7 @@ export default function App() {
         alert('Insufficient balance to join this tournament.');
         return;
       }
-      
+
       if (tournament.currentPlayers >= tournament.maxPlayers) {
         alert('Tournament is full.');
         return;
@@ -5780,29 +5757,26 @@ export default function App() {
           </button>
           <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Ludo Earn</h1>
           <p className="text-orange-100 text-xs font-bold uppercase tracking-widest opacity-80">Win Big with Ludo</p>
-          
+
           <div className="flex gap-2 mt-6 overflow-x-auto pb-2 no-scrollbar">
-            <button 
+            <button
               onClick={() => setLudoTab('all')}
-              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                ludoTab === 'all' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
-              }`}
+              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${ludoTab === 'all' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
+                }`}
             >
               All Matches
             </button>
-            <button 
+            <button
               onClick={() => setLudoTab('my')}
-              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                ludoTab === 'my' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
-              }`}
+              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${ludoTab === 'my' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
+                }`}
             >
               My Matches
             </button>
-            <button 
+            <button
               onClick={() => setLudoTab('history')}
-              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                ludoTab === 'history' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
-              }`}
+              className={`flex-1 min-w-[100px] py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${ludoTab === 'history' ? 'bg-white text-orange-600 shadow-lg' : 'bg-white/20 text-white'
+                }`}
             >
               History
             </button>
@@ -5821,14 +5795,13 @@ export default function App() {
                 ludoSubmissions.filter(s => s.userId === user.id).map(s => (
                   <div key={s.id} className="bg-white p-5 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${
-                        s.status === 'approved' ? 'bg-emerald-500 shadow-emerald-500/20' :
-                        s.status === 'rejected' ? 'bg-rose-500 shadow-rose-500/20' :
-                        'bg-amber-500 shadow-amber-500/20'
-                      }`}>
-                        {s.status === 'approved' ? <Check className="w-6 h-6" /> : 
-                         s.status === 'rejected' ? <X className="w-6 h-6" /> : 
-                         <Activity className="w-6 h-6" />}
+                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center text-white shadow-lg ${s.status === 'approved' ? 'bg-emerald-500 shadow-emerald-500/20' :
+                          s.status === 'rejected' ? 'bg-rose-500 shadow-rose-500/20' :
+                            'bg-amber-500 shadow-amber-500/20'
+                        }`}>
+                        {s.status === 'approved' ? <Check className="w-6 h-6" /> :
+                          s.status === 'rejected' ? <X className="w-6 h-6" /> :
+                            <Activity className="w-6 h-6" />}
                       </div>
                       <div>
                         <p className="text-xs font-black text-slate-900 uppercase tracking-tight">Match Result</p>
@@ -5836,11 +5809,10 @@ export default function App() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className={`text-[10px] font-black uppercase tracking-widest ${
-                        s.status === 'approved' ? 'text-emerald-600' :
-                        s.status === 'rejected' ? 'text-rose-600' :
-                        'text-amber-600'
-                      }`}>
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${s.status === 'approved' ? 'text-emerald-600' :
+                          s.status === 'rejected' ? 'text-rose-600' :
+                            'text-amber-600'
+                        }`}>
                         {s.status}
                       </p>
                       <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Ludo ID: {s.ludoUsername}</p>
@@ -5851,120 +5823,120 @@ export default function App() {
             </div>
           ) : (
             ludoTournaments.filter(t => ludoTab === 'all' ? true : t.playerIds?.includes(user.id)).length === 0 ? (
-            <div className="glass-card p-12 text-center border-white/40 shadow-xl">
-              <Trophy className="w-12 h-12 text-slate-200 mx-auto mb-4" />
-              <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No tournaments found</p>
-            </div>
-          ) : (
-            ludoTournaments
-              .filter(t => ludoTab === 'all' ? true : t.playerIds?.includes(user.id))
-              .map(t => {
-                const hasJoined = t.playerIds?.includes(user.id);
-                return (
-                  <div key={t.id} className="glass-card p-6 border-white/40 shadow-xl space-y-4 relative overflow-hidden">
-                    {hasJoined && (
-                      <div className="absolute top-0 right-0 bg-emerald-500 text-white px-4 py-1 rounded-bl-2xl text-[8px] font-black uppercase tracking-widest shadow-lg">
-                        Joined
-                      </div>
-                    )}
-                    
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{t.title}</h3>
-                        <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.type === '1vs1' ? '2 Players' : '4 Players'} • {t.status}</p>
-                      </div>
-                      <div className="bg-orange-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
-                        ৳ {t.prizePool}
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Entry Fee</p>
-                        <p className="text-sm font-black text-slate-800">৳ {t.entryFee}</p>
-                      </div>
-                      <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
-                        <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Players</p>
-                        <p className="text-sm font-black text-slate-800">{t.currentPlayers}/{t.maxPlayers}</p>
-                      </div>
-                    </div>
-
-                    {hasJoined && t.roomCode && (
-                      <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
-                        <div>
-                          <p className="text-[8px] font-bold text-emerald-600 uppercase mb-1">Room Code</p>
-                          <p className="text-lg font-black text-emerald-900 tracking-[0.2em]">{t.roomCode}</p>
+              <div className="glass-card p-12 text-center border-white/40 shadow-xl">
+                <Trophy className="w-12 h-12 text-slate-200 mx-auto mb-4" />
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">No tournaments found</p>
+              </div>
+            ) : (
+              ludoTournaments
+                .filter(t => ludoTab === 'all' ? true : t.playerIds?.includes(user.id))
+                .map(t => {
+                  const hasJoined = t.playerIds?.includes(user.id);
+                  return (
+                    <div key={t.id} className="glass-card p-6 border-white/40 shadow-xl space-y-4 relative overflow-hidden">
+                      {hasJoined && (
+                        <div className="absolute top-0 right-0 bg-emerald-500 text-white px-4 py-1 rounded-bl-2xl text-[8px] font-black uppercase tracking-widest shadow-lg">
+                          Joined
                         </div>
-                        <button 
+                      )}
+
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">{t.title}</h3>
+                          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{t.type === '1vs1' ? '2 Players' : '4 Players'} • {t.status}</p>
+                        </div>
+                        <div className="bg-orange-500 text-white px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shadow-lg">
+                          ৳ {t.prizePool}
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Entry Fee</p>
+                          <p className="text-sm font-black text-slate-800">৳ {t.entryFee}</p>
+                        </div>
+                        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100">
+                          <p className="text-[8px] font-bold text-slate-400 uppercase mb-1">Players</p>
+                          <p className="text-sm font-black text-slate-800">{t.currentPlayers}/{t.maxPlayers}</p>
+                        </div>
+                      </div>
+
+                      {hasJoined && t.roomCode && (
+                        <div className="bg-emerald-50 p-4 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                          <div>
+                            <p className="text-[8px] font-bold text-emerald-600 uppercase mb-1">Room Code</p>
+                            <p className="text-lg font-black text-emerald-900 tracking-[0.2em]">{t.roomCode}</p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(t.roomCode || '');
+                              alert('Room Code Copied!');
+                            }}
+                            className="p-3 bg-white rounded-xl shadow-sm text-emerald-600 active:scale-90 transition-all"
+                          >
+                            <Copy className="w-5 h-5" />
+                          </button>
+                        </div>
+                      )}
+
+                      <div className="flex gap-3">
+                        <button
                           onClick={() => {
-                            navigator.clipboard.writeText(t.roomCode || '');
-                            alert('Room Code Copied!');
+                            setSelectedInfoTournament(t);
+                            setShowInfoModal(true);
                           }}
-                          className="p-3 bg-white rounded-xl shadow-sm text-emerald-600 active:scale-90 transition-all"
+                          className="flex-1 bg-indigo-50 text-indigo-600 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest border border-indigo-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
                         >
-                          <Copy className="w-5 h-5" />
+                          <Info className="w-3.5 h-3.5" />
+                          Match Rules
                         </button>
                       </div>
-                    )}
 
-                    <div className="flex gap-3">
-                      <button 
-                        onClick={() => {
-                          setSelectedInfoTournament(t);
-                          setShowInfoModal(true);
-                        }}
-                        className="flex-1 bg-indigo-50 text-indigo-600 py-3 rounded-xl font-black text-[9px] uppercase tracking-widest border border-indigo-100 flex items-center justify-center gap-2 active:scale-95 transition-all"
-                      >
-                        <Info className="w-3.5 h-3.5" />
-                        Match Rules
-                      </button>
-                    </div>
-
-                    <div className="flex gap-3">
-                      {!hasJoined ? (
-                        <button 
-                          onClick={() => handleJoin(t)}
-                          disabled={t.currentPlayers >= t.maxPlayers || t.status !== 'open'}
-                          className="flex-1 bg-gradient-to-r from-orange-500 to-rose-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                      <div className="flex gap-3">
+                        {!hasJoined ? (
+                          <button
+                            onClick={() => handleJoin(t)}
+                            disabled={t.currentPlayers >= t.maxPlayers || t.status !== 'open'}
+                            className="flex-1 bg-gradient-to-r from-orange-500 to-rose-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:grayscale"
+                          >
+                            Join Tournament
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="flex-1 bg-slate-100 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-slate-200"
+                          >
+                            Already Joined
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            setSelectedTournament(t);
+                            setShowSubmitModal(true);
+                          }}
+                          className="px-6 bg-slate-800 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                         >
-                          Join Tournament
+                          Submit Proof
                         </button>
-                      ) : (
-                        <button 
-                          disabled
-                          className="flex-1 bg-slate-100 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-slate-200"
-                        >
-                          Already Joined
-                        </button>
-                      )}
-                      <button 
-                        onClick={() => {
-                          setSelectedTournament(t);
-                          setShowSubmitModal(true);
-                        }}
-                        className="px-6 bg-slate-800 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-                      >
-                        Submit Proof
-                      </button>
+                      </div>
                     </div>
-                  </div>
-                );
-              })
-          ))}
+                  );
+                })
+            ))}
         </div>
 
         {/* Info Modal */}
         <AnimatePresence>
           {showInfoModal && selectedInfoTournament && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowInfoModal(false)}
                 className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
               />
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -6032,7 +6004,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => setShowInfoModal(false)}
                   className="w-full mt-8 bg-slate-900 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                 >
@@ -6047,14 +6019,14 @@ export default function App() {
         <AnimatePresence>
           {showSubmitModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 onClick={() => setShowSubmitModal(false)}
                 className="absolute inset-0 bg-slate-900/80 backdrop-blur-sm"
               />
-              <motion.div 
+              <motion.div
                 initial={{ scale: 0.9, opacity: 0, y: 20 }}
                 animate={{ scale: 1, opacity: 1, y: 0 }}
                 exit={{ scale: 0.9, opacity: 0, y: 20 }}
@@ -6063,13 +6035,13 @@ export default function App() {
                 <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-orange-500 to-rose-600" />
                 <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight mb-2">Submit Win Proof</h3>
                 <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-6">Upload your winning screenshot</p>
-                
+
                 <div className="space-y-4">
                   <div className="relative group">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-                    <input 
-                      type="text" 
-                      placeholder="Your Ludo Username" 
+                    <input
+                      type="text"
+                      placeholder="Your Ludo Username"
                       value={ludoUsername}
                       onChange={e => setLudoUsername(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-orange-500 transition-all"
@@ -6078,8 +6050,8 @@ export default function App() {
 
                   <div className="relative group">
                     <Camera className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       accept="image/*"
                       onChange={e => {
                         const file = e.target.files?.[0];
@@ -6100,8 +6072,8 @@ export default function App() {
                       </button>
                     </div>
                   )}
-                  
-                  <button 
+
+                  <button
                     onClick={handleSubmitResult}
                     disabled={isSubmitting}
                     className="w-full bg-gradient-to-r from-orange-500 to-rose-600 text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-lg active:scale-95 transition-all disabled:opacity-50"
@@ -6147,7 +6119,7 @@ export default function App() {
       try {
         setIsSubmitting(true);
         const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
-        
+
         // Deduct balance
         const userRef_id = user.id;
         await updateRow('users', userRef_id, {
@@ -6207,11 +6179,10 @@ export default function App() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="text-xs font-black text-slate-900 uppercase tracking-tight">{o.service}</p>
-                          <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${
-                            o.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                            o.status === 'cancelled' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                          }`}>
+                          <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${o.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                              o.status === 'cancelled' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                                'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                            }`}>
                             {o.status}
                           </span>
                         </div>
@@ -6265,7 +6236,7 @@ export default function App() {
                   <h3 className="text-xl font-black tracking-tight uppercase">Select Your Boost</h3>
                 </div>
                 {services.map(s => (
-                  <button 
+                  <button
                     key={s.id}
                     onClick={() => setSelectedService(s.id)}
                     className="bg-white p-5 rounded-[32px] flex items-center gap-5 border border-slate-100 shadow-sm group hover:border-indigo-500 transition-all relative overflow-hidden"
@@ -6311,9 +6282,9 @@ export default function App() {
                   <div className="space-y-3">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] ml-2">Target Destination Link</label>
                     <div className="relative">
-                      <input 
-                        type="text" 
-                        placeholder="https://facebook.com/post/..." 
+                      <input
+                        type="text"
+                        placeholder="https://facebook.com/post/..."
                         value={link}
                         onChange={e => setLink(e.target.value)}
                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-xs font-black outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
@@ -6325,9 +6296,9 @@ export default function App() {
                   <div className="space-y-3">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] ml-2">Investment Amount (৳)</label>
                     <div className="relative">
-                      <input 
-                        type="number" 
-                        placeholder="0.00" 
+                      <input
+                        type="number"
+                        placeholder="0.00"
                         value={amount || ''}
                         onChange={e => setAmount(Number(e.target.value))}
                         className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-xl font-black outline-none focus:border-indigo-500 focus:bg-white transition-all shadow-inner"
@@ -6358,13 +6329,13 @@ export default function App() {
                   )}
 
                   <div className="flex gap-4">
-                    <button 
+                    <button
                       onClick={() => setSelectedService(null)}
                       className="flex-1 bg-slate-100 text-slate-500 py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] active:scale-95 transition-all"
                     >
                       BACK
                     </button>
-                    <button 
+                    <button
                       onClick={handleOrder}
                       disabled={isSubmitting || amount <= 0}
                       className="flex-[2] bg-indigo-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all disabled:opacity-50"
@@ -6456,11 +6427,10 @@ export default function App() {
                         <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{r.date}</p>
                         <p className="text-xs font-black text-indigo-600 mt-3 tracking-tight">৳ {r.price}</p>
                       </div>
-                      <span className={`text-[7px] font-black px-3 py-1 rounded-full uppercase border ${
-                        r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 
-                        r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' : 
-                        'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                      }`}>
+                      <span className={`text-[7px] font-black px-3 py-1 rounded-full uppercase border ${r.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
+                          r.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                        }`}>
                         {r.status}
                       </span>
                     </div>
@@ -6518,9 +6488,9 @@ export default function App() {
                 <div className="space-y-3">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] ml-2">YouTube Account Email</label>
                   <div className="relative">
-                    <input 
-                      type="email" 
-                      placeholder="example@gmail.com" 
+                    <input
+                      type="email"
+                      placeholder="example@gmail.com"
                       value={email}
                       onChange={e => setEmail(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-xs font-black outline-none focus:border-rose-500 focus:bg-white transition-all shadow-inner"
@@ -6529,7 +6499,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => handleSubscribe('youtube', 55)}
                   disabled={isSubmitting}
                   className="w-full bg-rose-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-rose-500/20 active:scale-95 transition-all disabled:opacity-50"
@@ -6587,9 +6557,9 @@ export default function App() {
                 <div className="space-y-3">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-[0.3em] ml-2">Telegram User ID</label>
                   <div className="relative">
-                    <input 
-                      type="text" 
-                      placeholder="e.g. 123456789" 
+                    <input
+                      type="text"
+                      placeholder="e.g. 123456789"
                       value={telegramId}
                       onChange={e => setTelegramId(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-xs font-black outline-none focus:border-sky-500 focus:bg-white transition-all shadow-inner"
@@ -6598,7 +6568,7 @@ export default function App() {
                   </div>
                 </div>
 
-                <button 
+                <button
                   onClick={() => handleSubscribe('telegram', 550)}
                   disabled={isSubmitting}
                   className="w-full bg-sky-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-sky-500/20 active:scale-95 transition-all disabled:opacity-50"
@@ -6645,14 +6615,14 @@ export default function App() {
                 <div className="p-6 bg-blue-50/50 rounded-3xl border border-blue-100/50">
                   <h4 className="text-[8px] font-black text-blue-500 uppercase tracking-[0.3em] mb-4">Service Details</h4>
                   <p className="text-[11px] text-slate-600 font-bold leading-relaxed">
-                    Meta Verified provides account verification with a blue badge, increased account protection, and direct support. 
+                    Meta Verified provides account verification with a blue badge, increased account protection, and direct support.
                     To get Meta Verified through us, please contact our developer directly on Telegram for manual processing.
                   </p>
                 </div>
 
-                <a 
-                  href="https://t.me/your_devlopar" 
-                  target="_blank" 
+                <a
+                  href="https://t.me/your_devlopar"
+                  target="_blank"
                   rel="noopener noreferrer"
                   className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-blue-600/20 active:scale-95 transition-all flex items-center justify-center gap-3"
                 >
@@ -6668,7 +6638,7 @@ export default function App() {
 
     if (step === 'success') {
       return (
-        <SuccessView 
+        <SuccessView
           title="Order Placed"
           subtitle="Subscription request sent"
           onClose={() => { setStep('list'); setEmail(''); setTelegramId(''); }}
@@ -6698,7 +6668,7 @@ export default function App() {
 
           <div className="grid grid-cols-1 gap-4">
             {(isAdmin || enabledSmmServices.some(s => ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star'].includes(s))) && (
-              <button 
+              <button
                 onClick={() => setView('smm-panel')}
                 className="glass-card border-white/40 shadow-lg p-6 flex items-center justify-between hover:scale-[1.02] transition-all group bg-gradient-to-br from-indigo-500/5 to-blue-600/5"
               >
@@ -6716,7 +6686,7 @@ export default function App() {
             )}
 
             {(isAdmin || enabledSmmServices.includes('youtube-premium')) && (
-              <button 
+              <button
                 onClick={() => setStep('youtube')}
                 className="glass-card border-white/40 shadow-lg p-6 flex items-center justify-between hover:scale-[1.02] transition-all group"
               >
@@ -6734,7 +6704,7 @@ export default function App() {
             )}
 
             {(isAdmin || enabledSmmServices.includes('telegram-premium')) && (
-              <button 
+              <button
                 onClick={() => setStep('telegram')}
                 className="glass-card border-white/40 shadow-lg p-6 flex items-center justify-between hover:scale-[1.02] transition-all group"
               >
@@ -6752,7 +6722,7 @@ export default function App() {
             )}
 
             {(isAdmin || enabledSmmServices.includes('meta-verified')) && (
-              <button 
+              <button
                 onClick={() => setStep('meta')}
                 className="glass-card border-white/40 shadow-lg p-6 flex items-center justify-between hover:scale-[1.02] transition-all group"
               >
@@ -6771,20 +6741,20 @@ export default function App() {
           </div>
 
           <div className="mt-8 p-6 glass-card border-indigo-100 bg-indigo-50/30">
-              <div className="flex items-center gap-3 mb-4">
-                <Bot className="w-6 h-6 text-indigo-600" />
-                <h3 className="text-sm font-black text-slate-900 uppercase">Web Bot By Ara</h3>
-              </div>
-              <p className="text-[11px] text-slate-500 font-medium mb-6 leading-relaxed">
-                Get custom web bots and automation tools developed by Ara. High performance and full admin control.
-              </p>
-              <button className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
-                <RefreshCw className="w-3 h-3" />
-                Update Now
-              </button>
+            <div className="flex items-center gap-3 mb-4">
+              <Bot className="w-6 h-6 text-indigo-600" />
+              <h3 className="text-sm font-black text-slate-900 uppercase">Web Bot By Ara</h3>
             </div>
+            <p className="text-[11px] text-slate-500 font-medium mb-6 leading-relaxed">
+              Get custom web bots and automation tools developed by Ara. High performance and full admin control.
+            </p>
+            <button className="w-full py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2">
+              <RefreshCw className="w-3 h-3" />
+              Update Now
+            </button>
           </div>
         </div>
+      </div>
     );
   };
 
@@ -6875,8 +6845,8 @@ export default function App() {
 
       try {
         const userRef_id = userId;
-        await updateRow('users', userRef_id, { 
-          status, 
+        await updateRow('users', userRef_id, {
+          status,
           restrictionReason: reason,
           suspensionUntil
         });
@@ -6897,13 +6867,13 @@ export default function App() {
 
       setIsSubmitting(true);
       setSubmissionProgress(0);
-      
+
       try {
         let count = 0;
         for (const u of suspendedUsers) {
           const userRef_id = u.id;
-          await updateRow('users', userRef_id, { 
-            status: 'active', 
+          await updateRow('users', userRef_id, {
+            status: 'active',
             restrictionReason: '',
             suspensionUntil: ''
           });
@@ -6935,10 +6905,10 @@ export default function App() {
                   totalEarned: commission,
                   totalCommission: commission,
                   notifications: [
-                    { 
-                      id: Date.now().toString(), 
-                      text: `Referral Commission! You earned ৳ ${commission.toFixed(2)} from ${userData.name}'s ${source}.`, 
-                      date: new Date().toISOString().split('T')[0] 
+                    {
+                      id: Date.now().toString(),
+                      text: `Referral Commission! You earned ৳ ${commission.toFixed(2)} from ${userData.name}'s ${source}.`,
+                      date: new Date().toISOString().split('T')[0]
                     },
                     ...referrerData.notifications
                   ]
@@ -7011,7 +6981,7 @@ export default function App() {
       try {
         // table: gmailSubmissions, id: id
         await updateRow('gmailSubmissions', id, { status: action, reason });
-        
+
         if (action === 'approved') {
           const s = gmailSubmissions.find(s => s.id === id);
           if (s) {
@@ -7038,7 +7008,7 @@ export default function App() {
       try {
         // table: microjobSubmissions, id: id
         await updateRow('microjobSubmissions', id, { status: action, reason });
-        
+
         if (action === 'approved') {
           const s = microjobSubmissions.find(s => s.id === id);
           if (s) {
@@ -7099,7 +7069,7 @@ export default function App() {
       try {
         // table: taskSubmissions, id: id
         await updateRow('taskSubmissions', id, { status: action, reason });
-        
+
         if (action === 'approved') {
           const s = taskSubmissions.find(s => s.id === id);
           if (s) {
@@ -7123,7 +7093,7 @@ export default function App() {
 
     const handleWithdrawAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : undefined;
-      
+
       try {
         // admin op: withdrawals
         await updateRow('withdrawals', id, { status: action, reason });
@@ -7164,7 +7134,7 @@ export default function App() {
       try {
         // admin op: rechargeRequests
         await updateRow('rechargeRequests', id, { status: action, reason });
-        
+
         const r = rechargeRequests.find(r => r.id === id);
         if (r) {
           const userRef_id = r.userId;
@@ -7202,7 +7172,7 @@ export default function App() {
       try {
         // admin op: driveOfferRequests
         await updateRow('driveOfferRequests', id, { status: action, reason });
-        
+
         if (action === 'rejected') {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
@@ -7226,7 +7196,7 @@ export default function App() {
       try {
         // admin op: smmOrders
         await updateRow('smmOrders', id, { status: action });
-        
+
         if (action === 'cancelled') {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
@@ -7254,7 +7224,7 @@ export default function App() {
       try {
         // admin op: dollarBuyRequests
         await updateRow('dollarBuyRequests', id, { status: action, reason });
-        
+
         if (action === 'rejected') {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
@@ -7316,7 +7286,7 @@ export default function App() {
       try {
         // admin op: productOrders
         await updateRow('productOrders', id, { status: action, reason });
-        
+
         if (action === 'cancelled') {
           const o = productOrders.find(o => o.id === id);
           if (o) {
@@ -7355,19 +7325,19 @@ export default function App() {
     };
 
     const toggleFolder = (id: string) => {
-      setAdminFolders(prev => 
+      setAdminFolders(prev =>
         prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
       );
     };
 
     const toggleFeature = (id: string) => {
-      setAdminFeatures(prev => 
+      setAdminFeatures(prev =>
         prev.includes(id) ? prev.filter(f => f !== id) : [...prev, id]
       );
     };
 
     const toggleCard = (title: string) => {
-      setAdminEnabledCards(prev => 
+      setAdminEnabledCards(prev =>
         prev.includes(title) ? prev.filter(c => c !== title) : [...prev, title]
       );
     };
@@ -7395,7 +7365,7 @@ export default function App() {
       try {
         // table: subscriptionRequests, id: id
         await updateRow('subscriptionRequests', id, { status, reason });
-        
+
         const sub = subscriptionRequests.find(r => r.id === id);
         if (sub && status === 'rejected') {
           // Refund balance
@@ -7404,7 +7374,7 @@ export default function App() {
             mainBalance: sub.price
           });
         }
-        
+
         alert(`Subscription ${status}`);
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, 'subscriptionRequests');
@@ -7416,7 +7386,7 @@ export default function App() {
       try {
         // table: socialSubmissions, id: id
         await updateRow('socialSubmissions', id, { status: action, reason });
-        
+
         const s = allSocialSubmissions.find(s => s.id === id);
         if (s && action === 'approved') {
           const userRef_id = s.userId;
@@ -7479,126 +7449,126 @@ export default function App() {
                 <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Live Control Hub</h3>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <button 
+                <button
                   onClick={() => setAdminMaintenance(!adminMaintenance)}
                   className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all ${adminMaintenance ? 'bg-rose-500 border-rose-400 text-white shadow-lg scale-105' : 'bg-white border-slate-100 text-slate-600 hover:border-rose-500'}`}
                 >
                   <ShieldAlert className="w-5 h-5" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Maintenance</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setView('home')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Globe className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Live Site</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('tasks')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
                 >
                   <PlusCircle className="w-5 h-5 text-emerald-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Add Task</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('withdrawals')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-amber-500 hover:bg-amber-50/30"
                 >
                   <CreditCard className="w-5 h-5 text-amber-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Payouts</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('recharge')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Smartphone className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Recharge</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('drive-requests')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-amber-500 hover:bg-amber-50/30"
                 >
                   <Zap className="w-5 h-5 text-amber-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Drive Req</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('drive-offers')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
                 >
                   <PlusCircle className="w-5 h-5 text-emerald-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">D-Offers</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('products')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-pink-500 hover:bg-pink-50/30"
                 >
                   <ShoppingBag className="w-5 h-5 text-pink-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Products</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('product-orders')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Package className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Orders</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('tasks')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Briefcase className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Tasks</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('microjobs')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
                 >
                   <Zap className="w-5 h-5 text-emerald-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Microjobs</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('withdrawals')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-rose-500 hover:bg-rose-50/30"
                 >
                   <CreditCard className="w-5 h-5 text-rose-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Withdraw</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('recharge')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-blue-500 hover:bg-blue-50/30"
                 >
                   <Smartphone className="w-5 h-5 text-blue-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Recharge</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('products')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-pink-500 hover:bg-pink-50/30"
                 >
                   <ShoppingBag className="w-5 h-5 text-pink-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Products</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('users')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Users className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Users</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('ludo')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-orange-500 hover:bg-orange-50/30"
                 >
                   <Trophy className="w-5 h-5 text-orange-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Ludo</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('smm')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
                   <Zap className="w-5 h-5 text-indigo-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">SMM Panel</span>
                 </button>
-                <button 
+                <button
                   onClick={() => setActiveAdminTab('news')}
                   className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
                 >
@@ -7648,7 +7618,7 @@ export default function App() {
                     .map((item, i) => (
                       <div key={i} className="flex items-center gap-2 text-slate-500 border-b border-slate-50 pb-1 last:border-0">
                         <span className="text-indigo-500 font-bold">[{new Date(item.timestamp).toLocaleTimeString()}]</span>
-                        <span className="text-slate-800 font-black">USER_{item.userId.slice(0,4)}</span>
+                        <span className="text-slate-800 font-black">USER_{item.userId.slice(0, 4)}</span>
                         <span>performed</span>
                         <span className="px-1 bg-slate-100 rounded text-slate-600 uppercase">{'amount' in item ? 'WITHDRAWAL' : 'SUBMISSION'}</span>
                       </div>
@@ -7667,8 +7637,8 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gmail Password</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={adminGmailPassword}
                       onChange={e => setAdminGmailPassword(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7676,8 +7646,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Min Withdrawal</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminMinWithdrawal}
                       onChange={e => setAdminMinWithdrawal(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7685,8 +7655,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Withdrawal Fee (%)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminWithdrawalFee}
                       onChange={e => setAdminWithdrawalFee(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7694,8 +7664,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Dollar Buy Rate</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminDollarBuyRate}
                       onChange={e => setAdminDollarBuyRate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7703,8 +7673,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Dollar Sell Rate</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminDollarSellRate}
                       onChange={e => setAdminDollarSellRate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7712,8 +7682,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Spin Cost</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminSpinCost}
                       onChange={e => setAdminSpinCost(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7721,8 +7691,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Daily Reward</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminDailyReward}
                       onChange={e => setAdminDailyReward(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7730,8 +7700,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 1 Rate</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={localGen1Rate}
                       onChange={e => setLocalGen1Rate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7739,8 +7709,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 2 Rate</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={localGen2Rate}
                       onChange={e => setLocalGen2Rate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7748,8 +7718,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 3 Rate</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={localGen3Rate}
                       onChange={e => setLocalGen3Rate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7757,8 +7727,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Total Paid (৳)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminTotalPaid}
                       onChange={e => setAdminTotalPaid(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7766,8 +7736,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Active Workers</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminActiveWorkerCount}
                       onChange={e => setAdminActiveWorkerCount(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7775,8 +7745,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gmail Reward</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminGmailReward}
                       onChange={e => setAdminGmailReward(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7784,8 +7754,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Ad Reward</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminAdReward}
                       onChange={e => setAdminAdReward(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7793,8 +7763,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Daily Ad Limit</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminDailyAdLimit}
                       onChange={e => setAdminDailyAdLimit(parseInt(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7802,8 +7772,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Telegram Link</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={adminTelegramLink}
                       onChange={e => setAdminTelegramLink(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7811,8 +7781,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Facebook Link</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={adminFacebookLink}
                       onChange={e => setAdminFacebookLink(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7820,8 +7790,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">WhatsApp Link</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       value={adminWhatsappLink}
                       onChange={e => setAdminWhatsappLink(e.target.value)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7829,7 +7799,7 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Show Welcome Animation</label>
-                    <select 
+                    <select
                       value={adminShowWelcomeAnimation ? 'yes' : 'no'}
                       onChange={e => setAdminShowWelcomeAnimation(e.target.value === 'yes')}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7840,8 +7810,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Activation Fee</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminActivationFee}
                       onChange={e => setAdminActivationFee(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7849,8 +7819,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Recharge Commission (Per 1000)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminRechargeCommissionRate}
                       onChange={e => setAdminRechargeCommissionRate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7858,8 +7828,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Activation Duration (Days)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminActivationDuration}
                       onChange={e => setAdminActivationDuration(parseInt(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7867,8 +7837,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Referral Commission (%)</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminReferralCommissionRate}
                       onChange={e => setAdminReferralCommissionRate(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7876,8 +7846,8 @@ export default function App() {
                   </div>
                   <div className="space-y-1">
                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Referral Activation Bonus</label>
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={adminReferralActivationBonus}
                       onChange={e => setAdminReferralActivationBonus(parseFloat(e.target.value) || 0)}
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
@@ -7886,7 +7856,7 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Rules Text</label>
-                  <textarea 
+                  <textarea
                     value={adminRulesText}
                     onChange={e => setAdminRulesText(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-black font-bold outline-none focus:border-indigo-500 resize-none"
@@ -7895,14 +7865,14 @@ export default function App() {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Global Notice</label>
-                  <textarea 
+                  <textarea
                     value={notice}
                     onChange={e => setNotice(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-black font-bold outline-none focus:border-indigo-500 resize-none"
                     rows={2}
                   />
                 </div>
-                <button 
+                <button
                   onClick={saveChanges}
                   className="w-full py-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-xl active:scale-95 transition-all"
                 >
@@ -7921,8 +7891,8 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Search by Email/Name</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       placeholder="Search..."
                       value={userSearch}
                       onChange={e => setUserSearch(e.target.value)}
@@ -7932,14 +7902,14 @@ export default function App() {
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Search by Referral ID</label>
                     <div className="flex gap-2">
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         placeholder="ID..."
                         value={referralSearch}
                         onChange={e => setReferralSearch(e.target.value)}
                         className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                       />
-                      <button 
+                      <button
                         onClick={() => {
                           const u = allUsers.find(u => u.numericId === referralSearch);
                           if (u) {
@@ -7960,7 +7930,7 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Select User</label>
-                  <select 
+                  <select
                     value={selectedUserEmail}
                     onChange={(e) => {
                       const u = allUsers.find(u => u.email === e.target.value);
@@ -7973,8 +7943,8 @@ export default function App() {
                     }}
                     className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                   >
-                    {allUsers.filter(u => 
-                      u.email.toLowerCase().includes(userSearch.toLowerCase()) || 
+                    {allUsers.filter(u =>
+                      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
                       u.name.toLowerCase().includes(userSearch.toLowerCase())
                     ).map(u => (
                       <option key={u.id} value={u.email}>{u.name} ({u.email})</option>
@@ -7988,21 +7958,21 @@ export default function App() {
                     <p className="text-[10px] font-bold text-indigo-600">Current: ৳{adminUser.mainBalance.toFixed(2)}</p>
                   </div>
                   <div className="flex gap-2">
-                    <input 
-                      type="number" 
+                    <input
+                      type="number"
                       value={balanceAmount}
                       onChange={e => setBalanceAmount(parseFloat(e.target.value) || 0)}
                       className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:border-indigo-500"
                       placeholder="Amount"
                     />
-                    <button 
-                      onClick={() => setAdminUser({...adminUser, mainBalance: adminUser.mainBalance + balanceAmount})}
+                    <button
+                      onClick={() => setAdminUser({ ...adminUser, mainBalance: adminUser.mainBalance + balanceAmount })}
                       className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase"
                     >
                       Add
                     </button>
-                    <button 
-                      onClick={() => setAdminUser({...adminUser, mainBalance: Math.max(0, adminUser.mainBalance - balanceAmount)})}
+                    <button
+                      onClick={() => setAdminUser({ ...adminUser, mainBalance: Math.max(0, adminUser.mainBalance - balanceAmount) })}
                       className="bg-rose-500 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase"
                     >
                       Remove
@@ -8013,24 +7983,24 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Change Name</label>
-                    <input 
-                      type="text" 
-                      value={newUserName} 
+                    <input
+                      type="text"
+                      value={newUserName}
                       onChange={e => {
                         setNewUserName(e.target.value);
-                        setAdminUser({...adminUser, name: e.target.value});
+                        setAdminUser({ ...adminUser, name: e.target.value });
                       }}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Change Password</label>
-                    <input 
-                      type="text" 
-                      value={newUserPassword} 
+                    <input
+                      type="text"
+                      value={newUserPassword}
                       onChange={e => {
                         setNewUserPassword(e.target.value);
-                        setAdminUser({...adminUser, password: e.target.value});
+                        setAdminUser({ ...adminUser, password: e.target.value });
                       }}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                     />
@@ -8039,19 +8009,19 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Email Address</label>
-                    <input 
-                      type="text" 
-                      value={adminUser.email} 
-                      onChange={e => setAdminUser({...adminUser, email: e.target.value})}
+                    <input
+                      type="text"
+                      value={adminUser.email}
+                      onChange={e => setAdminUser({ ...adminUser, email: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Age</label>
-                    <input 
-                      type="number" 
-                      value={adminUser.age} 
-                      onChange={e => setAdminUser({...adminUser, age: parseInt(e.target.value) || 0})}
+                    <input
+                      type="number"
+                      value={adminUser.age}
+                      onChange={e => setAdminUser({ ...adminUser, age: parseInt(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
@@ -8059,19 +8029,19 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Main Balance (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminUser.mainBalance} 
-                      onChange={e => setAdminUser({...adminUser, mainBalance: parseFloat(e.target.value) || 0})}
+                    <input
+                      type="number"
+                      value={adminUser.mainBalance}
+                      onChange={e => setAdminUser({ ...adminUser, mainBalance: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-4 text-sm text-emerald-700 font-black outline-none focus:border-emerald-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Total Earned (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminUser.totalEarned} 
-                      onChange={e => setAdminUser({...adminUser, totalEarned: parseFloat(e.target.value) || 0})}
+                    <input
+                      type="number"
+                      value={adminUser.totalEarned}
+                      onChange={e => setAdminUser({ ...adminUser, totalEarned: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-4 text-sm text-indigo-700 font-black outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
@@ -8079,19 +8049,19 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Pending Payout (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminUser.pendingPayout} 
-                      onChange={e => setAdminUser({...adminUser, pendingPayout: parseFloat(e.target.value) || 0})}
+                    <input
+                      type="number"
+                      value={adminUser.pendingPayout}
+                      onChange={e => setAdminUser({ ...adminUser, pendingPayout: parseFloat(e.target.value) || 0 })}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Rank</label>
-                    <input 
-                      type="text" 
-                      value={adminUser.rank} 
-                      onChange={e => setAdminUser({...adminUser, rank: e.target.value})}
+                    <input
+                      type="text"
+                      value={adminUser.rank}
+                      onChange={e => setAdminUser({ ...adminUser, rank: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
@@ -8101,14 +8071,14 @@ export default function App() {
                     <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Account Activation</p>
                     <p className="text-[10px] text-slate-500 mt-1">{adminUser.isActive ? 'Active' : 'Inactive'}</p>
                   </div>
-                  <button 
-                    onClick={() => setAdminUser({...adminUser, isActive: !adminUser.isActive})}
+                  <button
+                    onClick={() => setAdminUser({ ...adminUser, isActive: !adminUser.isActive })}
                     className={`w-14 h-7 rounded-full relative transition-all duration-300 ${adminUser.isActive ? 'bg-indigo-500 shadow-md' : 'bg-slate-200'}`}
                   >
                     <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${adminUser.isActive ? 'right-1' : 'left-1'}`} />
                   </button>
                 </div>
-                <button 
+                <button
                   onClick={async () => {
                     if (confirm(`Are you sure you want to DELETE user ${adminUser.email}? This cannot be undone.`)) {
                       try {
@@ -8139,7 +8109,7 @@ export default function App() {
                     <p className="text-xs font-black text-rose-600 uppercase tracking-widest">Maintenance Mode</p>
                     <p className="text-[10px] text-slate-500 mt-1">Lock all application features</p>
                   </div>
-                  <button 
+                  <button
                     onClick={() => setAdminMaintenance(!adminMaintenance)}
                     className={`w-14 h-7 rounded-full relative transition-all duration-300 ${adminMaintenance ? 'bg-rose-500 shadow-md' : 'bg-slate-200'}`}
                   >
@@ -8148,8 +8118,8 @@ export default function App() {
                 </div>
                 <div>
                   <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Global Notice Broadcast</label>
-                  <textarea 
-                    value={notice} 
+                  <textarea
+                    value={notice}
                     onChange={e => setNotice(e.target.value)}
                     rows={3}
                     className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 resize-none shadow-sm"
@@ -8158,18 +8128,18 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Min Withdrawal (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminMinWithdrawal} 
+                    <input
+                      type="number"
+                      value={adminMinWithdrawal}
                       onChange={e => setAdminMinWithdrawal(parseFloat(e.target.value) || 0)}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Spin Cost (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminSpinCost} 
+                    <input
+                      type="number"
+                      value={adminSpinCost}
                       onChange={e => setAdminSpinCost(parseFloat(e.target.value) || 0)}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
@@ -8178,18 +8148,18 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Daily Reward (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminDailyReward} 
+                    <input
+                      type="number"
+                      value={adminDailyReward}
                       onChange={e => setAdminDailyReward(parseFloat(e.target.value) || 0)}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Ad Reward (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminAdReward} 
+                    <input
+                      type="number"
+                      value={adminAdReward}
                       onChange={e => setAdminAdReward(parseFloat(e.target.value) || 0)}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
@@ -8198,9 +8168,9 @@ export default function App() {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Delivery Fee (৳)</label>
-                    <input 
-                      type="number" 
-                      value={adminDeliveryFee} 
+                    <input
+                      type="number"
+                      value={adminDeliveryFee}
                       onChange={e => setAdminDeliveryFee(parseFloat(e.target.value) || 0)}
                       className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
                     />
@@ -8228,14 +8198,13 @@ export default function App() {
                       { id: 'mobile-recharge', label: 'Mobile Recharge' },
                       { id: 'drive-offer', label: 'Drive Offer' }
                     ].map(f => (
-                      <button 
+                      <button
                         key={f.id}
                         onClick={() => toggleFeature(f.id)}
-                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${
-                          adminFeatures.includes(f.id) 
-                          ? 'bg-emerald-500 border-emerald-400 text-white shadow-md' 
-                          : 'bg-slate-50 border-slate-100 text-slate-400'
-                        }`}
+                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${adminFeatures.includes(f.id)
+                            ? 'bg-emerald-500 border-emerald-400 text-white shadow-md'
+                            : 'bg-slate-50 border-slate-100 text-slate-400'
+                          }`}
                       >
                         {f.label}
                       </button>
@@ -8246,14 +8215,13 @@ export default function App() {
                   <label className="text-[10px] font-bold text-slate-500 uppercase mb-4 block">Income Cards</label>
                   <div className="grid grid-cols-2 gap-3">
                     {INCOME_CARDS.map(c => (
-                      <button 
+                      <button
                         key={c.title}
                         onClick={() => toggleCard(c.title)}
-                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${
-                          adminEnabledCards.includes(c.title) 
-                          ? 'bg-indigo-500 border-indigo-400 text-white shadow-md' 
-                          : 'bg-slate-50 border-slate-100 text-slate-400'
-                        }`}
+                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${adminEnabledCards.includes(c.title)
+                            ? 'bg-indigo-500 border-indigo-400 text-white shadow-md'
+                            : 'bg-slate-50 border-slate-100 text-slate-400'
+                          }`}
                       >
                         {c.title}
                       </button>
@@ -8274,7 +8242,7 @@ export default function App() {
                       { id: 'youtube-premium', label: 'YT Premium' },
                       { id: 'meta-verified', label: 'Meta Verified' }
                     ].map(s => (
-                      <button 
+                      <button
                         key={s.id}
                         onClick={() => {
                           if (adminSmmServices.includes(s.id)) {
@@ -8283,11 +8251,10 @@ export default function App() {
                             setAdminSmmServices([...adminSmmServices, s.id]);
                           }
                         }}
-                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${
-                          adminSmmServices.includes(s.id) 
-                          ? 'bg-violet-500 border-violet-400 text-white shadow-md' 
-                          : 'bg-slate-50 border-slate-100 text-slate-400'
-                        }`}
+                        className={`p-4 rounded-2xl border text-[10px] font-black uppercase transition-all ${adminSmmServices.includes(s.id)
+                            ? 'bg-violet-500 border-violet-400 text-white shadow-md'
+                            : 'bg-slate-50 border-slate-100 text-slate-400'
+                          }`}
                       >
                         {s.label}
                       </button>
@@ -8326,11 +8293,10 @@ export default function App() {
                   <button
                     key={tab.id}
                     onClick={() => setActiveAdminTab(tab.id as any)}
-                    className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${
-                      activeAdminTab === tab.id 
-                      ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10' 
-                      : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
-                    }`}
+                    className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${activeAdminTab === tab.id
+                        ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
+                        : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
+                      }`}
                   >
                     {tab.icon}
                     {tab.label}
@@ -8342,199 +8308,196 @@ export default function App() {
                   </button>
                 ))}
               </div>
-              
+
               {/* Gmail Submissions */}
               {activeAdminTab === 'users' && (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm border border-indigo-500/20 shadow-sm">👥</div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">User Management</h3>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button 
-                      onClick={reactivateAllUsers}
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center gap-2"
-                    >
-                      <RefreshCw className={`w-3 h-3 ${isSubmitting ? 'animate-spin' : ''}`} />
-                      Reactivate All
-                    </button>
-                    <div className="relative w-48">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
-                      <input 
-                        type="text" 
-                        placeholder="Search Ref Code..." 
-                        value={userSearch}
-                        onChange={e => setUserSearch(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-8 pr-3 text-[10px] font-bold outline-none focus:border-indigo-500"
-                      />
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-3">
-                  {allUsers
-                    .filter(u => !userSearch || u.numericId.includes(userSearch))
-                    .map(u => (
-                    <div key={u.id} className="glass-card border-white/40 shadow-sm">
-                      <div className="flex justify-between items-start">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center relative">
-                            <User className="w-6 h-6 text-slate-400" />
-                            {u.status !== 'active' && (
-                              <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-white border-2 border-white">
-                                <UserX className="w-2 h-2" />
-                              </div>
-                            )}
-                          </div>
-                          <div>
-                            <p className="text-xs font-black text-slate-800 uppercase">{u.name}</p>
-                            <p className="text-[8px] font-bold text-slate-400">{u.email} • ID: {u.numericId}</p>
-                            <p className="text-[8px] font-bold text-indigo-600 uppercase">Balance: ৳ {u.mainBalance.toFixed(2)}</p>
-                            {u.status !== 'active' && (
-                              <p className="text-[7px] font-bold text-rose-500 uppercase mt-1">
-                                {u.status}: {u.restrictionReason} 
-                                {u.status === 'suspended' && ` (Until ${new Date(u.suspensionUntil).toLocaleDateString()})`}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <div className="flex gap-1">
-                            <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest border ${
-                              u.isActive ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                            }`}>
-                              {u.isActive ? 'Active' : 'Inactive'}
-                            </span>
-                            <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest border ${
-                              u.status === 'active' ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' :
-                              u.status === 'banned' ? 'bg-slate-900 text-white border-slate-900' :
-                              'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                            }`}>
-                              {u.status}
-                            </span>
-                          </div>
-                          <div className="flex gap-2">
-                            <button 
-                              onClick={async () => {
-                                try {
-                                  const userRef_id = u.id;
-                                  await updateRow('users', userRef_id, { isActive: !u.isActive });
-                                  alert(`User ${u.isActive ? 'deactivated' : 'activated'} successfully!`);
-                                } catch (e) {
-                                  handleFirestoreError(e, OperationType.UPDATE, `users/${u.id}`);
-                                }
-                              }}
-                              className={`text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white shadow-sm active:scale-95 transition-all ${
-                                u.isActive ? 'bg-rose-500' : 'bg-emerald-500'
-                              }`}
-                            >
-                              {u.isActive ? 'Deactivate' : 'Activate'}
-                            </button>
-                            {u.status === 'active' ? (
-                              <>
-                                <button 
-                                  onClick={() => handleUserStatus(u.id, 'suspended')}
-                                  className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-amber-500 shadow-sm active:scale-95 transition-all"
-                                >
-                                  Suspend
-                                </button>
-                                <button 
-                                  onClick={() => handleUserStatus(u.id, 'banned')}
-                                  className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-slate-900 shadow-sm active:scale-95 transition-all"
-                                >
-                                  Ban
-                                </button>
-                              </>
-                            ) : (
-                              <button 
-                                onClick={() => handleUserStatus(u.id, 'active')}
-                                className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-indigo-600 shadow-sm active:scale-95 transition-all"
-                              >
-                                Unban / Unsuspend
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {activeAdminTab === 'news' && (
-              <div className="space-y-6">
-                <div className="glass-card border-white/40 shadow-lg p-6">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">Post New News (Facebook Style)</h3>
-                  <div className="space-y-4">
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Content / Description</label>
-                      <textarea 
-                        value={newNews.content}
-                        onChange={e => setNewNews({ ...newNews, content: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500 min-h-[150px]"
-                        placeholder="What's on your mind, Owner?"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image URL (Optional)</label>
-                      <input 
-                        type="text"
-                        value={newNews.imageUrl}
-                        onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
-                        className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500"
-                        placeholder="https://example.com/image.jpg"
-                      />
-                    </div>
-                    <button 
-                      onClick={postNews}
-                      className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all"
-                    >
-                      Post to Top News
-                    </button>
-                  </div>
-                </div>
-
                 <div className="space-y-4">
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest px-2">Manage Posts</h3>
-                  {newsPosts.map(post => (
-                    <div key={post.id} className="glass-card border-white/40 shadow-sm p-4 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
-                          <Newspaper className="w-5 h-5" />
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 line-clamp-1">{post.content}</p>
-                          <p className="text-[10px] text-slate-400">{new Date(post.timestamp).toLocaleDateString()}</p>
-                        </div>
-                      </div>
-                      <button 
-                        onClick={async () => {
-                          if (confirm('Delete this post?')) {
-                            try {
-                              await deleteRow('newsPosts', post.id);
-                            } catch (e) {
-                              handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
-                            }
-                          }
-                        }}
-                        className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm border border-indigo-500/20 shadow-sm">👥</div>
+                      <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">User Management</h3>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={reactivateAllUsers}
+                        className="px-4 py-2 bg-emerald-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md active:scale-95 transition-all flex items-center gap-2"
                       >
-                        <Trash2 className="w-5 h-5" />
+                        <RefreshCw className={`w-3 h-3 ${isSubmitting ? 'animate-spin' : ''}`} />
+                        Reactivate All
+                      </button>
+                      <div className="relative w-48">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search Ref Code..."
+                          value={userSearch}
+                          onChange={e => setUserSearch(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-xl py-2 pl-8 pr-3 text-[10px] font-bold outline-none focus:border-indigo-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {allUsers
+                      .filter(u => !userSearch || u.numericId.includes(userSearch))
+                      .map(u => (
+                        <div key={u.id} className="glass-card border-white/40 shadow-sm">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center relative">
+                                <User className="w-6 h-6 text-slate-400" />
+                                {u.status !== 'active' && (
+                                  <div className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-white border-2 border-white">
+                                    <UserX className="w-2 h-2" />
+                                  </div>
+                                )}
+                              </div>
+                              <div>
+                                <p className="text-xs font-black text-slate-800 uppercase">{u.name}</p>
+                                <p className="text-[8px] font-bold text-slate-400">{u.email} • ID: {u.numericId}</p>
+                                <p className="text-[8px] font-bold text-indigo-600 uppercase">Balance: ৳ {u.mainBalance.toFixed(2)}</p>
+                                {u.status !== 'active' && (
+                                  <p className="text-[7px] font-bold text-rose-500 uppercase mt-1">
+                                    {u.status}: {u.restrictionReason}
+                                    {u.status === 'suspended' && ` (Until ${new Date(u.suspensionUntil).toLocaleDateString()})`}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <div className="flex flex-col items-end gap-2">
+                              <div className="flex gap-1">
+                                <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest border ${u.isActive ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-rose-500/10 text-rose-600 border-rose-500/20'
+                                  }`}>
+                                  {u.isActive ? 'Active' : 'Inactive'}
+                                </span>
+                                <span className={`text-[8px] font-black px-2 py-1 rounded-full uppercase tracking-widest border ${u.status === 'active' ? 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20' :
+                                    u.status === 'banned' ? 'bg-slate-900 text-white border-slate-900' :
+                                      'bg-amber-500/10 text-amber-600 border-amber-500/20'
+                                  }`}>
+                                  {u.status}
+                                </span>
+                              </div>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      const userRef_id = u.id;
+                                      await updateRow('users', userRef_id, { isActive: !u.isActive });
+                                      alert(`User ${u.isActive ? 'deactivated' : 'activated'} successfully!`);
+                                    } catch (e) {
+                                      handleFirestoreError(e, OperationType.UPDATE, `users/${u.id}`);
+                                    }
+                                  }}
+                                  className={`text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white shadow-sm active:scale-95 transition-all ${u.isActive ? 'bg-rose-500' : 'bg-emerald-500'
+                                    }`}
+                                >
+                                  {u.isActive ? 'Deactivate' : 'Activate'}
+                                </button>
+                                {u.status === 'active' ? (
+                                  <>
+                                    <button
+                                      onClick={() => handleUserStatus(u.id, 'suspended')}
+                                      className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-amber-500 shadow-sm active:scale-95 transition-all"
+                                    >
+                                      Suspend
+                                    </button>
+                                    <button
+                                      onClick={() => handleUserStatus(u.id, 'banned')}
+                                      className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-slate-900 shadow-sm active:scale-95 transition-all"
+                                    >
+                                      Ban
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    onClick={() => handleUserStatus(u.id, 'active')}
+                                    className="text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white bg-indigo-600 shadow-sm active:scale-95 transition-all"
+                                  >
+                                    Unban / Unsuspend
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              )}
+
+              {activeAdminTab === 'news' && (
+                <div className="space-y-6">
+                  <div className="glass-card border-white/40 shadow-lg p-6">
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-4">Post New News (Facebook Style)</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Content / Description</label>
+                        <textarea
+                          value={newNews.content}
+                          onChange={e => setNewNews({ ...newNews, content: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500 min-h-[150px]"
+                          placeholder="What's on your mind, Owner?"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image URL (Optional)</label>
+                        <input
+                          type="text"
+                          value={newNews.imageUrl}
+                          onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
+                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500"
+                          placeholder="https://example.com/image.jpg"
+                        />
+                      </div>
+                      <button
+                        onClick={postNews}
+                        className="w-full py-4 bg-blue-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all"
+                      >
+                        Post to Top News
                       </button>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
+                  </div>
 
-            {activeAdminTab === 'gmail' && (
+                  <div className="space-y-4">
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest px-2">Manage Posts</h3>
+                    {newsPosts.map(post => (
+                      <div key={post.id} className="glass-card border-white/40 shadow-sm p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center text-slate-400">
+                            <Newspaper className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 line-clamp-1">{post.content}</p>
+                            <p className="text-[10px] text-slate-400">{new Date(post.timestamp).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            if (confirm('Delete this post?')) {
+                              try {
+                                await deleteRow('newsPosts', post.id);
+                              } catch (e) {
+                                handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
+                              }
+                            }
+                          }}
+                          className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"
+                        >
+                          <Trash2 className="w-5 h-5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {activeAdminTab === 'gmail' && (
                 <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
                   <h4 className="text-xs font-black text-slate-800 uppercase mb-4 flex items-center gap-2">
                     <Mail className="w-4 h-4 text-rose-500" />
                     Gmail Submissions
                   </h4>
-                  
+
                   {/* Live Inventory Summary */}
                   <div className="mb-6 p-4 bg-rose-50 rounded-2xl border border-rose-100 flex items-center justify-between">
                     <div>
@@ -8755,10 +8718,10 @@ export default function App() {
                           </div>
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] font-bold text-slate-400">৳</span>
-                            <input 
-                              type="number" 
+                            <input
+                              type="number"
                               value={adminSmmPrices[service.id] || service.pricePer1k}
-                              onChange={e => setAdminSmmPrices({...adminSmmPrices, [service.id]: parseFloat(e.target.value) || 0})}
+                              onChange={e => setAdminSmmPrices({ ...adminSmmPrices, [service.id]: parseFloat(e.target.value) || 0 })}
                               className="w-20 bg-white border border-slate-200 rounded-xl p-2 text-[10px] font-bold outline-none focus:border-indigo-500"
                             />
                           </div>
@@ -8794,9 +8757,8 @@ export default function App() {
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="text-xs font-black text-slate-900 uppercase tracking-tight truncate">{o.service}</p>
-                                <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${
-                                  o.status === 'processing' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
-                                }`}>
+                                <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${o.status === 'processing' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' : 'bg-indigo-500/10 text-indigo-600 border-indigo-500/20'
+                                  }`}>
                                   {o.status}
                                 </span>
                               </div>
@@ -8824,7 +8786,7 @@ export default function App() {
                             </div>
                             <div className="flex flex-col gap-2 shrink-0">
                               {o.status === 'pending' && (
-                                <button 
+                                <button
                                   onClick={() => handleSmmAction(o.id, 'processing')}
                                   className="w-24 py-2.5 bg-indigo-600 text-white rounded-xl text-[8px] font-black uppercase tracking-widest shadow-lg shadow-indigo-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                                 >
@@ -8833,7 +8795,7 @@ export default function App() {
                                 </button>
                               )}
                               {o.status === 'processing' && (
-                                <button 
+                                <button
                                   onClick={() => handleSmmAction(o.id, 'completed')}
                                   className="w-24 py-2.5 bg-emerald-600 text-white rounded-xl text-[8px] font-black uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                                 >
@@ -8841,7 +8803,7 @@ export default function App() {
                                   FINISH
                                 </button>
                               )}
-                              <button 
+                              <button
                                 onClick={() => handleSmmAction(o.id, 'cancelled')}
                                 className="w-24 py-2.5 bg-white text-rose-600 border border-rose-100 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-rose-50 active:scale-95 transition-all flex items-center justify-center gap-2"
                               >
@@ -8962,16 +8924,16 @@ export default function App() {
                       <textarea placeholder="Enter match rules and details..." id="ludo-desc" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all h-32 resize-none" />
                     </div>
 
-                    <button 
+                    <button
                       onClick={async () => {
                         const title = (document.getElementById('ludo-title') as HTMLInputElement).value;
                         const fee = parseFloat((document.getElementById('ludo-fee') as HTMLInputElement).value);
                         const prize = parseFloat((document.getElementById('ludo-prize') as HTMLInputElement).value);
                         const type = (document.getElementById('ludo-type') as HTMLSelectElement).value;
                         const desc = (document.getElementById('ludo-desc') as HTMLTextAreaElement).value;
-                        
+
                         if (!title || !fee || !prize) return alert('Fill all fields');
-                        
+
                         await insertRow('ludoTournaments', {
                           title, entryFee: fee, prizePool: prize, type, description: desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
                           status: 'open', maxPlayers: type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
@@ -9005,17 +8967,16 @@ export default function App() {
                             <div>
                               <div className="flex items-center gap-2 mb-1">
                                 <p className="text-sm font-black text-slate-900 uppercase tracking-tight">{t.title}</p>
-                                <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${
-                                  t.status === 'open' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                  t.status === 'ongoing' ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                                  'bg-slate-50 text-slate-400 border-slate-100'
-                                }`}>
+                                <span className={`text-[7px] font-black px-2 py-0.5 rounded-md uppercase border ${t.status === 'open' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
+                                    t.status === 'ongoing' ? 'bg-amber-50 text-amber-600 border-amber-100' :
+                                      'bg-slate-50 text-slate-400 border-slate-100'
+                                  }`}>
                                   {t.status}
                                 </span>
                               </div>
                               <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">{t.type} • {t.currentPlayers}/{t.maxPlayers} Players Joined</p>
                             </div>
-                            <select 
+                            <select
                               value={t.status}
                               onChange={async (e) => {
                                 await updateRow('ludoTournaments', t.id, { status: e.target.value });
@@ -9033,16 +8994,16 @@ export default function App() {
                             <div className="space-y-2">
                               <label className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-2">Match Room Code</label>
                               <div className="flex gap-2">
-                                <input 
-                                  type="text" 
-                                  placeholder="Enter Room Code" 
+                                <input
+                                  type="text"
+                                  placeholder="Enter Room Code"
                                   defaultValue={t.roomCode || ''}
                                   onBlur={async (e) => {
                                     await updateRow('ludoTournaments', t.id, { roomCode: e.target.value });
                                   }}
                                   className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] font-bold outline-none focus:border-indigo-500"
                                 />
-                                <button 
+                                <button
                                   onClick={async () => {
                                     if (confirm('Delete this tournament?')) {
                                       await deleteRow('ludoTournaments', t.id);
@@ -9054,7 +9015,7 @@ export default function App() {
                                 </button>
                               </div>
                             </div>
-                            
+
                             <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
                               <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest mb-2">Joined Players ({t.playerIds?.length || 0})</p>
                               <div className="flex flex-wrap gap-1.5">
@@ -9115,7 +9076,7 @@ export default function App() {
                             </a>
 
                             <div className="flex gap-3">
-                              <button 
+                              <button
                                 onClick={async () => {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
@@ -9135,7 +9096,7 @@ export default function App() {
                                 <Check className="w-4 h-4" />
                                 Approve & Pay
                               </button>
-                              <button 
+                              <button
                                 onClick={async () => {
                                   await updateRow('ludoSubmissions', s.id, { status: 'rejected' });
                                   alert('Submission Rejected');
@@ -9161,24 +9122,24 @@ export default function App() {
                     Add New Task
                   </h4>
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      placeholder="Task Title" 
+                    <input
+                      type="text"
+                      placeholder="Task Title"
                       value={newTask.title}
-                      onChange={e => setNewTask({...newTask, title: e.target.value})}
+                      onChange={e => setNewTask({ ...newTask, title: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                     />
                     <div className="grid grid-cols-2 gap-3">
-                      <input 
-                        type="number" 
-                        placeholder="Reward (৳)" 
+                      <input
+                        type="number"
+                        placeholder="Reward (৳)"
                         value={newTask.reward}
-                        onChange={e => setNewTask({...newTask, reward: parseFloat(e.target.value) || 0})}
+                        onChange={e => setNewTask({ ...newTask, reward: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
-                      <select 
+                      <select
                         value={newTask.category}
-                        onChange={e => setNewTask({...newTask, category: e.target.value as any})}
+                        onChange={e => setNewTask({ ...newTask, category: e.target.value as any })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       >
                         <option value="micro">Microjob (Folder A)</option>
@@ -9187,21 +9148,21 @@ export default function App() {
                         <option value="premium">Premium Income (Folder D)</option>
                       </select>
                     </div>
-                    <input 
-                      type="text" 
-                      placeholder="Task Link" 
+                    <input
+                      type="text"
+                      placeholder="Task Link"
                       value={newTask.link}
-                      onChange={e => setNewTask({...newTask, link: e.target.value})}
+                      onChange={e => setNewTask({ ...newTask, link: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                     />
-                    <textarea 
-                      placeholder="Description" 
+                    <textarea
+                      placeholder="Description"
                       value={newTask.desc}
-                      onChange={e => setNewTask({...newTask, desc: e.target.value})}
+                      onChange={e => setNewTask({ ...newTask, desc: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
                     />
-                    <button 
+                    <button
                       onClick={addTask}
                       className="w-full py-3 bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                     >
@@ -9295,24 +9256,24 @@ export default function App() {
                     Manage Drive Offers
                   </h4>
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      placeholder="Offer Title" 
+                    <input
+                      type="text"
+                      placeholder="Offer Title"
                       value={newDriveOffer.title}
-                      onChange={e => setNewDriveOffer({...newDriveOffer, title: e.target.value})}
+                      onChange={e => setNewDriveOffer({ ...newDriveOffer, title: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                     />
                     <div className="grid grid-cols-2 gap-3">
-                      <input 
-                        type="number" 
-                        placeholder="Price (৳)" 
+                      <input
+                        type="number"
+                        placeholder="Price (৳)"
                         value={newDriveOffer.price}
-                        onChange={e => setNewDriveOffer({...newDriveOffer, price: parseFloat(e.target.value) || 0})}
+                        onChange={e => setNewDriveOffer({ ...newDriveOffer, price: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
-                      <select 
+                      <select
                         value={newDriveOffer.operator}
-                        onChange={e => setNewDriveOffer({...newDriveOffer, operator: e.target.value})}
+                        onChange={e => setNewDriveOffer({ ...newDriveOffer, operator: e.target.value })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       >
                         <option value="GP">GP</option>
@@ -9322,14 +9283,14 @@ export default function App() {
                         <option value="Airtel">Airtel</option>
                       </select>
                     </div>
-                    <textarea 
-                      placeholder="Description" 
+                    <textarea
+                      placeholder="Description"
                       value={newDriveOffer.description}
-                      onChange={e => setNewDriveOffer({...newDriveOffer, description: e.target.value})}
+                      onChange={e => setNewDriveOffer({ ...newDriveOffer, description: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
                     />
-                    <button 
+                    <button
                       onClick={addDriveOffer}
                       className="w-full py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all"
                     >
@@ -9364,44 +9325,44 @@ export default function App() {
                     Manage Products
                   </h4>
                   <div className="space-y-4">
-                    <input 
-                      type="text" 
-                      placeholder="Product Name" 
+                    <input
+                      type="text"
+                      placeholder="Product Name"
                       value={newProduct.name}
-                      onChange={e => setNewProduct({...newProduct, name: e.target.value})}
+                      onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                     />
                     <div className="grid grid-cols-2 gap-3">
-                      <input 
-                        type="number" 
-                        placeholder="Price (৳)" 
+                      <input
+                        type="number"
+                        placeholder="Price (৳)"
                         value={newProduct.price}
-                        onChange={e => setNewProduct({...newProduct, price: parseFloat(e.target.value) || 0})}
+                        onChange={e => setNewProduct({ ...newProduct, price: parseFloat(e.target.value) || 0 })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
-                      <input 
-                        type="text" 
-                        placeholder="Category" 
+                      <input
+                        type="text"
+                        placeholder="Category"
                         value={newProduct.category}
-                        onChange={e => setNewProduct({...newProduct, category: e.target.value})}
+                        onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
                     </div>
-                    <textarea 
-                      placeholder="Description" 
+                    <textarea
+                      placeholder="Description"
                       value={newProduct.description}
-                      onChange={e => setNewProduct({...newProduct, description: e.target.value})}
+                      onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
                     />
                     <div className="flex gap-2">
-                      <button 
+                      <button
                         onClick={addProduct}
                         className="flex-1 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all bg-pink-500 hover:bg-pink-600"
                       >
                         Add Product
                       </button>
-                      <button 
+                      <button
                         onClick={seedSampleProduct}
                         className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
                         title="Post AI Sample Product"
@@ -9572,15 +9533,15 @@ export default function App() {
                             </button>
                           </div>
                           <div className="relative group aspect-video rounded-xl overflow-hidden border border-slate-100 bg-slate-50">
-                            <img 
-                              src={u.url} 
-                              alt="Upload" 
+                            <img
+                              src={u.url}
+                              alt="Upload"
                               className="w-full h-full object-cover"
                               referrerPolicy="no-referrer"
                             />
-                            <a 
-                              href={u.url} 
-                              target="_blank" 
+                            <a
+                              href={u.url}
+                              target="_blank"
                               rel="noopener noreferrer"
                               className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-black text-[10px] uppercase tracking-widest"
                             >
@@ -9599,7 +9560,7 @@ export default function App() {
               )}
             </section>
 
-            <button 
+            <button
               onClick={saveChanges}
               className="w-full py-5 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all"
             >
@@ -9664,7 +9625,7 @@ export default function App() {
               <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition-all" />
             </button>
           ))}
-          
+
           <div className="pt-10 space-y-6">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] text-center">Network Uplinks</p>
             <div className="flex justify-center gap-8">
@@ -9679,8 +9640,8 @@ export default function App() {
               ))}
             </div>
           </div>
-          
-          <button 
+
+          <button
             onClick={() => { supabase.auth.signOut(); setIsLoggedIn(false); setView('login'); }}
             className="w-full py-5 bg-rose-500/5 text-rose-500 border border-rose-500/20 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 mt-10 hover:bg-rose-500/10 transition-all active:scale-95"
           >
@@ -9780,7 +9741,7 @@ export default function App() {
             </div>
           </div>
 
-          <button 
+          <button
             onClick={handleLogout}
             className="w-full py-5 bg-rose-500/5 text-rose-500 border border-rose-500/20 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 hover:bg-rose-500/10 transition-all active:scale-95"
           >
@@ -9794,7 +9755,7 @@ export default function App() {
 
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 text-slate-900 font-sans relative overflow-x-hidden">
-      
+
       <WelcomeOverlay />
       <SubmissionLoader />
 
@@ -9807,7 +9768,7 @@ export default function App() {
           <h2 className="text-2xl font-black text-slate-900 mb-2 uppercase tracking-widest">Maintenance Mode</h2>
           <p className="text-sm text-slate-500 mb-8">We are currently updating our systems for a better experience. Please check back later.</p>
           <div className="w-full max-w-xs h-1 bg-slate-100 rounded-full overflow-hidden">
-            <motion.div 
+            <motion.div
               initial={{ x: '-100%' }}
               animate={{ x: '100%' }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
@@ -9828,10 +9789,10 @@ export default function App() {
             We've sent a verification link to your email. Please verify your account to continue.
           </p>
           <div className="w-full space-y-4">
-            <button 
+            <button
               onClick={async () => {
                 const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
-                  
+
                   if (_checkUser.email_confirmed_at) {
                     setNeedsEmailVerification(false);
                     setView('home');
@@ -9844,7 +9805,7 @@ export default function App() {
             >
               I HAVE VERIFIED
             </button>
-            <button 
+            <button
               onClick={async () => {
                 const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
                   await supabase.auth.resend({ type: 'signup', email: _checkUser.email || '' });
@@ -9855,7 +9816,7 @@ export default function App() {
             >
               RESEND EMAIL
             </button>
-            <button 
+            <button
               onClick={() => {
                 supabase.auth.signOut();
                 setNeedsEmailVerification(false);
@@ -9872,11 +9833,11 @@ export default function App() {
       {/* Feature 5: Notification Modal */}
       <AnimatePresence>
         {showNotifications && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-md"
           >
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.9, y: 20 }} animate={{ scale: 1, y: 0 }} exit={{ scale: 0.9, y: 20 }}
               className="glass-card w-full max-w-sm p-8 relative shadow-2xl border-white/40"
             >
@@ -9902,7 +9863,7 @@ export default function App() {
 
       {/* Feature 6: Live Support Chat Widget */}
       <div className="fixed bottom-24 right-6 z-[90]">
-        <button 
+        <button
           onClick={() => setShowChat(!showChat)}
           className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-full flex items-center justify-center shadow-2xl text-white active:scale-90 transition-all"
         >
@@ -9912,7 +9873,7 @@ export default function App() {
 
       <AnimatePresence>
         {showChat && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: 20, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.8 }}
@@ -9927,16 +9888,15 @@ export default function App() {
             <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-white">
               {userMessages.filter(m => m.userId === user.id).map((msg, i) => (
                 <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-xs font-medium shadow-sm ${
-                    msg.sender === 'user' ? 'bg-indigo-500 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'
-                  }`}>
+                  <div className={`max-w-[80%] p-3 rounded-2xl text-xs font-medium shadow-sm ${msg.sender === 'user' ? 'bg-indigo-500 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'
+                    }`}>
                     {msg.text}
                   </div>
                 </div>
               ))}
             </div>
             <div className="p-4 border-t border-slate-100 flex gap-2 bg-white">
-              <input 
+              <input
                 value={chatMessage}
                 onChange={(e) => setChatMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendGlobalMessage()}
@@ -9998,12 +9958,11 @@ export default function App() {
               { id: 'finance', icon: <CreditCard className="w-6 h-6" />, label: 'Wallet' },
               { id: 'settings', icon: <Settings className="w-6 h-6" />, label: 'Settings' },
             ].map((item) => (
-              <button 
+              <button
                 key={item.id}
                 onClick={() => setView(item.id as View)}
-                className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all duration-300 ${
-                  view === item.id ? 'bg-indigo-600 text-white scale-110 shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600'
-                }`}
+                className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all duration-300 ${view === item.id ? 'bg-indigo-600 text-white scale-110 shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600'
+                  }`}
               >
                 {item.icon}
                 {view === item.id && <span className="text-[8px] font-black uppercase tracking-tighter">{item.label}</span>}
