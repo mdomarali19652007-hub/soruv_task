@@ -5,6 +5,9 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 import morgan from "morgan";
+import { toNodeHandler } from "better-auth/node";
+import { auth } from "./src/server/auth.js";
+import apiRoutes from "./src/server/routes.js";
 
 interface GamePlayer {
   id: string;
@@ -91,6 +94,12 @@ async function startServer() {
       console.log("User disconnected:", socket.id);
     });
   });
+
+  // Better Auth handler -- handles all /api/auth/* routes
+  app.all("/api/auth/*splat", toNodeHandler(auth));
+
+  // Application API routes (registration, admin, etc.)
+  app.use("/api", apiRoutes);
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== "production") {
