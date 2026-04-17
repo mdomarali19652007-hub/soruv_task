@@ -89,7 +89,16 @@ import {
   processSpin
 } from './lib/database';
 import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
-import type { User as SupabaseUser } from '@supabase/supabase-js';
+import {
+  authClient,
+  signIn,
+  signOut,
+  useSession,
+  registerWithReferral,
+  createGoogleProfile,
+  validateReferralCode,
+  requestPasswordReset,
+} from './lib/auth-client';
 
 interface GlobalUpload {
   id: string;
@@ -585,102 +594,82 @@ export default function App() {
     }
   }, [isLoggedIn, view]);
 
-  // --- Supabase Sync ---
+  // --- Better Auth Session + Supabase Realtime Sync ---
   useEffect(() => {
     const unsubs: (() => void)[] = [];
-    // Track currently subscribed user to prevent duplicate realtime channels
     let currentSubscribedUserId: string | null = null;
     let currentUserUnsub: (() => void) | null = null;
 
-    // Auth state listener -- single source of truth for auth
-    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        const supaUser = session.user;
-        setIsLoggedIn(true);
-        const emailNotVerified = !supaUser.email_confirmed_at;
-        setNeedsEmailVerification(emailNotVerified);
+    // Poll Better Auth session to determine auth state
+    const checkSession = async () => {
+      try {
+        const sessionResult = await authClient.getSession();
+        const session = sessionResult?.data;
 
-        // Auto-navigate away from login when authenticated
-        if (!emailNotVerified) {
-          setView(prev => prev === 'login' ? 'home' : prev);
-        }
+        if (session?.user) {
+          const authUser = session.user;
+          setIsLoggedIn(true);
+          setNeedsEmailVerification(!authUser.emailVerified);
 
-        // Only subscribe if we haven't already for this user (prevents duplicate channels)
-        if (currentSubscribedUserId !== supaUser.id) {
-          // Clean up previous subscription if switching users
+          if (authUser.emailVerified) {
+            setView(prev => prev === 'login' ? 'home' : prev);
+          }
+
+          // Only subscribe if we haven't already for this user
+          if (currentSubscribedUserId !== authUser.id) {
+            if (currentUserUnsub) {
+              currentUserUnsub();
+              currentUserUnsub = null;
+            }
+            currentSubscribedUserId = authUser.id;
+
+            // For Google OAuth users, ensure profile exists
+            const pendingRefCode = localStorage.getItem('pendingReferralCode');
+            if (pendingRefCode) {
+              localStorage.removeItem('pendingReferralCode');
+              await createGoogleProfile(pendingRefCode).catch(e =>
+                console.warn('Failed to create Google profile:', e)
+              );
+            }
+
+            // Subscribe to user profile via Supabase realtime
+            const unsubUser = subscribeToRow<UserProfile>('users', authUser.id, async (data) => {
+              if (data) {
+                setUser(data);
+              } else {
+                // Profile not found -- may happen for new Google OAuth users
+                // The server-side /api/register/google-profile endpoint handles creation
+                await createGoogleProfile().catch(e =>
+                  console.warn('Failed to create profile:', e)
+                );
+              }
+            });
+            currentUserUnsub = unsubUser;
+            unsubs.push(unsubUser);
+          }
+          setIsAuthReady(true);
+        } else {
           if (currentUserUnsub) {
             currentUserUnsub();
             currentUserUnsub = null;
           }
-          currentSubscribedUserId = supaUser.id;
-
-          // Subscribe to user profile
-          const unsubUser = subscribeToRow<UserProfile>('users', supaUser.id, async (data) => {
-            if (data) {
-              // Check suspension expiry
-              if (data.status === 'suspended' && data.suspensionUntil) {
-                const expiry = new Date(data.suspensionUntil);
-                if (new Date() > expiry) {
-                  await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
-                }
-              }
-              // Admin Self-Healing
-              if (['soruvislam51@gmail.com', 'shovonali885@gmail.com'].includes(data.email) && data.status !== 'active') {
-                await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
-              }
-              setUser(data);
-            } else {
-              // New user - create profile (handles both email signup and Google OAuth)
-              const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
-
-              // Check for pending referral code (persisted before Google OAuth redirect)
-              let referredBy = '';
-              const pendingRefCode = localStorage.getItem('pendingReferralCode');
-              if (pendingRefCode) {
-                localStorage.removeItem('pendingReferralCode');
-                try {
-                  const { data: refResult } = await supabase.rpc('validate_referral_code', { code: pendingRefCode });
-                  if (refResult && refResult.length > 0) {
-                    referredBy = refResult[0].user_id;
-                    // Increment gen1 count for referrer
-                    await incrementField('users', referredBy, 'gen1Count', 1).catch(() => {});
-                  }
-                } catch (e) {
-                  console.warn('Failed to apply referral code:', e);
-                }
-              }
-
-              const newUser: UserProfile = {
-                ...INITIAL_USER,
-                id: supaUser.id,
-                name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || 'User',
-                email: supaUser.email || '',
-                numericId: userNumericId,
-                referralCode: userNumericId,
-                referralLink: `${window.location.origin}?ref=${userNumericId}`,
-                referredBy,
-              };
-              await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
-            }
-          });
-          currentUserUnsub = unsubUser;
-          unsubs.push(unsubUser);
+          currentSubscribedUserId = null;
+          setIsLoggedIn(false);
+          setView('login');
+          setIsAuthReady(true);
         }
-        setIsAuthReady(true);
-      } else {
-        // No session -- only show login if this is a definitive sign-out or initial with no session
-        // Clean up user subscription
-        if (currentUserUnsub) {
-          currentUserUnsub();
-          currentUserUnsub = null;
-        }
-        currentSubscribedUserId = null;
+      } catch {
         setIsLoggedIn(false);
         setView('login');
         setIsAuthReady(true);
       }
-    });
-    unsubs.push(() => authSub.unsubscribe());
+    };
+
+    checkSession();
+
+    // Re-check session periodically (catches deleted users instantly)
+    const sessionInterval = setInterval(checkSession, 60000);
+    unsubs.push(() => clearInterval(sessionInterval));
 
     // Sync Global Settings - use defaults when settings row doesn't exist
     // NOTE: The settings row must be created via SQL migration or admin panel.
@@ -753,8 +742,9 @@ export default function App() {
 
   // --- Global Image Upload Handler ---
   const uploadImage = async (file: File, context: string = 'general'): Promise<string> => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) throw new Error('User not authenticated');
+    // Use the current user from component state (authenticated via Better Auth)
+    if (!user?.id) throw new Error('User not authenticated');
+    const currentUser = { id: user.id };
 
     const fileName = `${Date.now()}-${file.name}`;
     const filePath = `${currentUser.id}/${fileName}`;
@@ -840,71 +830,33 @@ export default function App() {
     }
 
     try {
-      // Check if referral code is valid (or allow first user without one)
-      // Uses RPC function to bypass RLS (unauthenticated users can't query the users table directly)
-      let referrerId = '';
-
-      if (regData.refCode) {
-        const { data: refResult, error: refError } = await supabase.rpc('validate_referral_code', { code: regData.refCode });
-        if (refError || !refResult || refResult.length === 0) {
-          alert('Invalid Referral Code. Please enter a valid code.');
-          return;
-        }
-        referrerId = refResult[0].user_id;
-      } else {
-        // Allow registration without referral code only if no users exist (first user bootstrap)
-        const { count } = await supabase.from('users').select('id', { count: 'exact', head: true });
-        if (count && count > 0) {
-          alert('Referral Code is required. Please enter a valid referral code.');
-          return;
-        }
-        // First user - no referral needed
-      }
-
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+      // Use server-side registration with referral code validation
+      const result = await registerWithReferral({
         email: regData.email,
         password: regData.password,
-        options: {
-          data: { full_name: regData.name }
-        }
-      });
-      if (signUpError) throw signUpError;
-      if (!signUpData.user) throw new Error('Registration failed');
-
-      // Generate unique referral code (numeric ID) - same value for both fields
-      const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
-
-      const newUser: UserProfile = {
-        ...INITIAL_USER,
-        id: signUpData.user.id,
-        numericId: userNumericId,
         name: regData.name,
-        email: regData.email,
         phone: regData.phone,
         country: regData.country,
-        age: parseInt(regData.age) || 18,
-        referralCode: userNumericId,
-        referralLink: `${window.location.origin}?ref=${userNumericId}`,
-        referredBy: referrerId,
-      };
+        age: regData.age,
+        refCode: regData.refCode,
+      });
 
-      await upsertRow('users', newUser as any);
-
-      // Increment gen1 count for referrer immediately (skip if no referrer)
-      if (referrerId) {
-        await incrementField('users', referrerId, 'gen1Count', 1);
+      if (!result.success) {
+        alert(result.error || 'Registration failed');
+        return;
       }
 
-      setNeedsEmailVerification(true);
-      alert('Registration successful! Please check your email for verification.');
+      // Auto-login after registration
+      await signIn.email({
+        email: regData.email,
+        password: regData.password,
+      });
+
+      alert('Registration successful!');
+      setView('home');
     } catch (error: any) {
       console.error('Registration Error:', error);
-      // Handle rate limit error with friendly message
-      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429 || error?.message?.includes('rate_limit')) {
-        const waitMatch = error.message?.match(/after (\d+) seconds/);
-        const waitTime = waitMatch ? waitMatch[1] : '60';
-        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
-      } else if (error?.message?.includes('already registered')) {
+      if (error?.message?.includes('already registered') || error?.message?.includes('already')) {
         alert('This email is already registered. Please sign in instead.');
       } else {
         alert(error.message || 'Registration failed. Please try again.');
@@ -916,19 +868,10 @@ export default function App() {
     const email = loginEmail || prompt('Enter your email address:');
     if (!email) return;
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}`,
-      });
-      if (error) throw error;
+      await requestPasswordReset(email, `${window.location.origin}`);
       alert('Password reset email sent! Check your inbox.');
     } catch (error: any) {
-      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429) {
-        const waitMatch = error.message?.match(/after (\d+) seconds/);
-        const waitTime = waitMatch ? waitMatch[1] : '60';
-        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
-      } else {
-        alert(error.message || 'Failed to send reset email.');
-      }
+      alert(error.message || 'Failed to send reset email.');
     }
   };
 
@@ -956,24 +899,17 @@ export default function App() {
         }
       }
 
-      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+      // Use Better Auth email sign-in
+      const { error: loginError } = await signIn.email({
         email: emailToUse,
         password: loginPassword,
       });
       if (loginError) throw loginError;
-      if (!loginData.user?.email_confirmed_at) {
-        setNeedsEmailVerification(true);
-      } else {
-        setShowWelcome(true);
-        setView('home');
-      }
+      setShowWelcome(true);
+      setView('home');
     } catch (error: any) {
       console.error('Login Error:', error);
-      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429) {
-        const waitMatch = error.message?.match(/after (\d+) seconds/);
-        const waitTime = waitMatch ? waitMatch[1] : '60';
-        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
-      } else if (error?.message?.includes('Invalid login credentials')) {
+      if (error?.message?.includes('Invalid') || error?.message?.includes('credentials')) {
         alert('Invalid email or password. Please check your credentials.');
       } else {
         alert(error.message || 'Login failed. Please try again.');
@@ -987,8 +923,8 @@ export default function App() {
       if (isRegistering) {
         if (regData.refCode) {
           // Validate referral code before redirecting
-          const { data: refResult, error: refError } = await supabase.rpc('validate_referral_code', { code: regData.refCode });
-          if (refError || !refResult || refResult.length === 0) {
+          const isValid = await validateReferralCode(regData.refCode);
+          if (!isValid) {
             alert('Invalid Referral Code. Please enter a valid code before signing up with Google.');
             return;
           }
@@ -1005,15 +941,11 @@ export default function App() {
         }
       }
 
-      const { error: googleError } = await supabase.auth.signInWithOAuth({
+      // Use Better Auth Google OAuth
+      await signIn.social({
         provider: 'google',
-        options: { redirectTo: window.location.origin }
+        callbackURL: window.location.origin,
       });
-      if (googleError) throw googleError;
-
-      // After OAuth redirect, the onAuthStateChange listener handles user creation
-      setShowWelcome(true);
-      setView('home');
     } catch (error) {
       console.error('Login Error:', error);
       alert('Login failed. Please try again.');
@@ -1074,7 +1006,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    supabase.auth.signOut();
+    signOut();
     setIsLoggedIn(false);
     setView('login');
     confetti({ particleCount: 50, spread: 60 });
@@ -1670,7 +1602,7 @@ export default function App() {
           </a>
           <button
             onClick={() => {
-              supabase.auth.signOut();
+              signOut();
               setView('login');
             }}
             className="block w-full bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 active:scale-95 transition-all"
@@ -9881,7 +9813,7 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => { supabase.auth.signOut(); setIsLoggedIn(false); setView('login'); }}
+            onClick={() => { signOut(); setIsLoggedIn(false); setView('login'); }}
             className="w-full py-5 bg-rose-500/5 text-rose-500 border border-rose-500/20 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 mt-10 hover:bg-rose-500/10 transition-all active:scale-95"
           >
             <LogOut className="w-4 h-4" />
@@ -10030,14 +9962,14 @@ export default function App() {
           <div className="w-full space-y-4">
             <button
               onClick={async () => {
-                const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
-
-                  if (_checkUser.email_confirmed_at) {
-                    setNeedsEmailVerification(false);
-                    setView('home');
-                  } else {
-                    alert('Email not verified yet. Please check your inbox.');
-                  }
+                // Re-check session to see if email is verified
+                const sessionResult = await authClient.getSession();
+                const sess = sessionResult?.data;
+                if (sess?.user?.emailVerified) {
+                  setNeedsEmailVerification(false);
+                  setView('home');
+                } else {
+                  alert('Email not verified yet. Please check your inbox.');
                 }
               }}
               className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all"
@@ -10046,10 +9978,8 @@ export default function App() {
             </button>
             <button
               onClick={async () => {
-                const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
-                  await supabase.auth.resend({ type: 'signup', email: _checkUser.email || '' });
-                  alert('Verification email resent!');
-                }
+                // Better Auth handles email verification via its built-in flow
+                alert('Please check your inbox for the verification email. If you did not receive it, try logging in again.');
               }}
               className="w-full py-4 bg-slate-50 text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
             >
@@ -10057,7 +9987,7 @@ export default function App() {
             </button>
             <button
               onClick={() => {
-                supabase.auth.signOut();
+                signOut();
                 setNeedsEmailVerification(false);
                 setView('login');
               }}

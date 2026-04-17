@@ -4,16 +4,76 @@
 -- 
 -- NOTE: Column names use camelCase (double-quoted) to match
 -- the existing app data model and minimize migration changes.
+--
+-- Authentication is handled by Better Auth (not Supabase Auth).
+-- Better Auth manages its own user/session/account tables.
+-- The "users" table below is the app-specific profile table.
 -- ============================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
 -- ============================================================
--- Tables
+-- Better Auth Tables
+-- These are managed by Better Auth but defined here for clarity.
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS "ba_user" (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT '',
+  email TEXT NOT NULL UNIQUE,
+  "emailVerified" BOOLEAN DEFAULT FALSE,
+  image TEXT DEFAULT '',
+  role TEXT DEFAULT 'user',
+  banned BOOLEAN DEFAULT FALSE,
+  "banReason" TEXT DEFAULT '',
+  "banExpires" TIMESTAMPTZ,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ba_session" (
+  id TEXT PRIMARY KEY,
+  "userId" TEXT NOT NULL REFERENCES "ba_user"(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "ipAddress" TEXT DEFAULT '',
+  "userAgent" TEXT DEFAULT '',
+  "impersonatedBy" TEXT DEFAULT '',
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ba_account" (
+  id TEXT PRIMARY KEY,
+  "userId" TEXT NOT NULL REFERENCES "ba_user"(id) ON DELETE CASCADE,
+  "accountId" TEXT NOT NULL,
+  "providerId" TEXT NOT NULL,
+  "accessToken" TEXT DEFAULT '',
+  "refreshToken" TEXT DEFAULT '',
+  "accessTokenExpiresAt" TIMESTAMPTZ,
+  "refreshTokenExpiresAt" TIMESTAMPTZ,
+  scope TEXT DEFAULT '',
+  "idToken" TEXT DEFAULT '',
+  password TEXT DEFAULT '',
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS "ba_verification" (
+  id TEXT PRIMARY KEY,
+  identifier TEXT NOT NULL,
+  value TEXT NOT NULL,
+  "expiresAt" TIMESTAMPTZ NOT NULL,
+  "createdAt" TIMESTAMPTZ DEFAULT NOW(),
+  "updatedAt" TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- App Tables
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS users (
-  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  id TEXT PRIMARY KEY,
   name TEXT NOT NULL DEFAULT '',
   email TEXT NOT NULL DEFAULT '',
   phone TEXT DEFAULT '',
@@ -348,8 +408,9 @@ BEGIN
     RAISE EXCEPTION 'increment_field: disallowed table/column combination: %.%', p_table, p_column;
   END IF;
 
+  -- NOTE: id is TEXT (Better Auth) not UUID, so no ::uuid cast needed
   EXECUTE format(
-    'UPDATE %I SET %I = COALESCE(%I, 0) + $1 WHERE id = $2::uuid',
+    'UPDATE %I SET %I = COALESCE(%I, 0) + $1 WHERE id = $2',
     p_table, p_column, p_column
   ) USING p_amount, p_id;
 END;
@@ -374,7 +435,7 @@ END $$;
 
 -- Submit a withdrawal request with server-side validation
 CREATE OR REPLACE FUNCTION submit_withdrawal(
-  p_user_id UUID,
+  p_user_id TEXT,
   p_amount NUMERIC,
   p_method TEXT,
   p_account_number TEXT
@@ -386,11 +447,6 @@ DECLARE
   v_withdrawal_id UUID;
   v_txn_id TEXT;
 BEGIN
-  -- Verify the caller is the user
-  IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
-    RAISE EXCEPTION 'Unauthorized: caller does not match user_id';
-  END IF;
-
   -- Lock the user row to prevent race conditions
   SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -436,7 +492,7 @@ BEGIN
   -- Insert withdrawal record
   INSERT INTO withdrawals ("userId", amount, method, "accountNumber", status, date, time, timestamp, "transactionId")
   VALUES (
-    p_user_id::text, p_amount,
+    p_user_id, p_amount,
     p_method || ' (' || p_account_number || ')',
     p_account_number, 'pending',
     to_char(now(), 'MM/DD/YYYY'),
@@ -481,20 +537,20 @@ BEGIN
   -- Update withdrawal status
   UPDATE withdrawals SET status = p_action, reason = COALESCE(p_reason, '') WHERE id = p_withdrawal_id;
 
-  -- Lock user row
-  SELECT * INTO v_user FROM users WHERE id = v_withdrawal."userId"::uuid FOR UPDATE;
+  -- Lock user row (userId is TEXT in Better Auth)
+  SELECT * INTO v_user FROM users WHERE id = v_withdrawal."userId" FOR UPDATE;
 
   IF p_action = 'approved' THEN
     -- Deduct from pending payout
     UPDATE users SET
       "pendingPayout" = GREATEST(0, COALESCE("pendingPayout", 0) - v_withdrawal.amount)
-    WHERE id = v_withdrawal."userId"::uuid;
+    WHERE id = v_withdrawal."userId";
   ELSE
     -- Rejected: refund to main balance, deduct from pending
     UPDATE users SET
       "mainBalance" = COALESCE("mainBalance", 0) + v_withdrawal.amount,
       "pendingPayout" = GREATEST(0, COALESCE("pendingPayout", 0) - v_withdrawal.amount)
-    WHERE id = v_withdrawal."userId"::uuid;
+    WHERE id = v_withdrawal."userId";
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -529,18 +585,18 @@ BEGIN
   UPDATE "rechargeRequests" SET status = p_action, reason = COALESCE(p_reason, '') WHERE id = p_request_id;
 
   IF p_action = 'approved' THEN
-    -- Atomically add to user balance
+    -- Atomically add to user balance (userId is TEXT)
     UPDATE users SET
       "mainBalance" = COALESCE("mainBalance", 0) + v_request.amount,
       "totalEarned" = COALESCE("totalEarned", 0) + v_request.amount
-    WHERE id = v_request."userId"::uuid;
+    WHERE id = v_request."userId";
   END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Activate account with server-side fee deduction
 CREATE OR REPLACE FUNCTION activate_account(
-  p_user_id UUID
+  p_user_id TEXT
 ) RETURNS VOID AS $$
 DECLARE
   v_user RECORD;
@@ -548,10 +604,6 @@ DECLARE
   v_expiry TIMESTAMPTZ;
   v_referrer RECORD;
 BEGIN
-  IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
-
   SELECT * INTO v_settings FROM settings WHERE id = 'global';
   SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
 
@@ -575,7 +627,7 @@ BEGIN
 
   -- Process referral bonus if applicable
   IF v_user."referredBy" IS NOT NULL AND v_user."referredBy" != '' THEN
-    SELECT * INTO v_referrer FROM users WHERE id = v_user."referredBy"::uuid FOR UPDATE;
+    SELECT * INTO v_referrer FROM users WHERE id = v_user."referredBy" FOR UPDATE;
     IF FOUND THEN
       UPDATE users SET
         "mainBalance" = COALESCE("mainBalance", 0) + v_settings."referralActivationBonus",
@@ -589,16 +641,12 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Claim daily reward with server-side validation
 CREATE OR REPLACE FUNCTION claim_daily_reward(
-  p_user_id UUID
+  p_user_id TEXT
 ) RETURNS NUMERIC AS $$
 DECLARE
   v_user RECORD;
   v_settings RECORD;
 BEGIN
-  IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
-
   SELECT * INTO v_settings FROM settings WHERE id = 'global';
   SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
 
@@ -622,7 +670,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Process spin with server-side validation and randomness
 CREATE OR REPLACE FUNCTION process_spin(
-  p_user_id UUID
+  p_user_id TEXT
 ) RETURNS NUMERIC AS $$
 DECLARE
   v_user RECORD;
@@ -630,10 +678,6 @@ DECLARE
   v_prizes NUMERIC[] := ARRAY[0, 0.5, 1, 2, 5, 10, 0, 0.2];
   v_win NUMERIC;
 BEGIN
-  IF auth.uid() IS NULL OR auth.uid() != p_user_id THEN
-    RAISE EXCEPTION 'Unauthorized';
-  END IF;
-
   SELECT * INTO v_settings FROM settings WHERE id = 'global';
   SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
 
@@ -684,38 +728,34 @@ ALTER TABLE "dollarBuyRequests" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "newsPosts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE uploads ENABLE ROW LEVEL SECURITY;
 
--- Admin check helper (supports multiple admin emails)
-CREATE OR REPLACE FUNCTION is_admin() RETURNS BOOLEAN AS $$
-BEGIN
-  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) IN (
-    'soruvislam51@gmail.com',
-    'shovonali885@gmail.com'
-  );
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+-- ============================================================
+-- RLS Policy Strategy (Better Auth):
+-- 
+-- With Better Auth, authentication is handled server-side.
+-- The anon key is used ONLY for realtime subscriptions (read-only).
+-- All write operations go through the Express server using
+-- the service role key (which bypasses RLS).
+--
+-- Therefore: all RLS policies are SELECT-only for the anon key.
+-- Write policies are removed (service role bypasses RLS).
+-- ============================================================
 
--- Users
-CREATE POLICY "users_select" ON users FOR SELECT USING (auth.uid() = id OR is_admin());
-CREATE POLICY "users_insert" ON users FOR INSERT WITH CHECK (auth.uid() = id);
-CREATE POLICY "users_update" ON users FOR UPDATE USING (auth.uid() = id OR is_admin());
-CREATE POLICY "users_delete" ON users FOR DELETE USING (is_admin());
+-- Users: public read for realtime subscriptions
+CREATE POLICY "users_select" ON users FOR SELECT USING (true);
 
--- RPC function for referral code validation (bypasses RLS so unauthenticated users can validate codes)
+-- RPC function for referral code validation
 CREATE OR REPLACE FUNCTION validate_referral_code(code TEXT)
-RETURNS TABLE(user_id UUID) AS $$
+RETURNS TABLE(user_id TEXT) AS $$
 BEGIN
   RETURN QUERY SELECT id FROM users WHERE "numericId" = code LIMIT 1;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
--- Settings: public read (maintenance mode must be visible before login), admin write
+-- Settings: public read (maintenance mode must be visible before login)
 CREATE POLICY "settings_select" ON settings FOR SELECT USING (true);
-CREATE POLICY "settings_insert" ON settings FOR INSERT WITH CHECK (is_admin());
-CREATE POLICY "settings_update" ON settings FOR UPDATE USING (is_admin());
-CREATE POLICY "settings_delete" ON settings FOR DELETE USING (is_admin());
 
--- For each submission/request table: user reads own + admin reads all, user creates own, admin updates/deletes
--- Using a macro-like pattern for all similar tables
+-- For each submission/request table: public read for realtime
+-- Writes are handled server-side via service role key
 
 DO $$ 
 DECLARE
@@ -727,44 +767,30 @@ BEGIN
     'ludoSubmissions', 'socialSubmissions', 'subscriptionRequests', 'dollarBuyRequests'
   ])
   LOOP
-    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING ("userId" = auth.uid()::text OR is_admin())', tbl || '_sel', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR INSERT WITH CHECK ("userId" = auth.uid()::text)', tbl || '_ins', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR UPDATE USING (is_admin())', tbl || '_upd', tbl);
+    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (true)', tbl || '_sel', tbl);
     EXECUTE format('CREATE POLICY %I ON %I FOR DELETE USING (is_admin())', tbl || '_del', tbl);
   END LOOP;
 END $$;
 
--- Messages: all auth read/create, admin update/delete
-CREATE POLICY "msg_sel" ON messages FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "msg_ins" ON messages FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "msg_upd" ON messages FOR UPDATE USING (is_admin());
-CREATE POLICY "msg_del" ON messages FOR DELETE USING (is_admin());
+-- Messages: public read for realtime
+CREATE POLICY "msg_sel" ON messages FOR SELECT USING (true);
 
--- Read-only for all auth, admin writes
+-- Read-only catalogs for realtime
 DO $$ 
 DECLARE
   tbl TEXT;
 BEGIN
   FOR tbl IN SELECT unnest(ARRAY['tasks', 'driveOffers', 'products', 'ludoTournaments'])
   LOOP
-    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (auth.uid() IS NOT NULL)', tbl || '_sel', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR INSERT WITH CHECK (is_admin())', tbl || '_ins', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR UPDATE USING (is_admin())', tbl || '_upd', tbl);
-    EXECUTE format('CREATE POLICY %I ON %I FOR DELETE USING (is_admin())', tbl || '_del', tbl);
+    EXECUTE format('CREATE POLICY %I ON %I FOR SELECT USING (true)', tbl || '_sel', tbl);
   END LOOP;
 END $$;
 
--- News: all read, admin create/delete, all update (likes/comments)
-CREATE POLICY "news_sel" ON "newsPosts" FOR SELECT USING (auth.uid() IS NOT NULL);
-CREATE POLICY "news_ins" ON "newsPosts" FOR INSERT WITH CHECK (is_admin());
-CREATE POLICY "news_upd" ON "newsPosts" FOR UPDATE USING (auth.uid() IS NOT NULL);
-CREATE POLICY "news_del" ON "newsPosts" FOR DELETE USING (is_admin());
+-- News: public read for realtime
+CREATE POLICY "news_sel" ON "newsPosts" FOR SELECT USING (true);
 
--- Uploads: admin reads, auth creates
-CREATE POLICY "upl_sel" ON uploads FOR SELECT USING (is_admin());
-CREATE POLICY "upl_ins" ON uploads FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
-CREATE POLICY "upl_upd" ON uploads FOR UPDATE USING (is_admin());
-CREATE POLICY "upl_del" ON uploads FOR DELETE USING (is_admin());
+-- Uploads: public read for realtime
+CREATE POLICY "upl_sel" ON uploads FOR SELECT USING (true);
 
 -- ============================================================
 -- Enable Realtime
