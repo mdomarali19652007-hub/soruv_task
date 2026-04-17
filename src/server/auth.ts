@@ -4,6 +4,22 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Validate DATABASE_URL before initializing Better Auth
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  console.error(
+    '\n[Auth Error] DATABASE_URL environment variable is missing!\n' +
+    'Better Auth requires a direct Postgres connection string from Supabase.\n\n' +
+    'To fix this:\n' +
+    '  1. Go to your Supabase dashboard > Settings > Database\n' +
+    '  2. Copy the "Connection string" (URI format)\n' +
+    '  3. Add it to your .env file as:\n' +
+    '     DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres\n\n' +
+    'Note: This is NOT the same as VITE_SUPABASE_URL (REST API). It is the direct Postgres connection.\n'
+  );
+  process.exit(1);
+}
+
 /**
  * Better Auth server instance.
  *
@@ -12,7 +28,7 @@ dotenv.config();
  *
  * Environment variables required:
  *   BETTER_AUTH_SECRET        - Secret key for signing sessions/tokens
- *   DATABASE_URL              - Supabase Postgres connection string
+ *   DATABASE_URL              - Supabase Postgres connection string (direct, not REST API)
  *   BETTER_AUTH_URL           - Public URL of the server (e.g. http://localhost:3000)
  *   GOOGLE_CLIENT_ID          - Google OAuth client ID
  *   GOOGLE_CLIENT_SECRET      - Google OAuth client secret
@@ -20,7 +36,7 @@ dotenv.config();
 export const auth = betterAuth({
   database: {
     type: 'postgres',
-    url: process.env.DATABASE_URL || '',
+    url: databaseUrl,
   },
   secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-in-production',
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
