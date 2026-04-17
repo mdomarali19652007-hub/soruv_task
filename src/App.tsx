@@ -80,9 +80,15 @@ import {
   incrementFields,
   subscribeToTable,
   subscribeToRow,
-  uploadFile
+  uploadFile,
+  submitWithdrawal,
+  processWithdrawal,
+  processDeposit,
+  activateAccount,
+  claimDailyReward,
+  processSpin
 } from './lib/database';
-import { sanitizeAndTrim } from './utils/sanitize';
+import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
 import {
   authClient,
   signIn,
@@ -949,14 +955,10 @@ export default function App() {
   const claimDaily = async () => {
     if (user.dailyClaimed) return;
     try {
-      const userRef_id = user.id;
-      await updateRow('users', userRef_id, {
-        mainBalance: dailyReward,
-        totalEarned: dailyReward,
-        dailyClaimed: true
-      });
+      // Use server-side RPC for atomic daily reward claim
+      const reward = await claimDailyReward(user.id);
       confetti({ particleCount: 100, spread: 70 });
-      alert(`Claimed ৳ ${dailyReward.toFixed(2)}!`);
+      alert(`Claimed ৳ ${reward.toFixed(2)}!`);
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `users/${user.id}`);
     }
@@ -971,15 +973,9 @@ export default function App() {
     setResult(null);
 
     setTimeout(async () => {
-      const prizes = [0, 0.5, 1, 2, 5, 10, 0, 0.2];
-      const win = prizes[Math.floor(Math.random() * prizes.length)];
-
       try {
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -spinCost + win,
-          totalEarned: win
-        });
+        // Use server-side RPC for atomic spin with server-side randomness
+        const win = await processSpin(user.id);
 
         setIsSpinning(false);
         setResult(win > 0 ? `৳ ${win.toFixed(2)}` : 'Better Luck Next Time!');
@@ -2037,8 +2033,12 @@ export default function App() {
           <div className="glass-card mb-8 relative overflow-hidden group border-white/40 shadow-xl">
             <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all" />
             <div className="flex items-center gap-5 relative z-10">
-              <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl neon-border">
-                <User className="w-10 h-10 text-white" />
+              <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl neon-border overflow-hidden">
+                {(user as any).profilePic ? (
+                  <img src={(user as any).profilePic} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <User className="w-10 h-10 text-white" />
+                )}
               </div>
               <div>
                 <h3 className="text-xl font-black text-slate-900">{user.name}</h3>
@@ -2414,34 +2414,31 @@ export default function App() {
         setError('Please select a withdrawal method');
         return;
       }
-      if (!accountNumber.trim()) {
+      const sanitizedAccount = sanitizeAccountNumber(accountNumber);
+      if (!sanitizedAccount) {
         setError('Please enter your account number');
+        return;
+      }
+      // Validate mobile wallet number format for bKash/Nagad
+      if (!isValidMobileWallet(sanitizedAccount)) {
+        setError('Please enter a valid 11-digit Bangladeshi mobile number');
         return;
       }
 
       await handleSubmission(async () => {
-        const withdrawalData = {
+        // Use server-side RPC for atomic withdrawal with validation
+        await submitWithdrawal(user.id, val, method, sanitizedAccount);
+
+        setLastWithdrawal({
           userId: user.id,
           amount: val,
           receiveAmount: val - fee,
           fee: fee,
-          method: `${method} (${accountNumber})`,
-          status: 'pending' as const,
+          method: `${method} (${sanitizedAccount})`,
+          status: 'pending',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
-          timestamp: Date.now(),
-          transactionId: 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase()
-        };
-
-        await insertRow('withdrawals', withdrawalData);
-
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -val,
-          pendingPayout: val
         });
-
-        setLastWithdrawal(withdrawalData);
         setAmount('');
         setMethod(null);
         setAccountNumber('');
@@ -2504,13 +2501,13 @@ export default function App() {
             </div>
 
             <div className="space-y-4">
-              {withdrawals.length === 0 ? (
+              {withdrawals.filter(w => w.userId === user.id).length === 0 ? (
                 <div className="text-center py-20 opacity-50">
                   <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                   <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">No transaction logs</p>
                 </div>
               ) : (
-                withdrawals.map(w => (
+                withdrawals.filter(w => w.userId === user.id).map(w => (
                   <div key={w.id} className="glass-card border-white/40 shadow-sm">
                     <div className="flex justify-between items-start mb-3">
                       <div>
@@ -3056,7 +3053,7 @@ export default function App() {
       }
       await handleSubmission(async () => {
         const newSub: MicrojobSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           microjobId: selectedTask.title,
           userName: submission.userName,
@@ -3339,7 +3336,7 @@ export default function App() {
       }
       await handleSubmission(async () => {
         const newSub: TaskSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           taskType: selectedTask.title,
           userName: proof.userName,
@@ -3599,7 +3596,7 @@ export default function App() {
       if (!email.trim()) return;
       await handleSubmission(async () => {
         const newSub: GmailSubmission = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           email,
           status: 'pending',
@@ -4126,7 +4123,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'REC-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('REC')
         };
         await insertRow('rechargeRequests', rechargeData);
 
@@ -4344,7 +4341,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'DRV-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('DRV')
         };
         await insertRow('driveOfferRequests', offerData);
 
@@ -4579,7 +4576,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          orderId: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          orderId: generateTransactionId('ORD')
         };
 
         const userRef_id = user.id;
@@ -4852,7 +4849,7 @@ export default function App() {
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          orderId: 'BUY-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          orderId: generateTransactionId('BUY')
         };
 
         await insertRow('dollarBuyRequests', buyData);
@@ -5178,15 +5175,44 @@ export default function App() {
               </div>
 
               <div>
-                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Screenshot URL</label>
-                <input
-                  type="text"
-                  value={screenshot}
-                  onChange={(e) => setScreenshot(e.target.value)}
-                  placeholder="Paste Screenshot Link"
-                  className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3 text-sm font-bold focus:border-indigo-500 outline-none transition-all"
-                />
-                <p className="text-[8px] font-bold text-slate-400 mt-1 ml-2 uppercase">Upload to imgbb.com and paste link here</p>
+                <label className="text-[10px] font-black text-slate-400 uppercase ml-2 mb-1 block">Screenshot Proof</label>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    id="social-job-screenshot"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      try {
+                        const url = await uploadMedia(file);
+                        setScreenshot(url);
+                      } catch (err) {
+                        alert(err instanceof Error ? err.message : 'Upload failed');
+                      }
+                    }}
+                  />
+                  <label
+                    htmlFor="social-job-screenshot"
+                    className="w-full flex items-center justify-center gap-3 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-8 cursor-pointer hover:border-indigo-500 transition-all"
+                  >
+                    {screenshot ? (
+                      <div className="flex flex-col items-center gap-2">
+                        <CheckCircle2 className="w-8 h-8 text-emerald-500" />
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase">Screenshot Ready</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-2">
+                        <ImageIcon className="w-8 h-8 text-slate-300" />
+                        <span className="text-[10px] font-bold text-slate-400 uppercase">Select from Gallery</span>
+                      </div>
+                    )}
+                  </label>
+                  {screenshot && (
+                    <p className="text-[8px] text-slate-400 mt-2 truncate px-2">URL: {screenshot}</p>
+                  )}
+                </div>
               </div>
 
               <button
@@ -5265,20 +5291,31 @@ export default function App() {
         setError('Wallet address/ID required');
         return;
       }
+      // Balance check for dollar sell (Medium #10)
+      const totalTk = parseFloat(amount) * dollarSellRate;
+      if (totalTk > user.mainBalance) {
+        setError('Insufficient balance for this dollar sell amount');
+        return;
+      }
 
       await handleSubmission(async () => {
         const sellData = {
           userId: user.id,
-          amount: parseFloat(amount) * dollarSellRate,
-          method: `Dollar Sell (${method}) - ${wallet}`,
+          amount: totalTk,
+          method: `Dollar Sell (${method}) - ${sanitizeAccountNumber(wallet, 60)}`,
           status: 'pending',
           date: new Date().toLocaleDateString(),
           time: new Date().toLocaleTimeString(),
           timestamp: Date.now(),
-          transactionId: 'SEL-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+          transactionId: generateTransactionId('SEL')
         };
 
         await insertRow('withdrawals', sellData);
+        // Deduct balance atomically for dollar sell
+        await incrementFields('users', user.id, {
+          mainBalance: -totalTk,
+          pendingPayout: totalTk
+        });
         setLastSell(sellData);
         setStep('success');
       }, 'Dollar sell request submitted successfully!');
@@ -5613,46 +5650,8 @@ export default function App() {
       }
 
       await handleSubmission(async () => {
-        const expiryDate = new Date();
-        expiryDate.setDate(expiryDate.getDate() + activationDuration);
-
-        const userRef_id = user.id;
-        await updateRow('users', userRef_id, {
-          mainBalance: -activationFee,
-          isActive: true,
-          activationDate: new Date().toISOString(),
-          activationExpiry: expiryDate.toISOString(),
-          notifications: [
-            {
-              id: Date.now().toString(),
-              text: `Account Activated! Your account is now active until ${expiryDate.toLocaleDateString()}.`,
-              date: new Date().toISOString().split('T')[0]
-            },
-            ...user.notifications
-          ]
-        });
-
-        // Referral Bonus on Activation
-        if (user.referredBy) {
-          const referrerRef_id = user.referredBy;
-          const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
-          if (referrerData) {
-            await updateRow('users', referrerRef_id, {
-              mainBalance: referralActivationBonus,
-              totalEarned: referralActivationBonus,
-              referralActiveCount: 1,
-              notifications: [
-                {
-                  id: Date.now().toString(),
-                  text: `Referral Activation Bonus! You earned ৳ ${referralActivationBonus} from ${user.name}'s activation.`,
-                  date: new Date().toISOString().split('T')[0]
-                },
-                ...referrerData.notifications
-              ]
-            });
-          }
-        }
-
+        // Use server-side RPC for atomic activation with fee deduction and referral bonus
+        await activateAccount(user.id);
         setShowSuccess(true);
       }, 'Account activated successfully!');
     };
@@ -6162,21 +6161,39 @@ export default function App() {
                     />
                   </div>
 
-                  <div className="relative group">
-                    <Camera className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-orange-500 transition-colors" />
+                  <div className="relative">
                     <input
                       type="file"
                       accept="image/*"
-                      onChange={e => {
+                      className="hidden"
+                      id="ludo-screenshot-upload"
+                      onChange={async (e) => {
                         const file = e.target.files?.[0];
-                        if (file) {
-                          const reader = new FileReader();
-                          reader.onloadend = () => setScreenshotUrl(reader.result as string);
-                          reader.readAsDataURL(file);
+                        if (!file) return;
+                        try {
+                          const url = await uploadMedia(file);
+                          setScreenshotUrl(url);
+                        } catch (err) {
+                          alert(err instanceof Error ? err.message : 'Upload failed');
                         }
                       }}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-orange-500 transition-all"
                     />
+                    <label
+                      htmlFor="ludo-screenshot-upload"
+                      className="w-full flex items-center justify-center gap-3 bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl p-6 cursor-pointer hover:border-orange-500 transition-all"
+                    >
+                      {screenshotUrl ? (
+                        <div className="flex items-center gap-2">
+                          <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase">Screenshot Uploaded</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Camera className="w-5 h-5 text-slate-400" />
+                          <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Screenshot</span>
+                        </div>
+                      )}
+                    </label>
                   </div>
                   {screenshotUrl && (
                     <div className="relative w-full h-32 rounded-2xl overflow-hidden border border-slate-200">
@@ -6232,7 +6249,7 @@ export default function App() {
 
       try {
         setIsSubmitting(true);
-        const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
+        const orderId = crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase();
 
         // Deduct balance
         const userRef_id = user.id;
@@ -6491,7 +6508,7 @@ export default function App() {
 
       await handleSubmission(async () => {
         const newReq: SubscriptionRequest = {
-          id: Math.random().toString(36).substr(2, 9).toUpperCase(),
+          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
           userId: user.id,
           type,
           email: type === 'youtube' ? email : undefined,
@@ -7015,18 +7032,11 @@ export default function App() {
             if (referrerData) {
               const commission = (amount * referralCommissionRate) / 100;
               if (commission > 0) {
-                await updateRow('users', referrerRef_id, {
+                // Use atomic increment for balance fields
+                await incrementFields('users', referrerRef_id, {
                   mainBalance: commission,
                   totalEarned: commission,
-                  totalCommission: commission,
-                  notifications: [
-                    {
-                      id: Date.now().toString(),
-                      text: `Referral Commission! You earned ৳ ${commission.toFixed(2)} from ${userData.name}'s ${source}.`,
-                      date: new Date().toISOString().split('T')[0]
-                    },
-                    ...referrerData.notifications
-                  ]
+                  totalCommission: commission
                 });
               }
             }
@@ -7039,7 +7049,7 @@ export default function App() {
 
     const [newTask, setNewTask] = useState({ title: '', reward: 0, desc: '', link: '', category: 'micro' as 'micro' | 'social' | 'gmail' | 'premium' });
     const [newDriveOffer, setNewDriveOffer] = useState({ title: '', operator: 'GP', price: 0, description: '' });
-    const [newProduct, setNewProduct] = useState({ name: '', price: 0, description: '', category: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', price: 0, description: '', category: '', image: '' });
 
     const saveChanges = async () => {
       try {
@@ -7102,14 +7112,12 @@ export default function App() {
           if (s) {
             const reward = s.reward || gmailReward;
             const userRef_id = s.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
-              });
-              await processReferralCommission(s.userId, reward, 'Gmail Submission');
-            }
+            // Use atomic increment instead of read-modify-write
+            await incrementFields('users', userRef_id, {
+              mainBalance: reward,
+              totalEarned: reward
+            });
+            await processReferralCommission(s.userId, reward, 'Gmail Submission');
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7133,9 +7141,10 @@ export default function App() {
               // Find the task to get the reward
               const task = dynamicTasks.find(t => t.id === s.microjobId || t.title === s.microjobId);
               const reward = task ? task.reward : 5.00;
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
+              // Use atomic increment instead of read-modify-write
+              await incrementFields('users', userRef_id, {
+                mainBalance: reward,
+                totalEarned: reward
               });
               await processReferralCommission(s.userId, reward, 'Microjob');
             }
@@ -7190,14 +7199,12 @@ export default function App() {
           if (s) {
             const reward = s.reward || 2.00;
             const userRef_id = s.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + reward,
-                totalEarned: userData.totalEarned + reward
-              });
-              await processReferralCommission(s.userId, reward, 'Task');
-            }
+            // Use atomic increment instead of read-modify-write
+            await incrementFields('users', userRef_id, {
+              mainBalance: reward,
+              totalEarned: reward
+            });
+            await processReferralCommission(s.userId, reward, 'Task');
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7214,34 +7221,8 @@ export default function App() {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : '';
 
       try {
-        // admin op: withdrawals
-        await updateRow('withdrawals', id, { status: action, reason: reason || '' });
-
-        const w = withdrawals.find(w => w.id === id);
-        if (w) {
-          const userRef_id = w.userId;
-          const userData = await getRow('users', userRef_id) as UserProfile | null;
-          if (userData) {
-            if (action === 'approved') {
-              await updateRow('users', userRef_id, {
-                pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
-                notifications: [
-                  { id: Date.now().toString(), text: `Withdrawal Approved: ৳${w.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            } else {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + w.amount,
-                pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
-                notifications: [
-                  { id: Date.now().toString(), text: `Withdrawal Rejected: ${reason}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
-          }
-        }
+        // Use server-side RPC for atomic withdrawal processing with proper locking
+        await processWithdrawal(id, action, reason);
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `withdrawals/${id}`);
@@ -7261,35 +7242,8 @@ export default function App() {
 
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : '';
       try {
-        // admin op: rechargeRequests - use empty string instead of undefined for reason
-        await updateRow('rechargeRequests', id, { status: action, reason: reason || '' });
-
-        const r = rechargeRequests.find(r => r.id === id);
-        if (r) {
-          const userRef_id = r.userId;
-          const userData = await getRow('users', userRef_id) as UserProfile | null;
-          if (userData) {
-            if (action === 'approved') {
-              // For deposits, we ADD to balance when approved
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.amount,
-                totalEarned: userData.totalEarned + r.amount,
-                notifications: [
-                  { id: Date.now().toString(), text: `Deposit Approved: ৳${r.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            } else {
-              // For deposits, if rejected, we just notify
-              await updateRow('users', userRef_id, {
-                notifications: [
-                  { id: Date.now().toString(), text: `Deposit Rejected: ${reason}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
-          }
-        }
+        // Use server-side RPC for atomic deposit processing with proper locking
+        await processDeposit(id, action, reason);
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `rechargeRequests/${id}`);
@@ -7311,13 +7265,8 @@ export default function App() {
         if (action === 'rejected') {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
-            const userRef_id = r.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.amount
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', r.userId, 'mainBalance', r.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7335,17 +7284,8 @@ export default function App() {
         if (action === 'cancelled') {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
-            const userRef_id = o.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + o.amount,
-                notifications: [
-                  { id: Date.now().toString(), text: `SMM Order Cancelled: ${reason}. Refunded ৳${o.amount}`, date: new Date().toISOString().split('T')[0] },
-                  ...userData.notifications
-                ]
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', o.userId, 'mainBalance', o.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7363,13 +7303,8 @@ export default function App() {
         if (action === 'rejected') {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
-            const userRef_id = r.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + r.price
-              });
-            }
+            // Use atomic increment for refund
+            await incrementField('users', r.userId, 'mainBalance', r.price);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7399,8 +7334,8 @@ export default function App() {
         return;
       }
       try {
-        await insertRow('products', { ...newProduct, image: '' });
-        setNewProduct({ name: '', price: 0, description: '', category: '' });
+        await insertRow('products', { ...newProduct });
+        setNewProduct({ name: '', price: 0, description: '', category: '', image: '' });
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.CREATE, 'products');
@@ -8575,14 +8510,58 @@ export default function App() {
                         />
                       </div>
                       <div>
-                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image URL (Optional)</label>
-                        <input
-                          type="text"
-                          value={newNews.imageUrl}
-                          onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
-                          className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 outline-none focus:border-indigo-500"
-                          placeholder="https://example.com/image.jpg"
-                        />
+                        <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Image (Optional)</label>
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <input
+                              type="file"
+                              accept="image/*"
+                              className="hidden"
+                              id="news-image-upload"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                try {
+                                  const url = await uploadMedia(file);
+                                  setNewNews(prev => ({ ...prev, imageUrl: url }));
+                                } catch (err) {
+                                  alert(err instanceof Error ? err.message : 'Upload failed');
+                                }
+                              }}
+                            />
+                            <label
+                              htmlFor="news-image-upload"
+                              className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-slate-200 rounded-2xl p-5 cursor-pointer hover:border-blue-500 transition-all"
+                            >
+                              {newNews.imageUrl ? (
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                  <span className="text-[10px] font-bold text-emerald-600 uppercase">Image Ready</span>
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <ImageIcon className="w-5 h-5 text-slate-300" />
+                                  <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Image from Gallery</span>
+                                </div>
+                              )}
+                            </label>
+                          </div>
+                          {newNews.imageUrl && (
+                            <div className="flex items-center gap-2">
+                              <p className="text-[8px] text-slate-400 truncate flex-1">{newNews.imageUrl}</p>
+                              <button onClick={() => setNewNews(prev => ({ ...prev, imageUrl: '' }))} className="text-rose-500 hover:text-rose-600">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                          <input
+                            type="text"
+                            value={newNews.imageUrl}
+                            onChange={e => setNewNews({ ...newNews, imageUrl: e.target.value })}
+                            className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                            placeholder="Or paste image URL manually"
+                          />
+                        </div>
                       </div>
                       <button
                         onClick={postNews}
@@ -9215,14 +9194,11 @@ export default function App() {
                                 onClick={async () => {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
-                                  const userRef_id = s.userId;
-                                  const userData = await getRow('users', userRef_id) as UserProfile | null;
-                                  if (userData) {
-                                    await updateRow('users', userRef_id, {
-                                      mainBalance: userData.mainBalance + tournament.prizePool,
-                                      totalEarned: userData.totalEarned + tournament.prizePool
-                                    });
-                                  }
+                                  // Use atomic increment for prize payout
+                                  await incrementFields('users', s.userId, {
+                                    mainBalance: tournament.prizePool,
+                                    totalEarned: tournament.prizePool
+                                  });
                                   await updateRow('ludoSubmissions', s.id, { status: 'approved' });
                                   alert('Submission Approved & Prize Paid!');
                                 }}
@@ -9490,6 +9466,43 @@ export default function App() {
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
                     />
+                    <div>
+                      <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Product Image</label>
+                      <div className="relative">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          id="product-image-upload"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const url = await uploadMedia(file);
+                              setNewProduct(prev => ({ ...prev, image: url }));
+                            } catch (err) {
+                              alert(err instanceof Error ? err.message : 'Upload failed');
+                            }
+                          }}
+                        />
+                        <label
+                          htmlFor="product-image-upload"
+                          className="w-full flex items-center justify-center gap-2 bg-white border-2 border-dashed border-slate-200 rounded-xl p-4 cursor-pointer hover:border-pink-500 transition-all"
+                        >
+                          {newProduct.image ? (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+                              <span className="text-[10px] font-bold text-emerald-600 uppercase">Image Uploaded</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <ImageIcon className="w-4 h-4 text-slate-300" />
+                              <span className="text-[10px] font-bold text-slate-400 uppercase">Upload Product Image</span>
+                            </div>
+                          )}
+                        </label>
+                      </div>
+                    </div>
                     <div className="flex gap-2">
                       <button
                         onClick={addProduct}
@@ -9720,11 +9733,34 @@ export default function App() {
         <div className="flex flex-col items-center mb-10">
           <div className="w-28 h-28 rounded-full bg-gradient-to-br from-indigo-400 to-violet-600 p-1 mb-4 shadow-xl relative group">
             <div className="w-full h-full rounded-full bg-white flex items-center justify-center overflow-hidden">
-              <User className="w-14 h-14 text-indigo-500 group-hover:scale-110 transition-all" />
+              {(user as any).profilePic ? (
+                <img src={(user as any).profilePic} alt="Profile" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+              ) : (
+                <User className="w-14 h-14 text-indigo-500 group-hover:scale-110 transition-all" />
+              )}
             </div>
-            <div className="absolute -bottom-1 -right-1 w-8 h-8 bg-emerald-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg">
-              <div className="w-2 h-2 bg-white rounded-full animate-pulse" />
-            </div>
+            <label htmlFor="profile-pic-upload" className="absolute -bottom-1 -right-1 w-8 h-8 bg-indigo-500 rounded-full border-4 border-white flex items-center justify-center shadow-lg cursor-pointer hover:bg-indigo-600 transition-colors">
+              <Camera className="w-3.5 h-3.5 text-white" />
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              id="profile-pic-upload"
+              className="hidden"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const url = await uploadImage(file, 'profile');
+                  if (url) {
+                    await updateRow('users', user.id, { profilePic: url });
+                  }
+                } catch (err) {
+                  console.error('Profile photo upload failed:', err);
+                  alert('Failed to upload profile photo. Please try again.');
+                }
+              }}
+            />
           </div>
           <h3 className="text-xl font-black text-slate-900 tracking-tight">{user.name}</h3>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-1">{user.id}</p>

@@ -102,6 +102,7 @@ CREATE TABLE IF NOT EXISTS users (
   "suspensionUntil" TEXT DEFAULT '',
   "totalCommission" NUMERIC(12,2) DEFAULT 0,
   "socialSubmissions" JSONB DEFAULT '[]'::jsonb,
+  "profilePic" TEXT DEFAULT '',
   "createdAt" TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -380,7 +381,7 @@ CREATE TABLE IF NOT EXISTS uploads (
 );
 
 -- ============================================================
--- RPC Function for atomic increment
+-- RPC Function for atomic increment (SECURED with whitelist)
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION increment_field(
@@ -389,9 +390,315 @@ CREATE OR REPLACE FUNCTION increment_field(
   p_column TEXT,
   p_amount NUMERIC
 ) RETURNS VOID AS $$
+DECLARE
+  allowed BOOLEAN := FALSE;
 BEGIN
-  EXECUTE format('UPDATE %I SET %I = COALESCE(%I, 0) + $1 WHERE id = $2', p_table, p_column, p_column)
-  USING p_amount, p_id;
+  -- SECURITY: Whitelist of allowed table/column combinations
+  -- Only specific financial and counter fields can be incremented
+  IF (p_table = 'users' AND p_column IN (
+    'mainBalance', 'totalEarned', 'pendingPayout', 'totalCommission',
+    'gen1Count', 'referralActiveCount'
+  )) THEN
+    allowed := TRUE;
+  ELSIF (p_table = 'settings' AND p_column IN ('totalPaid', 'activeWorkerCount')) THEN
+    allowed := TRUE;
+  END IF;
+
+  IF NOT allowed THEN
+    RAISE EXCEPTION 'increment_field: disallowed table/column combination: %.%', p_table, p_column;
+  END IF;
+
+  -- NOTE: id is TEXT (Better Auth) not UUID, so no ::uuid cast needed
+  EXECUTE format(
+    'UPDATE %I SET %I = COALESCE(%I, 0) + $1 WHERE id = $2',
+    p_table, p_column, p_column
+  ) USING p_amount, p_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- CHECK constraint: prevent negative balances
+-- ============================================================
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint WHERE conname = 'users_main_balance_non_negative'
+  ) THEN
+    ALTER TABLE users ADD CONSTRAINT users_main_balance_non_negative CHECK ("mainBalance" >= 0);
+  END IF;
+END $$;
+
+-- ============================================================
+-- Secure server-side financial functions
+-- ============================================================
+
+-- Submit a withdrawal request with server-side validation
+CREATE OR REPLACE FUNCTION submit_withdrawal(
+  p_user_id TEXT,
+  p_amount NUMERIC,
+  p_method TEXT,
+  p_account_number TEXT
+) RETURNS UUID AS $$
+DECLARE
+  v_user RECORD;
+  v_settings RECORD;
+  v_fee NUMERIC;
+  v_withdrawal_id UUID;
+  v_txn_id TEXT;
+BEGIN
+  -- Lock the user row to prevent race conditions
+  SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  -- Get settings
+  SELECT * INTO v_settings FROM settings WHERE id = 'global';
+
+  -- Server-side validation
+  IF NOT v_user."isActive" THEN
+    RAISE EXCEPTION 'Account is not active';
+  END IF;
+
+  IF p_amount < v_settings."minWithdrawal" THEN
+    RAISE EXCEPTION 'Amount below minimum withdrawal of %', v_settings."minWithdrawal";
+  END IF;
+
+  IF p_amount > v_user."mainBalance" THEN
+    RAISE EXCEPTION 'Insufficient balance';
+  END IF;
+
+  IF p_method IS NULL OR p_method = '' THEN
+    RAISE EXCEPTION 'Withdrawal method is required';
+  END IF;
+
+  IF p_account_number IS NULL OR p_account_number = '' THEN
+    RAISE EXCEPTION 'Account number is required';
+  END IF;
+
+  -- Calculate fee
+  v_fee := (p_amount * v_settings."withdrawalFee") / 100;
+
+  -- Generate transaction ID
+  v_txn_id := 'TXN-' || upper(substr(md5(random()::text || clock_timestamp()::text), 1, 9));
+
+  -- Deduct balance atomically
+  UPDATE users SET
+    "mainBalance" = "mainBalance" - p_amount,
+    "pendingPayout" = COALESCE("pendingPayout", 0) + p_amount
+  WHERE id = p_user_id;
+
+  -- Insert withdrawal record
+  INSERT INTO withdrawals ("userId", amount, method, "accountNumber", status, date, time, timestamp, "transactionId")
+  VALUES (
+    p_user_id, p_amount,
+    p_method || ' (' || p_account_number || ')',
+    p_account_number, 'pending',
+    to_char(now(), 'MM/DD/YYYY'),
+    to_char(now(), 'HH12:MI:SS AM'),
+    extract(epoch from now())::bigint * 1000,
+    v_txn_id
+  ) RETURNING id INTO v_withdrawal_id;
+
+  RETURN v_withdrawal_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Approve or reject a withdrawal (admin only)
+CREATE OR REPLACE FUNCTION process_withdrawal(
+  p_withdrawal_id UUID,
+  p_action TEXT,
+  p_reason TEXT DEFAULT ''
+) RETURNS VOID AS $$
+DECLARE
+  v_withdrawal RECORD;
+  v_user RECORD;
+BEGIN
+  -- Admin check
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Unauthorized: admin access required';
+  END IF;
+
+  IF p_action NOT IN ('approved', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid action: must be approved or rejected';
+  END IF;
+
+  -- Lock the withdrawal row
+  SELECT * INTO v_withdrawal FROM withdrawals WHERE id = p_withdrawal_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Withdrawal not found';
+  END IF;
+
+  IF v_withdrawal.status != 'pending' THEN
+    RAISE EXCEPTION 'Withdrawal already processed';
+  END IF;
+
+  -- Update withdrawal status
+  UPDATE withdrawals SET status = p_action, reason = COALESCE(p_reason, '') WHERE id = p_withdrawal_id;
+
+  -- Lock user row (userId is TEXT in Better Auth)
+  SELECT * INTO v_user FROM users WHERE id = v_withdrawal."userId" FOR UPDATE;
+
+  IF p_action = 'approved' THEN
+    -- Deduct from pending payout
+    UPDATE users SET
+      "pendingPayout" = GREATEST(0, COALESCE("pendingPayout", 0) - v_withdrawal.amount)
+    WHERE id = v_withdrawal."userId";
+  ELSE
+    -- Rejected: refund to main balance, deduct from pending
+    UPDATE users SET
+      "mainBalance" = COALESCE("mainBalance", 0) + v_withdrawal.amount,
+      "pendingPayout" = GREATEST(0, COALESCE("pendingPayout", 0) - v_withdrawal.amount)
+    WHERE id = v_withdrawal."userId";
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Approve or reject a deposit/recharge request (admin only)
+CREATE OR REPLACE FUNCTION process_deposit(
+  p_request_id UUID,
+  p_action TEXT,
+  p_reason TEXT DEFAULT ''
+) RETURNS VOID AS $$
+DECLARE
+  v_request RECORD;
+BEGIN
+  -- Admin check
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Unauthorized: admin access required';
+  END IF;
+
+  IF p_action NOT IN ('approved', 'rejected') THEN
+    RAISE EXCEPTION 'Invalid action';
+  END IF;
+
+  SELECT * INTO v_request FROM "rechargeRequests" WHERE id = p_request_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Deposit request not found';
+  END IF;
+
+  IF v_request.status != 'pending' THEN
+    RAISE EXCEPTION 'Request already processed';
+  END IF;
+
+  UPDATE "rechargeRequests" SET status = p_action, reason = COALESCE(p_reason, '') WHERE id = p_request_id;
+
+  IF p_action = 'approved' THEN
+    -- Atomically add to user balance (userId is TEXT)
+    UPDATE users SET
+      "mainBalance" = COALESCE("mainBalance", 0) + v_request.amount,
+      "totalEarned" = COALESCE("totalEarned", 0) + v_request.amount
+    WHERE id = v_request."userId";
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Activate account with server-side fee deduction
+CREATE OR REPLACE FUNCTION activate_account(
+  p_user_id TEXT
+) RETURNS VOID AS $$
+DECLARE
+  v_user RECORD;
+  v_settings RECORD;
+  v_expiry TIMESTAMPTZ;
+  v_referrer RECORD;
+BEGIN
+  SELECT * INTO v_settings FROM settings WHERE id = 'global';
+  SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  IF v_user."mainBalance" < v_settings."activationFee" THEN
+    RAISE EXCEPTION 'Insufficient balance for activation fee of %', v_settings."activationFee";
+  END IF;
+
+  v_expiry := now() + (v_settings."activationDuration" || ' days')::interval;
+
+  -- Deduct fee and activate
+  UPDATE users SET
+    "mainBalance" = "mainBalance" - v_settings."activationFee",
+    "isActive" = TRUE,
+    "activationDate" = now()::text,
+    "activationExpiry" = v_expiry::text
+  WHERE id = p_user_id;
+
+  -- Process referral bonus if applicable
+  IF v_user."referredBy" IS NOT NULL AND v_user."referredBy" != '' THEN
+    SELECT * INTO v_referrer FROM users WHERE id = v_user."referredBy" FOR UPDATE;
+    IF FOUND THEN
+      UPDATE users SET
+        "mainBalance" = COALESCE("mainBalance", 0) + v_settings."referralActivationBonus",
+        "totalEarned" = COALESCE("totalEarned", 0) + v_settings."referralActivationBonus",
+        "referralActiveCount" = COALESCE("referralActiveCount", 0) + 1
+      WHERE id = v_referrer.id;
+    END IF;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Claim daily reward with server-side validation
+CREATE OR REPLACE FUNCTION claim_daily_reward(
+  p_user_id TEXT
+) RETURNS NUMERIC AS $$
+DECLARE
+  v_user RECORD;
+  v_settings RECORD;
+BEGIN
+  SELECT * INTO v_settings FROM settings WHERE id = 'global';
+  SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  IF v_user."dailyClaimed" THEN
+    RAISE EXCEPTION 'Daily reward already claimed';
+  END IF;
+
+  UPDATE users SET
+    "mainBalance" = COALESCE("mainBalance", 0) + v_settings."dailyReward",
+    "totalEarned" = COALESCE("totalEarned", 0) + v_settings."dailyReward",
+    "dailyClaimed" = TRUE
+  WHERE id = p_user_id;
+
+  RETURN v_settings."dailyReward";
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Process spin with server-side validation and randomness
+CREATE OR REPLACE FUNCTION process_spin(
+  p_user_id TEXT
+) RETURNS NUMERIC AS $$
+DECLARE
+  v_user RECORD;
+  v_settings RECORD;
+  v_prizes NUMERIC[] := ARRAY[0, 0.5, 1, 2, 5, 10, 0, 0.2];
+  v_win NUMERIC;
+BEGIN
+  SELECT * INTO v_settings FROM settings WHERE id = 'global';
+  SELECT * INTO v_user FROM users WHERE id = p_user_id FOR UPDATE;
+
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+
+  IF v_user."mainBalance" < v_settings."spinCost" THEN
+    RAISE EXCEPTION 'Insufficient balance for spin';
+  END IF;
+
+  -- Server-side random prize selection
+  v_win := v_prizes[1 + floor(random() * array_length(v_prizes, 1))::int];
+
+  -- Deduct cost and add winnings atomically
+  UPDATE users SET
+    "mainBalance" = "mainBalance" - v_settings."spinCost" + v_win,
+    "totalEarned" = COALESCE("totalEarned", 0) + v_win
+  WHERE id = p_user_id;
+
+  RETURN v_win;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
