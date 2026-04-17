@@ -139,5 +139,4 @@
   -ms-overflow-style: none;  /* IE and Edge */
   scrollbar-width: none;  /* Firefox */
   -webkit-overflow-scrolling: touch;  /* Smooth momentum scrolling on iOS */
-  touch-action: pan-x;  /* Allow horizontal touch scrolling */
 }
