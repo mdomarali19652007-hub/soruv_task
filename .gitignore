@@ -19,6 +19,11 @@ firebase-applet-config.json
 .idea/
 *.swp
 *.swo
+.windsurf
+.agents
+.claude
+.kiro
+.trae
 
 # OS
 .DS_Store
