@@ -1,5 +1,6 @@
 import { betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins';
+import { Pool } from 'pg';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -15,26 +16,18 @@ if (!databaseUrl) {
     '  2. Copy the "Connection string" (URI format)\n' +
     '  3. Add it to your .env file as:\n' +
     '     DATABASE_URL=postgresql://postgres.[project-ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres\n\n' +
-    'Note: This is NOT the same as VITE_SUPABASE_URL (REST API). It is the direct Postgres connection.\n'
+    'Note: This is NOT the same as VITE_SUPABASE_URL (REST API). It is the direct Postgres connection.\n' +
+    'Important: If your password contains special characters (%, @, #), URL-encode them.\n' +
+    '           For example: % becomes %25, @ becomes %40\n'
   );
   process.exit(1);
-}
-
-// Check for common URL encoding issues in the password
-if (databaseUrl.includes('%') && !databaseUrl.includes('%25') && !databaseUrl.match(/%[0-9A-Fa-f]{2}/)) {
-  console.warn(
-    '\n[Auth Warning] DATABASE_URL may have an unescaped % in the password.\n' +
-    'If your Supabase password contains special characters like %, @, #, etc.,\n' +
-    'they must be URL-encoded. For example: % becomes %25, @ becomes %40\n' +
-    'Current value starts with: ' + databaseUrl.substring(0, 40) + '...\n'
-  );
 }
 
 /**
  * Better Auth server instance.
  *
- * Uses Supabase Postgres as the database backend via the connection string.
- * Tables are prefixed with "ba_" to avoid conflicts with existing app tables.
+ * Uses Supabase Postgres via the `pg` Pool adapter as recommended by Better Auth docs.
+ * See: https://better-auth.com/llms.txt/docs/adapters/postgresql.md
  *
  * Environment variables required:
  *   BETTER_AUTH_SECRET        - Secret key for signing sessions/tokens
@@ -44,10 +37,9 @@ if (databaseUrl.includes('%') && !databaseUrl.includes('%25') && !databaseUrl.ma
  *   GOOGLE_CLIENT_SECRET      - Google OAuth client secret
  */
 export const auth = betterAuth({
-  database: {
-    type: 'postgres',
-    url: databaseUrl,
-  },
+  database: new Pool({
+    connectionString: databaseUrl,
+  }),
   secret: process.env.BETTER_AUTH_SECRET || 'dev-secret-change-in-production',
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   basePath: '/api/auth',
