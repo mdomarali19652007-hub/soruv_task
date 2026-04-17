@@ -593,12 +593,16 @@ export default function App() {
             }
             setUser(data);
           } else {
-            // New user - create profile
+            // New user - create profile (handles both email signup and Google OAuth)
+            const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
             const newUser: UserProfile = {
               ...INITIAL_USER,
               id: supaUser.id,
               name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || 'User',
               email: supaUser.email || '',
+              numericId: userNumericId,
+              referralCode: userNumericId,
+              referralLink: `${window.location.origin}?ref=${userNumericId}`,
             };
             await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
           }
@@ -823,7 +827,36 @@ export default function App() {
       alert('Registration successful! Please check your email for verification.');
     } catch (error: any) {
       console.error('Registration Error:', error);
-      alert(error.message);
+      // Handle rate limit error with friendly message
+      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429 || error?.message?.includes('rate_limit')) {
+        const waitMatch = error.message?.match(/after (\d+) seconds/);
+        const waitTime = waitMatch ? waitMatch[1] : '60';
+        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
+      } else if (error?.message?.includes('already registered')) {
+        alert('This email is already registered. Please sign in instead.');
+      } else {
+        alert(error.message || 'Registration failed. Please try again.');
+      }
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    const email = loginEmail || prompt('Enter your email address:');
+    if (!email) return;
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}`,
+      });
+      if (error) throw error;
+      alert('Password reset email sent! Check your inbox.');
+    } catch (error: any) {
+      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429) {
+        const waitMatch = error.message?.match(/after (\d+) seconds/);
+        const waitTime = waitMatch ? waitMatch[1] : '60';
+        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
+      } else {
+        alert(error.message || 'Failed to send reset email.');
+      }
     }
   };
 
@@ -864,7 +897,15 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Login Error:', error);
-      alert('Login failed. Please check your credentials.');
+      if (error?.code === 'over_email_send_rate_limit' || error?.status === 429) {
+        const waitMatch = error.message?.match(/after (\d+) seconds/);
+        const waitTime = waitMatch ? waitMatch[1] : '60';
+        alert(`Too many attempts. Please wait ${waitTime} seconds before trying again.`);
+      } else if (error?.message?.includes('Invalid login credentials')) {
+        alert('Invalid email or password. Please check your credentials.');
+      } else {
+        alert(error.message || 'Login failed. Please try again.');
+      }
     }
   };
 
@@ -1152,7 +1193,21 @@ export default function App() {
                   onClick={handleEmailRegister}
                   className="w-full bg-gradient-to-r from-[#D4AF37] to-[#C5A028] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(212,175,55,0.3)] active:scale-95 transition-all mt-4"
                 >
-                  Registered
+                  Register
+                </button>
+
+                <div className="flex items-center gap-4 my-5">
+                  <div className="h-px bg-slate-100 flex-1" />
+                  <span className="text-[9px] font-black text-slate-300 uppercase tracking-[0.2em]">Or</span>
+                  <div className="h-px bg-slate-100 flex-1" />
+                </div>
+
+                <button
+                  onClick={handleGoogleLogin}
+                  className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#D4AF37]/30 hover:text-[#C5A028] transition-all shadow-sm active:scale-95"
+                >
+                  <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" referrerPolicy="no-referrer" />
+                  <span>Sign Up with Google</span>
                 </button>
 
                 <button onClick={() => setIsRegistering(false)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-4 hover:text-[#D4AF37] transition-colors">
@@ -1189,17 +1244,26 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="flex items-center gap-3 px-2">
-                    <input
-                      type="checkbox"
-                      id="login-terms"
-                      checked={loginAccepted}
-                      onChange={e => setLoginAccepted(e.target.checked)}
-                      className="w-4 h-4 accent-[#D4AF37]"
-                    />
-                    <label htmlFor="login-terms" className="text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer">
-                      I accept all rules and conditions
-                    </label>
+                  <div className="flex items-center justify-between px-2">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="checkbox"
+                        id="login-terms"
+                        checked={loginAccepted}
+                        onChange={e => setLoginAccepted(e.target.checked)}
+                        className="w-4 h-4 accent-[#D4AF37]"
+                      />
+                      <label htmlFor="login-terms" className="text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer">
+                        I accept all rules
+                      </label>
+                    </div>
+                    <button
+                      onClick={handlePasswordReset}
+                      type="button"
+                      className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest hover:underline transition-all"
+                    >
+                      Forgot Password?
+                    </button>
                   </div>
                 </div>
 
