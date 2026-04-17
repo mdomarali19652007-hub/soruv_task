@@ -361,10 +361,13 @@ ALTER TABLE "dollarBuyRequests" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "newsPosts" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE uploads ENABLE ROW LEVEL SECURITY;
 
--- Admin check helper
+-- Admin check helper (supports multiple admin emails)
 CREATE OR REPLACE FUNCTION is_admin() RETURNS BOOLEAN AS $$
 BEGIN
-  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) = 'soruvislam51@gmail.com';
+  RETURN (SELECT email FROM auth.users WHERE id = auth.uid()) IN (
+    'soruvislam51@gmail.com',
+    'shovonali885@gmail.com'
+  );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
