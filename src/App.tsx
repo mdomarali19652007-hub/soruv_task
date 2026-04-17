@@ -947,9 +947,26 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      // Persist referral code across OAuth redirect (form state is lost on redirect)
-      if (regData.refCode) {
-        localStorage.setItem('pendingReferralCode', regData.refCode);
+      // When on registration form, enforce referral code if users exist
+      if (isRegistering) {
+        if (regData.refCode) {
+          // Validate referral code before redirecting
+          const { data: refResult, error: refError } = await supabase.rpc('validate_referral_code', { code: regData.refCode });
+          if (refError || !refResult || refResult.length === 0) {
+            alert('Invalid Referral Code. Please enter a valid code before signing up with Google.');
+            return;
+          }
+          // Save validated referral code for after OAuth redirect
+          localStorage.setItem('pendingReferralCode', regData.refCode);
+        } else {
+          // Check if users exist - if so, referral code is mandatory
+          const { count } = await supabase.from('users').select('id', { count: 'exact', head: true });
+          if (count && count > 0) {
+            alert('Referral Code is required. Please enter a valid referral code before signing up with Google.');
+            return;
+          }
+          // First user bootstrap - no referral needed
+        }
       }
 
       const { error: googleError } = await supabase.auth.signInWithOAuth({
