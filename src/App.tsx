@@ -68,36 +68,22 @@ import {
   Trash2,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { supabase } from './lib/supabase';
 import { 
-  getFirestore, 
-  doc, 
-  setDoc, 
-  updateDoc, 
-  addDoc, 
-  collection, 
-  onSnapshot, 
-  query, 
-  where, 
-  orderBy,
-  getDoc,
-  getDocs,
-  deleteDoc,
-  getDocFromServer,
-  Timestamp,
-  increment,
-} from 'firebase/firestore';
-import { 
-  signInWithPopup, 
-  GoogleAuthProvider, 
-  onAuthStateChanged,
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  sendEmailVerification,
-  User as FirebaseUser
-} from 'firebase/auth';
-import { db, auth, storage } from './firebase';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+  insertRow, 
+  updateRow, 
+  upsertRow, 
+  getRow, 
+  getRows, 
+  deleteRow, 
+  incrementField,
+  incrementFields,
+  subscribeToTable, 
+  subscribeToRow,
+  uploadFile 
+} from './lib/database';
 import { sanitizeAndTrim } from './utils/sanitize';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
 
 interface GlobalUpload {
   id: string;
@@ -142,17 +128,12 @@ function buildFirestoreErrorInfo(error: unknown, operationType: OperationType, p
   return {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
+      userId: undefined,
+      email: undefined,
+      emailVerified: undefined,
+      isAnonymous: undefined,
+      tenantId: undefined,
+      providerInfo: []
     },
     operationType,
     path
@@ -584,62 +565,56 @@ export default function App() {
     }
   }, [isLoggedIn, view]);
 
-  // --- Firebase Sync ---
+  // --- Supabase Sync ---
   useEffect(() => {
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
+    const unsubs: (() => void)[] = [];
+
+    // Auth state listener
+    const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (session?.user) {
+        const supaUser = session.user;
         setIsLoggedIn(true);
-        if (!firebaseUser.emailVerified) {
-          setNeedsEmailVerification(true);
-        } else {
-          setNeedsEmailVerification(false);
-        }
-        // Sync User Data
-        const userRef = doc(db, 'users', firebaseUser.uid);
-        const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data() as UserProfile;
-            
+        setNeedsEmailVerification(!supaUser.email_confirmed_at);
+
+        // Subscribe to user profile
+        const unsubUser = subscribeToRow<UserProfile>('users', supaUser.id, async (data) => {
+          if (data) {
             // Check suspension expiry
             if (data.status === 'suspended' && data.suspensionUntil) {
               const expiry = new Date(data.suspensionUntil);
               if (new Date() > expiry) {
-                updateDoc(userRef, { status: 'active', restrictionReason: '', suspensionUntil: '' });
+                await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => {});
               }
             }
-
-            // Admin Self-Healing: Ensure the owner account is never restricted
+            // Admin Self-Healing
             if (data.email === 'soruvislam51@gmail.com' && data.status !== 'active') {
-              updateDoc(userRef, { status: 'active', restrictionReason: '', suspensionUntil: '' });
+              await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => {});
             }
-            
             setUser(data);
           } else {
             // New user - create profile
             const newUser: UserProfile = {
               ...INITIAL_USER,
-              id: firebaseUser.uid,
-              name: firebaseUser.displayName || 'User',
-              email: firebaseUser.email || '',
+              id: supaUser.id,
+              name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || 'User',
+              email: supaUser.email || '',
             };
-            setDoc(userRef, newUser).catch(e => handleListenerError(e, OperationType.WRITE, `users/${firebaseUser.uid}`));
+            await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
           }
-        }, (e) => handleListenerError(e, OperationType.GET, `users/${firebaseUser.uid}`));
-        
+        });
+        unsubs.push(unsubUser);
         setIsAuthReady(true);
-        return () => unsubscribeUser();
       } else {
         setIsLoggedIn(false);
         setView('login');
         setIsAuthReady(true);
       }
     });
+    unsubs.push(() => authSub.unsubscribe());
 
     // Sync Global Settings
-    const settingsRef = doc(db, 'settings', 'global');
-    const unsubscribeSettings = onSnapshot(settingsRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
+    const unsubSettings = subscribeToRow<any>('settings', 'global', (data) => {
+      if (data) {
         setGlobalNotice(data.globalNotice);
         setIsMaintenance(data.isMaintenance);
         setMinWithdrawal(data.minWithdrawal || 55);
@@ -668,129 +643,48 @@ export default function App() {
         setReferralCommissionRate(data.referralCommissionRate || 5);
         setReferralActivationBonus(data.referralActivationBonus || 20);
       }
-    }, (e) => handleListenerError(e, OperationType.GET, 'settings/global'));
+    });
+    unsubs.push(unsubSettings);
 
-    // Sync Dynamic Tasks
-    const tasksRef = collection(db, 'tasks');
-    const unsubscribeTasks = onSnapshot(tasksRef, (snapshot) => {
-      const tasksList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-      setDynamicTasks(tasksList);
-    }, (e) => handleListenerError(e, OperationType.GET, 'tasks'));
+    // Sync all collection tables
+    unsubs.push(subscribeToTable<any>('tasks', (rows) => setDynamicTasks(rows)));
+    unsubs.push(subscribeToTable<GmailSubmission>('gmailSubmissions', (rows) => setGmailSubmissions(rows)));
+    unsubs.push(subscribeToTable<MicrojobSubmission>('microjobSubmissions', (rows) => setMicrojobSubmissions(rows)));
+    unsubs.push(subscribeToTable<TaskSubmission>('taskSubmissions', (rows) => setTaskSubmissions(rows)));
+    unsubs.push(subscribeToTable<SubscriptionRequest>('subscriptionRequests', (rows) => setSubscriptionRequests(rows)));
+    unsubs.push(subscribeToTable<any>('withdrawals', (rows) => setWithdrawals(rows)));
+    unsubs.push(subscribeToTable<DollarBuyRequest>('dollarBuyRequests', (rows) => setDollarBuyRequests(rows)));
+    unsubs.push(subscribeToTable<UserMessage>('messages', (rows) => setUserMessages(rows)));
+    unsubs.push(subscribeToTable<RechargeRequest>('rechargeRequests', (rows) => setRechargeRequests(rows)));
+    unsubs.push(subscribeToTable<DriveOffer>('driveOffers', (rows) => setDriveOffers(rows)));
+    unsubs.push(subscribeToTable<DriveOfferRequest>('driveOfferRequests', (rows) => setDriveOfferRequests(rows)));
+    unsubs.push(subscribeToTable<Product>('products', (rows) => setProducts(rows)));
+    unsubs.push(subscribeToTable<ProductOrder>('productOrders', (rows) => setProductOrders(rows)));
+    unsubs.push(subscribeToTable<LudoTournament>('ludoTournaments', (rows) => setLudoTournaments(rows)));
+    unsubs.push(subscribeToTable<LudoSubmission>('ludoSubmissions', (rows) => setLudoSubmissions(rows)));
+    unsubs.push(subscribeToTable<SocialSubmission>('socialSubmissions', (rows) => setAllSocialSubmissions(rows)));
+    unsubs.push(subscribeToTable<SmmOrder>('smmOrders', (rows) => setSmmOrders(rows)));
+    unsubs.push(subscribeToTable<UserProfile>('users', (rows) => setAllUsers(rows)));
+    unsubs.push(subscribeToTable<NewsPost>('newsPosts', (rows) => setNewsPosts(rows), { orderBy: { column: 'timestamp', ascending: false } }));
+    unsubs.push(subscribeToTable<GlobalUpload>('uploads', (rows) => setAllUploads(rows), { orderBy: { column: 'timestamp', ascending: false } }));
 
-    // Sync Submissions
-    const gmailUnsubscribe = onSnapshot(collection(db, 'gmailSubmissions'), (snap) => {
-      setGmailSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as GmailSubmission)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'gmailSubmissions'));
-
-    const microjobUnsubscribe = onSnapshot(collection(db, 'microjobSubmissions'), (snap) => {
-      setMicrojobSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as MicrojobSubmission)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'microjobSubmissions'));
-
-    const taskUnsubscribe = onSnapshot(collection(db, 'taskSubmissions'), (snap) => {
-      setTaskSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as TaskSubmission)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'taskSubmissions'));
-
-    const subRequestsUnsubscribe = onSnapshot(collection(db, 'subscriptionRequests'), (snap) => {
-      setSubscriptionRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SubscriptionRequest)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'subscriptionRequests'));
-
-    const withdrawalUnsubscribe = onSnapshot(collection(db, 'withdrawals'), (snap) => {
-      setWithdrawals(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as any)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'withdrawals'));
-
-    const dollarBuyUnsubscribe = onSnapshot(collection(db, 'dollarBuyRequests'), (snap) => {
-      setDollarBuyRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DollarBuyRequest)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'dollarBuyRequests'));
-
-    const messageUnsubscribe = onSnapshot(collection(db, 'messages'), (snap) => {
-      setUserMessages(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserMessage)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'messages'));
-
-    const rechargeUnsubscribe = onSnapshot(collection(db, 'rechargeRequests'), (snap) => {
-      setRechargeRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as RechargeRequest)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'rechargeRequests'));
-
-    const driveOffersUnsubscribe = onSnapshot(collection(db, 'driveOffers'), (snap) => {
-      setDriveOffers(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DriveOffer)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'driveOffers'));
-
-    const driveOfferRequestsUnsubscribe = onSnapshot(collection(db, 'driveOfferRequests'), (snap) => {
-      setDriveOfferRequests(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as DriveOfferRequest)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'driveOfferRequests'));
-
-    const productsUnsubscribe = onSnapshot(collection(db, 'products'), (snap) => {
-      setProducts(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as Product)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'products'));
-
-    const productOrdersUnsubscribe = onSnapshot(collection(db, 'productOrders'), (snap) => {
-      setProductOrders(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as ProductOrder)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'productOrders'));
-
-    const ludoTournamentsUnsubscribe = onSnapshot(collection(db, 'ludoTournaments'), (snap) => {
-      setLudoTournaments(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as LudoTournament)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'ludoTournaments'));
-
-    const ludoSubmissionsUnsubscribe = onSnapshot(collection(db, 'ludoSubmissions'), (snap) => {
-      setLudoSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as LudoSubmission)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'ludoSubmissions'));
-
-    const socialSubmissionsUnsubscribe = onSnapshot(collection(db, 'socialSubmissions'), (snap) => {
-      setAllSocialSubmissions(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SocialSubmission)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'socialSubmissions'));
-
-    const smmOrdersUnsubscribe = onSnapshot(collection(db, 'smmOrders'), (snap) => {
-      setSmmOrders(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as SmmOrder)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'smmOrders'));
-
-    const usersUnsubscribe = onSnapshot(collection(db, 'users'), (snap) => {
-      setAllUsers(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as UserProfile)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'users'));
-
-    const newsUnsubscribe = onSnapshot(query(collection(db, 'newsPosts'), orderBy('timestamp', 'desc')), (snap) => {
-      setNewsPosts(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as NewsPost)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'newsPosts'));
-
-    const uploadsUnsubscribe = onSnapshot(query(collection(db, 'uploads'), orderBy('timestamp', 'desc')), (snap) => {
-      setAllUploads(snap.docs.map(doc => ({ ...doc.data(), id: doc.id } as GlobalUpload)));
-    }, (e) => handleListenerError(e, OperationType.GET, 'uploads'));
-
-    return () => {
-      unsubscribeAuth();
-      unsubscribeSettings();
-      gmailUnsubscribe();
-      microjobUnsubscribe();
-      taskUnsubscribe();
-      withdrawalUnsubscribe();
-      messageUnsubscribe();
-      rechargeUnsubscribe();
-      driveOffersUnsubscribe();
-      driveOfferRequestsUnsubscribe();
-      productsUnsubscribe();
-      productOrdersUnsubscribe();
-      subRequestsUnsubscribe();
-      ludoTournamentsUnsubscribe();
-      ludoSubmissionsUnsubscribe();
-      smmOrdersUnsubscribe();
-      usersUnsubscribe();
-      newsUnsubscribe();
-      uploadsUnsubscribe();
-    };
+    return () => unsubs.forEach(fn => fn());
   }, []);
 
   // --- Global Image Upload Handler ---
   const uploadImage = async (file: File, context: string = 'general'): Promise<string> => {
-    if (!auth.currentUser) throw new Error('User not authenticated');
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) throw new Error('User not authenticated');
     
     const fileName = `${Date.now()}-${file.name}`;
-    const storageRef = ref(storage, `uploads/${auth.currentUser.uid}/${fileName}`);
+    const filePath = `${currentUser.id}/${fileName}`;
     
     try {
-      const snapshot = await uploadBytes(storageRef, file);
-      const url = await getDownloadURL(snapshot.ref);
+      const url = await uploadFile(file, filePath);
       
-      // Save to Firestore uploads collection for admin tracking
-      await addDoc(collection(db, 'uploads'), {
-        userId: auth.currentUser.uid,
+      // Save to uploads table for admin tracking
+      await insertRow('uploads', {
+        userId: currentUser.id,
         userName: user.name,
         url,
         context,
@@ -826,8 +720,8 @@ export default function App() {
         try {
           const url = await uploadImage(file, context);
           
-          if (context === 'profile' && auth.currentUser) {
-            await updateDoc(doc(db, 'users', auth.currentUser.uid), {
+          if (context === 'profile' && user.id) {
+            await updateRow('users', user.id, {
               profilePic: url
             });
           }
@@ -867,31 +761,36 @@ export default function App() {
 
     try {
       // First check if referral code is valid
-      const usersRef = collection(db, 'users');
-      const qRef = query(usersRef, where('numericId', '==', regData.refCode));
-      const refSnap = await getDocs(qRef);
       
-      if (refSnap.empty) {
+      
+      const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
+      
+      if (!refSnap || refSnap.length === 0) {
         alert('Invalid Referral Code. Registration requires a valid code.');
         return;
       }
 
-      const referrerDoc = refSnap.docs[0];
+      const referrerDoc = refSnap[0];
       const referrerId = referrerDoc.id;
 
-      const result = await createUserWithEmailAndPassword(auth, regData.email, regData.password);
-      await sendEmailVerification(result.user);
+      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
+        email: regData.email,
+        password: regData.password,
+        options: {
+          data: { full_name: regData.name }
+        }
+      });
+      if (signUpError) throw signUpError;
+      if (!signUpData.user) throw new Error('Registration failed');
       
       // Generate unique referral code (numeric ID)
       const generateNumericId = () => {
         return Math.floor(100000 + Math.random() * 900000).toString();
       };
       
-      const userRef = doc(db, 'users', result.user.uid);
-      
       const newUser: UserProfile = {
         ...INITIAL_USER,
-        id: result.user.uid,
+        id: signUpData.user.id,
         numericId: generateNumericId(),
         name: regData.name,
         email: regData.email,
@@ -902,13 +801,10 @@ export default function App() {
         referredBy: referrerId,
       };
 
-      await setDoc(userRef, newUser);
+      await upsertRow('users', newUser as any);
 
       // Increment gen1 count for referrer immediately
-      const referrerRef = doc(db, 'users', referrerId);
-      await updateDoc(referrerRef, {
-        gen1Count: increment(1)
-      });
+      await incrementField('users', referrerId, 'gen1Count', 1);
 
       setNeedsEmailVerification(true);
       alert('Registration successful! Please check your email for verification.');
@@ -933,19 +829,21 @@ export default function App() {
 
       // If input is not an email, assume it's a phone number and find associated email
       if (!loginEmail.includes('@')) {
-        const usersRef = collection(db, 'users');
-        const q = query(usersRef, where('phone', '==', loginEmail));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          emailToUse = snap.docs[0].data().email;
+        const phoneResults = await getRows('users', [{ column: 'phone', value: loginEmail }]);
+        if (phoneResults && phoneResults.length > 0) {
+          emailToUse = phoneResults[0].email;
         } else {
           alert('No account found with this phone number.');
           return;
         }
       }
 
-      const result = await signInWithEmailAndPassword(auth, emailToUse, loginPassword);
-      if (!result.user.emailVerified) {
+      const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+        email: emailToUse,
+        password: loginPassword,
+      });
+      if (loginError) throw loginError;
+      if (!loginData.user?.email_confirmed_at) {
         setNeedsEmailVerification(true);
       } else {
         setShowWelcome(true);
@@ -959,65 +857,13 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      const provider = new GoogleAuthProvider();
-      const result = await signInWithPopup(auth, provider);
-      const firebaseUser = result.user;
+      const { error: googleError } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: window.location.origin }
+      });
+      if (googleError) throw googleError;
       
-      const userRef = doc(db, 'users', firebaseUser.uid);
-      const userSnap = await getDoc(userRef);
-      
-      if (!userSnap.exists()) {
-        // Generate unique numeric ID
-        const generateNumericId = () => {
-          return Math.floor(100000 + Math.random() * 900000).toString();
-        };
-
-        // If we were in registration mode, use that data
-        const newUser: UserProfile = {
-          ...INITIAL_USER,
-          id: firebaseUser.uid,
-          numericId: generateNumericId(),
-          name: isRegistering ? regData.name : (firebaseUser.displayName || 'User'),
-          email: firebaseUser.email || '',
-          phone: isRegistering ? regData.phone : '',
-          country: isRegistering ? regData.country : 'Bangladesh',
-          age: 0,
-          referralCode: '',
-        };
-        await setDoc(userRef, newUser);
-
-        // Process Referral
-        if (isRegistering && regData.refCode) {
-          try {
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('numericId', '==', regData.refCode));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
-              const referrerDoc = querySnapshot.docs[0];
-              const referrerData = referrerDoc.data() as UserProfile;
-              const referrerRef = doc(db, 'users', referrerDoc.id);
-              
-              await updateDoc(referrerRef, {
-                mainBalance: referrerData.mainBalance + 20,
-                totalEarned: referrerData.totalEarned + 20,
-                gen1Count: referrerData.gen1Count + 1,
-                notifications: [
-                  { 
-                    id: Date.now().toString(), 
-                    text: `New Referral Bonus! You earned ৳ 20 from ${newUser.name}.`, 
-                    date: new Date().toISOString().split('T')[0] 
-                  },
-                  ...referrerData.notifications
-                ]
-              });
-            }
-          } catch (refError) {
-            console.error('Referral Processing Error:', refError);
-          }
-        }
-      }
-      
+      // After OAuth redirect, the onAuthStateChange listener handles user creation
       setShowWelcome(true);
       setView('home');
     } catch (error) {
@@ -1029,10 +875,10 @@ export default function App() {
   const claimDaily = async () => {
     if (user.dailyClaimed) return;
     try {
-      const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, {
-        mainBalance: increment(dailyReward),
-        totalEarned: increment(dailyReward),
+      const userRef_id = user.id;
+      await updateRow('users', userRef_id, {
+        mainBalance: dailyReward,
+        totalEarned: dailyReward,
         dailyClaimed: true
       });
       confetti({ particleCount: 100, spread: 70 });
@@ -1055,10 +901,10 @@ export default function App() {
       const win = prizes[Math.floor(Math.random() * prizes.length)];
       
       try {
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-spinCost + win),
-          totalEarned: increment(win)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -spinCost + win,
+          totalEarned: win
         });
         
         setIsSpinning(false);
@@ -1075,7 +921,7 @@ export default function App() {
     if (!chatMessage.trim()) return;
     try {
       const sanitizedMessage = sanitizeAndTrim(chatMessage, 1000);
-      await addDoc(collection(db, 'messages'), {
+      await insertRow('messages', {
         userId: user.id,
         userName: sanitizeAndTrim(user.name, 100),
         text: sanitizedMessage,
@@ -1090,7 +936,7 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    auth.signOut();
+    supabase.auth.signOut();
     setIsLoggedIn(false);
     setView('login');
     confetti({ particleCount: 50, spread: 60 });
@@ -1655,7 +1501,7 @@ export default function App() {
           </a>
           <button 
             onClick={() => {
-              auth.signOut();
+              supabase.auth.signOut();
               setView('login');
             }}
             className="block w-full bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 active:scale-95 transition-all"
@@ -1919,7 +1765,7 @@ export default function App() {
         : [...post.likes, user.id];
 
       try {
-        await updateDoc(doc(db, 'newsPosts', postId), { likes: newLikes });
+        await updateRow('newsPosts', postId, { likes: newLikes });
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `newsPosts/${postId}`);
       }
@@ -1941,7 +1787,7 @@ export default function App() {
       };
 
       try {
-        await updateDoc(doc(db, 'newsPosts', postId), {
+        await updateRow('newsPosts', postId, {
           comments: [...post.comments, comment]
         });
         setNewComment({ ...newComment, [postId]: '' });
@@ -2488,12 +2334,12 @@ export default function App() {
           transactionId: 'TXN-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
 
-        await addDoc(collection(db, 'withdrawals'), withdrawalData);
+        await insertRow('withdrawals', withdrawalData);
         
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-val),
-          pendingPayout: increment(val)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -val,
+          pendingPayout: val
         });
 
         setLastWithdrawal(withdrawalData);
@@ -2532,7 +2378,7 @@ export default function App() {
           timestamp: Date.now()
         };
 
-        await addDoc(collection(db, 'rechargeRequests'), depositData);
+        await insertRow('rechargeRequests', depositData);
         
         setAmount('');
         setMethod(null);
@@ -2936,7 +2782,7 @@ export default function App() {
     const sendMessage = async () => {
       if (!msg.trim()) return;
       try {
-        await addDoc(collection(db, 'messages'), {
+        await insertRow('messages', {
           userId: user.id,
           userName: user.name,
           text: msg,
@@ -3099,7 +2945,7 @@ export default function App() {
           status: 'pending',
           date: new Date().toLocaleString()
         };
-        await addDoc(collection(db, 'microjobSubmissions'), newSub);
+        await insertRow('microjobSubmissions', newSub as any);
         setStep('success');
       }, 'Microjob submitted successfully!');
     };
@@ -3386,7 +3232,7 @@ export default function App() {
           reward: selectedTask.reward || 2.00,
           taskId: selectedTask.id
         };
-        await addDoc(collection(db, 'taskSubmissions'), newSub);
+        await insertRow('taskSubmissions', newSub as any);
         setStep('success');
       }, 'Proof submitted successfully!');
     };
@@ -3644,7 +3490,7 @@ export default function App() {
           date: new Date().toLocaleString(),
           reward: selectedTask ? selectedTask.reward : gmailReward
         };
-        await addDoc(collection(db, 'gmailSubmissions'), newSub);
+        await insertRow('gmailSubmissions', newSub as any);
         setEmail('');
         setStep('success');
       }, 'Gmail submitted successfully!');
@@ -4169,12 +4015,12 @@ export default function App() {
           timestamp: Date.now(),
           transactionId: 'REC-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
-        await addDoc(collection(db, 'rechargeRequests'), rechargeData);
+        await insertRow('rechargeRequests', rechargeData);
         
         // Deduct balance
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-amt)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -amt
         });
 
         setLastRecharge(rechargeData);
@@ -4388,12 +4234,12 @@ export default function App() {
           timestamp: Date.now(),
           transactionId: 'DRV-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
-        await addDoc(collection(db, 'driveOfferRequests'), offerData);
+        await insertRow('driveOfferRequests', offerData);
         
         // Deduct balance
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-selectedOffer.price)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -selectedOffer.price
         });
 
         setLastOffer(offerData);
@@ -4625,12 +4471,12 @@ export default function App() {
           orderId: 'ORD-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
 
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-deliveryFee)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -deliveryFee
         });
 
-        await addDoc(collection(db, 'productOrders'), orderData);
+        await insertRow('productOrders', orderData);
 
         setLastOrder(orderData);
         setStep('success');
@@ -4899,11 +4745,11 @@ export default function App() {
           orderId: 'BUY-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
 
-        await addDoc(collection(db, 'dollarBuyRequests'), buyData);
+        await insertRow('dollarBuyRequests', buyData);
         
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-totalPrice)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -totalPrice
         });
 
         setLastBuy(buyData);
@@ -5061,8 +4907,8 @@ export default function App() {
             onClick={() => {
               confetti({ particleCount: 100, spread: 70 });
               alert('You claimed a FREE gift! +৳ 5.00 added to your balance.');
-              const userRef = doc(db, 'users', user.id);
-              updateDoc(userRef, { mainBalance: increment(5) });
+              const userRef_id = user.id;
+              updateRow('users', userRef_id, { mainBalance: 5 });
             }}
             className="glass-card p-6 flex items-center justify-between border-amber-200 bg-amber-50/50 shadow-lg group relative overflow-hidden cursor-pointer active:scale-95 transition-all"
           >
@@ -5135,7 +4981,7 @@ export default function App() {
           date: new Date().toISOString()
         };
 
-        await addDoc(collection(db, 'socialSubmissions'), submission);
+        await insertRow('socialSubmissions', submission as any);
         alert('Submission successful! Please wait for admin approval.');
         setView('social-hub');
       } catch (e) {
@@ -5325,7 +5171,7 @@ export default function App() {
           transactionId: 'SEL-' + Math.random().toString(36).substr(2, 9).toUpperCase()
         };
 
-        await addDoc(collection(db, 'withdrawals'), sellData);
+        await insertRow('withdrawals', sellData);
         setLastSell(sellData);
         setStep('success');
       }, 'Dollar sell request submitted successfully!');
@@ -5549,10 +5395,10 @@ export default function App() {
         newAdWatches.push({ ...todayWatch, count: newCount });
         
         try {
-          const userRef = doc(db, 'users', user.id);
-          await updateDoc(userRef, {
-            mainBalance: increment(adReward),
-            totalEarned: increment(adReward),
+          const userRef_id = user.id;
+          await updateRow('users', userRef_id, {
+            mainBalance: adReward,
+            totalEarned: adReward,
             adWatches: newAdWatches
           });
           confetti({ particleCount: 50, spread: 60 });
@@ -5666,9 +5512,9 @@ export default function App() {
       const expiryDate = new Date();
       expiryDate.setDate(expiryDate.getDate() + activationDuration);
 
-      const userRef = doc(db, 'users', user.id);
-      await updateDoc(userRef, {
-        mainBalance: increment(-activationFee),
+      const userRef_id = user.id;
+      await updateRow('users', userRef_id, {
+        mainBalance: -activationFee,
         isActive: true,
         activationDate: new Date().toISOString(),
         activationExpiry: expiryDate.toISOString(),
@@ -5684,14 +5530,14 @@ export default function App() {
 
       // Referral Bonus on Activation
       if (user.referredBy) {
-        const referrerRef = doc(db, 'users', user.referredBy);
-        const referrerSnap = await getDoc(referrerRef);
+        const referrerRef_id = user.referredBy;
+        const referrerSnap = await getRow('users', referrerRef_id);
         if (referrerSnap.exists()) {
           const referrerData = referrerSnap.data() as UserProfile;
-          await updateDoc(referrerRef, {
-            mainBalance: increment(referralActivationBonus),
-            totalEarned: increment(referralActivationBonus),
-            referralActiveCount: increment(1),
+          await updateRow('users', referrerRef_id, {
+            mainBalance: referralActivationBonus,
+            totalEarned: referralActivationBonus,
+            referralActiveCount: 1,
             notifications: [
               { 
                 id: Date.now().toString(), 
@@ -5863,15 +5709,15 @@ export default function App() {
 
       try {
         setIsSubmitting(true);
-        const userRef = doc(db, 'users', user.id);
-        const tournamentRef = doc(db, 'ludoTournaments', tournament.id);
+        const userRef_id = user.id;
+        // admin op: ludoTournaments
 
-        await updateDoc(userRef, {
-          mainBalance: increment(-tournament.entryFee)
+        await updateRow('users', userRef_id, {
+          mainBalance: -tournament.entryFee
         });
 
-        await updateDoc(tournamentRef, {
-          currentPlayers: increment(1),
+        await updateRow('ludoTournaments', tournament.id, {
+          currentPlayers: 1,
           playerIds: [...(tournament.playerIds || []), user.id]
         });
 
@@ -5891,7 +5737,7 @@ export default function App() {
 
       try {
         setIsSubmitting(true);
-        await addDoc(collection(db, 'ludoSubmissions'), {
+        await insertRow('ludoSubmissions', {
           userId: user.id,
           userName: user.name,
           ludoUsername: ludoUsername,
@@ -6291,13 +6137,13 @@ export default function App() {
         const orderId = Math.random().toString(36).substr(2, 9).toUpperCase();
         
         // Deduct balance
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-amount)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -amount
         });
 
         // Create order
-        await addDoc(collection(db, 'smmOrders'), {
+        await insertRow('smmOrders', {
           id: orderId,
           userId: user.id,
           userName: user.name,
@@ -6559,12 +6405,12 @@ export default function App() {
         };
 
         // Deduct balance
-        const userRef = doc(db, 'users', user.id);
-        await updateDoc(userRef, {
-          mainBalance: increment(-price)
+        const userRef_id = user.id;
+        await updateRow('users', userRef_id, {
+          mainBalance: -price
         });
 
-        await addDoc(collection(db, 'subscriptionRequests'), newReq);
+        await insertRow('subscriptionRequests', newReq as any);
         setStep('success');
       }, 'Subscription request submitted successfully!');
     };
@@ -6981,7 +6827,7 @@ export default function App() {
     const postNews = async () => {
       if (!newNews.content.trim()) return;
       try {
-        await addDoc(collection(db, 'newsPosts'), {
+        await insertRow('newsPosts', {
           authorName: 'Owner',
           authorBadge: true,
           content: newNews.content.trim(),
@@ -7016,8 +6862,8 @@ export default function App() {
       }
 
       try {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, { 
+        const userRef_id = userId;
+        await updateRow('users', userRef_id, { 
           status, 
           restrictionReason: reason,
           suspensionUntil
@@ -7043,8 +6889,8 @@ export default function App() {
       try {
         let count = 0;
         for (const u of suspendedUsers) {
-          const userRef = doc(db, 'users', u.id);
-          await updateDoc(userRef, { 
+          const userRef_id = u.id;
+          await updateRow('users', userRef_id, { 
             status: 'active', 
             restrictionReason: '',
             suspensionUntil: ''
@@ -7063,21 +6909,21 @@ export default function App() {
 
     const processReferralCommission = async (userId: string, amount: number, source: string) => {
       try {
-        const userRef = doc(db, 'users', userId);
-        const userSnap = await getDoc(userRef);
+        const userRef_id = userId;
+        const userSnap = await getRow('users', userRef_id);
         if (userSnap.exists()) {
           const userData = userSnap.data() as UserProfile;
           if (userData.referredBy) {
-            const referrerRef = doc(db, 'users', userData.referredBy);
-            const referrerSnap = await getDoc(referrerRef);
+            const referrerRef_id = userData.referredBy;
+            const referrerSnap = await getRow('users', referrerRef_id);
             if (referrerSnap.exists()) {
               const referrerData = referrerSnap.data() as UserProfile;
               const commission = (amount * referralCommissionRate) / 100;
               if (commission > 0) {
-                await updateDoc(referrerRef, {
-                  mainBalance: increment(commission),
-                  totalEarned: increment(commission),
-                  totalCommission: increment(commission),
+                await updateRow('users', referrerRef_id, {
+                  mainBalance: commission,
+                  totalEarned: commission,
+                  totalCommission: commission,
                   notifications: [
                     { 
                       id: Date.now().toString(), 
@@ -7102,8 +6948,8 @@ export default function App() {
 
     const saveChanges = async () => {
       try {
-        const settingsRef = doc(db, 'settings', 'global');
-        await setDoc(settingsRef, {
+        const settingsRef_id = 'global';
+        await upsertRow('settings', {
           globalNotice: notice,
           isMaintenance: adminMaintenance,
           minWithdrawal: adminMinWithdrawal,
@@ -7139,8 +6985,8 @@ export default function App() {
           referralActivationBonus: adminReferralActivationBonus
         });
 
-        const userRef = doc(db, 'users', adminUser.id);
-        await setDoc(userRef, adminUser);
+        const userRef_id = adminUser.id;
+        await upsertRow('users', adminUser);
 
         confetti({ particleCount: 150, spread: 70 });
         alert('All changes saved and applied successfully!');
@@ -7152,18 +6998,18 @@ export default function App() {
     const handleGmailAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid account' : undefined;
       try {
-        const subRef = doc(db, 'gmailSubmissions', id);
-        await updateDoc(subRef, { status: action, reason });
+        // table: gmailSubmissions, id: id
+        await updateRow('gmailSubmissions', id, { status: action, reason });
         
         if (action === 'approved') {
           const s = gmailSubmissions.find(s => s.id === id);
           if (s) {
             const reward = s.reward || gmailReward;
-            const userRef = doc(db, 'users', s.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = s.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + reward,
                 totalEarned: userData.totalEarned + reward
               });
@@ -7180,20 +7026,20 @@ export default function App() {
     const handleMicrojobAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Incomplete work' : undefined;
       try {
-        const subRef = doc(db, 'microjobSubmissions', id);
-        await updateDoc(subRef, { status: action, reason });
+        // table: microjobSubmissions, id: id
+        await updateRow('microjobSubmissions', id, { status: action, reason });
         
         if (action === 'approved') {
           const s = microjobSubmissions.find(s => s.id === id);
           if (s) {
-            const userRef = doc(db, 'users', s.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = s.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
               // Find the task to get the reward
               const task = dynamicTasks.find(t => t.id === s.microjobId || t.title === s.microjobId);
               const reward = task ? task.reward : 5.00;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + reward,
                 totalEarned: userData.totalEarned + reward
               });
@@ -7242,18 +7088,18 @@ export default function App() {
     const handleTaskAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Proof not valid' : undefined;
       try {
-        const subRef = doc(db, 'taskSubmissions', id);
-        await updateDoc(subRef, { status: action, reason });
+        // table: taskSubmissions, id: id
+        await updateRow('taskSubmissions', id, { status: action, reason });
         
         if (action === 'approved') {
           const s = taskSubmissions.find(s => s.id === id);
           if (s) {
             const reward = s.reward || 2.00;
-            const userRef = doc(db, 'users', s.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = s.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + reward,
                 totalEarned: userData.totalEarned + reward
               });
@@ -7271,17 +7117,17 @@ export default function App() {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : undefined;
       
       try {
-        const withdrawRef = doc(db, 'withdrawals', id);
-        await updateDoc(withdrawRef, { status: action, reason });
+        // admin op: withdrawals
+        await updateRow('withdrawals', id, { status: action, reason });
 
         const w = withdrawals.find(w => w.id === id);
         if (w) {
-          const userRef = doc(db, 'users', w.userId);
-          const userSnap = await getDoc(userRef);
+          const userRef_id = w.userId;
+          const userSnap = await getRow('users', userRef_id);
           if (userSnap.exists()) {
             const userData = userSnap.data() as UserProfile;
             if (action === 'approved') {
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
                 notifications: [
                   { id: Date.now().toString(), text: `Withdrawal Approved: ৳${w.amount}`, date: new Date().toISOString().split('T')[0] },
@@ -7289,7 +7135,7 @@ export default function App() {
                 ]
               });
             } else {
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + w.amount,
                 pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
                 notifications: [
@@ -7309,18 +7155,18 @@ export default function App() {
     const handleRechargeAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
       try {
-        const reqRef = doc(db, 'rechargeRequests', id);
-        await updateDoc(reqRef, { status: action, reason });
+        // admin op: rechargeRequests
+        await updateRow('rechargeRequests', id, { status: action, reason });
         
         const r = rechargeRequests.find(r => r.id === id);
         if (r) {
-          const userRef = doc(db, 'users', r.userId);
-          const userSnap = await getDoc(userRef);
+          const userRef_id = r.userId;
+          const userSnap = await getRow('users', userRef_id);
           if (userSnap.exists()) {
             const userData = userSnap.data() as UserProfile;
             if (action === 'approved') {
               // For deposits, we ADD to balance when approved
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + r.amount,
                 totalEarned: userData.totalEarned + r.amount,
                 notifications: [
@@ -7330,7 +7176,7 @@ export default function App() {
               });
             } else {
               // For deposits, if rejected, we just notify
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 notifications: [
                   { id: Date.now().toString(), text: `Deposit Rejected: ${reason}`, date: new Date().toISOString().split('T')[0] },
                   ...userData.notifications
@@ -7348,17 +7194,17 @@ export default function App() {
     const handleDriveOfferRequestAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
       try {
-        const reqRef = doc(db, 'driveOfferRequests', id);
-        await updateDoc(reqRef, { status: action, reason });
+        // admin op: driveOfferRequests
+        await updateRow('driveOfferRequests', id, { status: action, reason });
         
         if (action === 'rejected') {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
-            const userRef = doc(db, 'users', r.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = r.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + r.amount
               });
             }
@@ -7373,17 +7219,17 @@ export default function App() {
     const handleSmmAction = async (id: string, action: 'processing' | 'completed' | 'cancelled') => {
       const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Invalid link' : undefined;
       try {
-        const orderRef = doc(db, 'smmOrders', id);
-        await updateDoc(orderRef, { status: action });
+        // admin op: smmOrders
+        await updateRow('smmOrders', id, { status: action });
         
         if (action === 'cancelled') {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
-            const userRef = doc(db, 'users', o.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = o.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + o.amount,
                 notifications: [
                   { id: Date.now().toString(), text: `SMM Order Cancelled: ${reason}. Refunded ৳${o.amount}`, date: new Date().toISOString().split('T')[0] },
@@ -7402,17 +7248,17 @@ export default function App() {
     const handleDollarBuyAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
       try {
-        const reqRef = doc(db, 'dollarBuyRequests', id);
-        await updateDoc(reqRef, { status: action, reason });
+        // admin op: dollarBuyRequests
+        await updateRow('dollarBuyRequests', id, { status: action, reason });
         
         if (action === 'rejected') {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
-            const userRef = doc(db, 'users', r.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = r.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + r.price
               });
             }
@@ -7432,7 +7278,7 @@ export default function App() {
         category: "Electronics"
       };
       try {
-        await addDoc(collection(db, 'products'), { ...sample, image: '' });
+        await insertRow('products', { ...sample, image: '' });
         confetti({ particleCount: 100, spread: 70 });
       } catch (e) {
         handleFirestoreError(e, OperationType.CREATE, 'products');
@@ -7445,7 +7291,7 @@ export default function App() {
         return;
       }
       try {
-        await addDoc(collection(db, 'products'), { ...newProduct, image: '' });
+        await insertRow('products', { ...newProduct, image: '' });
         setNewProduct({ name: '', price: 0, description: '', category: '' });
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
@@ -7456,7 +7302,7 @@ export default function App() {
     const deleteProduct = async (id: string) => {
       if (!confirm('Delete this product?')) return;
       try {
-        await deleteDoc(doc(db, 'products', id));
+        await deleteRow('products', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `products/${id}`);
       }
@@ -7465,17 +7311,17 @@ export default function App() {
     const handleProductOrderAction = async (id: string, action: 'processing' | 'shipped' | 'delivered' | 'cancelled') => {
       const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Out of stock' : undefined;
       try {
-        const orderRef = doc(db, 'productOrders', id);
-        await updateDoc(orderRef, { status: action, reason });
+        // admin op: productOrders
+        await updateRow('productOrders', id, { status: action, reason });
         
         if (action === 'cancelled') {
           const o = productOrders.find(o => o.id === id);
           if (o) {
-            const userRef = doc(db, 'users', o.userId);
-            const userSnap = await getDoc(userRef);
+            const userRef_id = o.userId;
+            const userSnap = await getRow('users', userRef_id);
             if (userSnap.exists()) {
               const userData = userSnap.data() as UserProfile;
-              await updateDoc(userRef, {
+              await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + o.amount
               });
             }
@@ -7490,7 +7336,7 @@ export default function App() {
     const addDriveOffer = async () => {
       if (!newDriveOffer.title || !newDriveOffer.price) return;
       try {
-        await addDoc(collection(db, 'driveOffers'), newDriveOffer);
+        await insertRow('driveOffers', newDriveOffer);
         setNewDriveOffer({ title: '', operator: 'GP', price: 0, description: '' });
         alert('Drive offer added successfully!');
       } catch (e) {
@@ -7500,7 +7346,7 @@ export default function App() {
 
     const deleteDriveOffer = async (id: string) => {
       try {
-        await deleteDoc(doc(db, 'driveOffers', id));
+        await deleteRow('driveOffers', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `driveOffers/${id}`);
       }
@@ -7527,7 +7373,7 @@ export default function App() {
     const addTask = async () => {
       if (!newTask.title || !newTask.link) return;
       try {
-        await addDoc(collection(db, 'tasks'), newTask);
+        await insertRow('tasks', newTask);
         setNewTask({ title: '', reward: 0, desc: '', link: '', category: 'micro' });
         alert('Task added successfully!');
       } catch (e) {
@@ -7537,7 +7383,7 @@ export default function App() {
 
     const deleteTask = async (id: string) => {
       try {
-        await deleteDoc(doc(db, 'tasks', id));
+        await deleteRow('tasks', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `tasks/${id}`);
       }
@@ -7545,15 +7391,15 @@ export default function App() {
 
     const handleSubscriptionAction = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
       try {
-        const subRef = doc(db, 'subscriptionRequests', id);
-        await updateDoc(subRef, { status, reason });
+        // table: subscriptionRequests, id: id
+        await updateRow('subscriptionRequests', id, { status, reason });
         
         const sub = subscriptionRequests.find(r => r.id === id);
         if (sub && status === 'rejected') {
           // Refund balance
-          const userRef = doc(db, 'users', sub.userId);
-          await updateDoc(userRef, {
-            mainBalance: increment(sub.price)
+          const userRef_id = sub.userId;
+          await updateRow('users', userRef_id, {
+            mainBalance: sub.price
           });
         }
         
@@ -7566,16 +7412,16 @@ export default function App() {
     const handleSocialAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid proof' : undefined;
       try {
-        const subRef = doc(db, 'socialSubmissions', id);
-        await updateDoc(subRef, { status: action, reason });
+        // table: socialSubmissions, id: id
+        await updateRow('socialSubmissions', id, { status: action, reason });
         
         const s = allSocialSubmissions.find(s => s.id === id);
         if (s && action === 'approved') {
-          const userRef = doc(db, 'users', s.userId);
-          const userSnap = await getDoc(userRef);
+          const userRef_id = s.userId;
+          const userSnap = await getRow('users', userRef_id);
           if (userSnap.exists()) {
             const userData = userSnap.data() as UserProfile;
-            await updateDoc(userRef, {
+            await updateRow('users', userRef_id, {
               notifications: [
                 { id: Date.now().toString(), text: `Social Job Approved: ${s.type}`, date: new Date().toISOString().split('T')[0] },
                 ...userData.notifications
@@ -7592,7 +7438,7 @@ export default function App() {
     const handleDeleteUpload = async (id: string) => {
       if (!confirm('Are you sure you want to delete this upload record?')) return;
       try {
-        await deleteDoc(doc(db, 'uploads', id));
+        await deleteRow('uploads', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `uploads/${id}`);
       }
@@ -8265,7 +8111,7 @@ export default function App() {
                   onClick={async () => {
                     if (confirm(`Are you sure you want to DELETE user ${adminUser.email}? This cannot be undone.`)) {
                       try {
-                        await deleteDoc(doc(db, 'users', adminUser.id));
+                        await deleteRow('users', adminUser.id);
                         alert('User deleted successfully!');
                         // Refresh users list or select another user
                       } catch (e) {
@@ -8570,8 +8416,8 @@ export default function App() {
                             <button 
                               onClick={async () => {
                                 try {
-                                  const userRef = doc(db, 'users', u.id);
-                                  await updateDoc(userRef, { isActive: !u.isActive });
+                                  const userRef_id = u.id;
+                                  await updateRow('users', userRef_id, { isActive: !u.isActive });
                                   alert(`User ${u.isActive ? 'deactivated' : 'activated'} successfully!`);
                                 } catch (e) {
                                   handleFirestoreError(e, OperationType.UPDATE, `users/${u.id}`);
@@ -8665,7 +8511,7 @@ export default function App() {
                         onClick={async () => {
                           if (confirm('Delete this post?')) {
                             try {
-                              await deleteDoc(doc(db, 'newsPosts', post.id));
+                              await deleteRow('newsPosts', post.id);
                             } catch (e) {
                               handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
                             }
@@ -9125,7 +8971,7 @@ export default function App() {
                         
                         if (!title || !fee || !prize) return alert('Fill all fields');
                         
-                        await addDoc(collection(db, 'ludoTournaments'), {
+                        await insertRow('ludoTournaments', {
                           title, entryFee: fee, prizePool: prize, type, description: desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
                           status: 'open', maxPlayers: type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
                           playerIds: []
@@ -9171,7 +9017,7 @@ export default function App() {
                             <select 
                               value={t.status}
                               onChange={async (e) => {
-                                await updateDoc(doc(db, 'ludoTournaments', t.id), { status: e.target.value });
+                                await updateRow('ludoTournaments', t.id, { status: e.target.value });
                               }}
                               className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-[8px] font-black uppercase outline-none focus:border-indigo-500"
                             >
@@ -9191,14 +9037,14 @@ export default function App() {
                                   placeholder="Enter Room Code" 
                                   defaultValue={t.roomCode || ''}
                                   onBlur={async (e) => {
-                                    await updateDoc(doc(db, 'ludoTournaments', t.id), { roomCode: e.target.value });
+                                    await updateRow('ludoTournaments', t.id, { roomCode: e.target.value });
                                   }}
                                   className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] font-bold outline-none focus:border-indigo-500"
                                 />
                                 <button 
                                   onClick={async () => {
                                     if (confirm('Delete this tournament?')) {
-                                      await deleteDoc(doc(db, 'ludoTournaments', t.id));
+                                      await deleteRow('ludoTournaments', t.id);
                                     }
                                   }}
                                   className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all"
@@ -9272,16 +9118,16 @@ export default function App() {
                                 onClick={async () => {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
-                                  const userRef = doc(db, 'users', s.userId);
-                                  const userSnap = await getDoc(userRef);
+                                  const userRef_id = s.userId;
+                                  const userSnap = await getRow('users', userRef_id);
                                   if (userSnap.exists()) {
                                     const userData = userSnap.data() as UserProfile;
-                                    await updateDoc(userRef, {
+                                    await updateRow('users', userRef_id, {
                                       mainBalance: userData.mainBalance + tournament.prizePool,
                                       totalEarned: userData.totalEarned + tournament.prizePool
                                     });
                                   }
-                                  await updateDoc(doc(db, 'ludoSubmissions', s.id), { status: 'approved' });
+                                  await updateRow('ludoSubmissions', s.id, { status: 'approved' });
                                   alert('Submission Approved & Prize Paid!');
                                 }}
                                 className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -9291,7 +9137,7 @@ export default function App() {
                               </button>
                               <button 
                                 onClick={async () => {
-                                  await updateDoc(doc(db, 'ludoSubmissions', s.id), { status: 'rejected' });
+                                  await updateRow('ludoSubmissions', s.id, { status: 'rejected' });
                                   alert('Submission Rejected');
                                 }}
                                 className="flex-1 bg-white text-rose-600 border border-rose-100 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -9835,7 +9681,7 @@ export default function App() {
           </div>
           
           <button 
-            onClick={() => { auth.signOut(); setIsLoggedIn(false); setView('login'); }}
+            onClick={() => { supabase.auth.signOut(); setIsLoggedIn(false); setView('login'); }}
             className="w-full py-5 bg-rose-500/5 text-rose-500 border border-rose-500/20 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 mt-10 hover:bg-rose-500/10 transition-all active:scale-95"
           >
             <LogOut className="w-4 h-4" />
@@ -9984,9 +9830,9 @@ export default function App() {
           <div className="w-full space-y-4">
             <button 
               onClick={async () => {
-                if (auth.currentUser) {
-                  await auth.currentUser.reload();
-                  if (auth.currentUser.emailVerified) {
+                const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
+                  
+                  if (_checkUser.email_confirmed_at) {
                     setNeedsEmailVerification(false);
                     setView('home');
                   } else {
@@ -10000,8 +9846,8 @@ export default function App() {
             </button>
             <button 
               onClick={async () => {
-                if (auth.currentUser) {
-                  await sendEmailVerification(auth.currentUser);
+                const { data: { user: _checkUser } } = await supabase.auth.getUser(); if (_checkUser) {
+                  await supabase.auth.resend({ type: 'signup', email: _checkUser.email || '' });
                   alert('Verification email resent!');
                 }
               }}
@@ -10011,7 +9857,7 @@ export default function App() {
             </button>
             <button 
               onClick={() => {
-                auth.signOut();
+                supabase.auth.signOut();
                 setNeedsEmailVerification(false);
                 setView('login');
               }}
