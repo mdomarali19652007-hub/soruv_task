@@ -612,8 +612,13 @@ export default function App() {
     });
     unsubs.push(() => authSub.unsubscribe());
 
-    // Sync Global Settings
-    const unsubSettings = subscribeToRow<any>('settings', 'global', (data) => {
+    // Sync Global Settings - auto-create default row if missing
+    const unsubSettings = subscribeToRow<any>('settings', 'global', async (data) => {
+      if (!data) {
+        // Settings row doesn't exist yet - create it with defaults
+        await upsertRow('settings', { id: 'global' }).catch(e => console.warn('Failed to create default settings:', e));
+        return;
+      }
       if (data) {
         setGlobalNotice(data.globalNotice);
         setIsMaintenance(data.isMaintenance);
@@ -5531,9 +5536,8 @@ export default function App() {
       // Referral Bonus on Activation
       if (user.referredBy) {
         const referrerRef_id = user.referredBy;
-        const referrerSnap = await getRow('users', referrerRef_id);
-        if (referrerSnap.exists()) {
-          const referrerData = referrerSnap.data() as UserProfile;
+        const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
+        if (referrerData) {
           await updateRow('users', referrerRef_id, {
             mainBalance: referralActivationBonus,
             totalEarned: referralActivationBonus,
@@ -6910,14 +6914,12 @@ export default function App() {
     const processReferralCommission = async (userId: string, amount: number, source: string) => {
       try {
         const userRef_id = userId;
-        const userSnap = await getRow('users', userRef_id);
-        if (userSnap.exists()) {
-          const userData = userSnap.data() as UserProfile;
+        const userData = await getRow('users', userRef_id) as UserProfile | null;
+        if (userData) {
           if (userData.referredBy) {
             const referrerRef_id = userData.referredBy;
-            const referrerSnap = await getRow('users', referrerRef_id);
-            if (referrerSnap.exists()) {
-              const referrerData = referrerSnap.data() as UserProfile;
+            const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
+            if (referrerData) {
               const commission = (amount * referralCommissionRate) / 100;
               if (commission > 0) {
                 await updateRow('users', referrerRef_id, {
@@ -6950,6 +6952,7 @@ export default function App() {
       try {
         const settingsRef_id = 'global';
         await upsertRow('settings', {
+          id: settingsRef_id,
           globalNotice: notice,
           isMaintenance: adminMaintenance,
           minWithdrawal: adminMinWithdrawal,
@@ -7006,9 +7009,8 @@ export default function App() {
           if (s) {
             const reward = s.reward || gmailReward;
             const userRef_id = s.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + reward,
                 totalEarned: userData.totalEarned + reward
@@ -7033,9 +7035,8 @@ export default function App() {
           const s = microjobSubmissions.find(s => s.id === id);
           if (s) {
             const userRef_id = s.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               // Find the task to get the reward
               const task = dynamicTasks.find(t => t.id === s.microjobId || t.title === s.microjobId);
               const reward = task ? task.reward : 5.00;
@@ -7096,9 +7097,8 @@ export default function App() {
           if (s) {
             const reward = s.reward || 2.00;
             const userRef_id = s.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + reward,
                 totalEarned: userData.totalEarned + reward
@@ -7123,9 +7123,8 @@ export default function App() {
         const w = withdrawals.find(w => w.id === id);
         if (w) {
           const userRef_id = w.userId;
-          const userSnap = await getRow('users', userRef_id);
-          if (userSnap.exists()) {
-            const userData = userSnap.data() as UserProfile;
+          const userData = await getRow('users', userRef_id) as UserProfile | null;
+          if (userData) {
             if (action === 'approved') {
               await updateRow('users', userRef_id, {
                 pendingPayout: Math.max(0, userData.pendingPayout - w.amount),
@@ -7161,9 +7160,8 @@ export default function App() {
         const r = rechargeRequests.find(r => r.id === id);
         if (r) {
           const userRef_id = r.userId;
-          const userSnap = await getRow('users', userRef_id);
-          if (userSnap.exists()) {
-            const userData = userSnap.data() as UserProfile;
+          const userData = await getRow('users', userRef_id) as UserProfile | null;
+          if (userData) {
             if (action === 'approved') {
               // For deposits, we ADD to balance when approved
               await updateRow('users', userRef_id, {
@@ -7201,9 +7199,8 @@ export default function App() {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
             const userRef_id = r.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + r.amount
               });
@@ -7226,9 +7223,8 @@ export default function App() {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
             const userRef_id = o.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + o.amount,
                 notifications: [
@@ -7255,9 +7251,8 @@ export default function App() {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
             const userRef_id = r.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + r.price
               });
@@ -7318,9 +7313,8 @@ export default function App() {
           const o = productOrders.find(o => o.id === id);
           if (o) {
             const userRef_id = o.userId;
-            const userSnap = await getRow('users', userRef_id);
-            if (userSnap.exists()) {
-              const userData = userSnap.data() as UserProfile;
+            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            if (userData) {
               await updateRow('users', userRef_id, {
                 mainBalance: userData.mainBalance + o.amount
               });
@@ -7418,9 +7412,8 @@ export default function App() {
         const s = allSocialSubmissions.find(s => s.id === id);
         if (s && action === 'approved') {
           const userRef_id = s.userId;
-          const userSnap = await getRow('users', userRef_id);
-          if (userSnap.exists()) {
-            const userData = userSnap.data() as UserProfile;
+          const userData = await getRow('users', userRef_id) as UserProfile | null;
+          if (userData) {
             await updateRow('users', userRef_id, {
               notifications: [
                 { id: Date.now().toString(), text: `Social Job Approved: ${s.type}`, date: new Date().toISOString().split('T')[0] },
@@ -9119,9 +9112,8 @@ export default function App() {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
                                   const userRef_id = s.userId;
-                                  const userSnap = await getRow('users', userRef_id);
-                                  if (userSnap.exists()) {
-                                    const userData = userSnap.data() as UserProfile;
+                                  const userData = await getRow('users', userRef_id) as UserProfile | null;
+                                  if (userData) {
                                     await updateRow('users', userRef_id, {
                                       mainBalance: userData.mainBalance + tournament.prizePool,
                                       totalEarned: userData.totalEarned + tournament.prizePool

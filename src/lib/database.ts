@@ -42,8 +42,8 @@ export async function getRow(table: string, id: string) {
     .from(table)
     .select('*')
     .eq('id', id)
-    .single();
-  if (error && error.code !== 'PGRST116') throw error; // PGRST116 = no rows
+    .maybeSingle();
+  if (error) throw error;
   return data;
 }
 
@@ -161,10 +161,10 @@ export function subscribeToRow<T>(
   id: string,
   callback: SingleRowCallback<T>
 ): () => void {
-  // Fetch initial data
-  supabase.from(table).select('*').eq('id', id).single().then(({ data, error }) => {
-    if (!error && data) {
-      callback(data as T);
+  // Fetch initial data - use maybeSingle() to avoid 406 when row doesn't exist
+  supabase.from(table).select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
+    if (!error) {
+      callback(data as T | null);
     } else {
       callback(null);
     }
@@ -177,9 +177,9 @@ export function subscribeToRow<T>(
       'postgres_changes',
       { event: '*', schema: 'public', table, filter: `id=eq.${id}` },
       (_payload: RealtimePostgresChangesPayload<Record<string, unknown>>) => {
-        supabase.from(table).select('*').eq('id', id).single().then(({ data, error }) => {
-          if (!error && data) {
-            callback(data as T);
+        supabase.from(table).select('*').eq('id', id).maybeSingle().then(({ data, error }) => {
+          if (!error) {
+            callback(data as T | null);
           }
         });
       }
