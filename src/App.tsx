@@ -549,6 +549,8 @@ export default function App() {
   const [showInfoModal, setShowInfoModal] = useState<'info' | 'freelance' | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submissionProgress, setSubmissionProgress] = useState(0);
+  const [lastWithdrawal, setLastWithdrawal] = useState<any>(null);
+  const [lastDeposit, setLastDeposit] = useState<any>(null);
 
   const ADMIN_EMAILS = ['soruvislam51@gmail.com', 'shovonali885@gmail.com'];
   const isAdmin = ADMIN_EMAILS.includes(user.email);
@@ -1565,6 +1567,7 @@ export default function App() {
                 strokeWidth="8"
                 fill="transparent"
                 strokeDasharray="251.2"
+                initial={{ strokeDashoffset: 251.2 }}
                 animate={{ strokeDashoffset: 251.2 - (251.2 * submissionProgress) / 100 }}
                 className="text-[#D4AF37]"
               />
@@ -2456,8 +2459,6 @@ export default function App() {
     const [accountNumber, setAccountNumber] = useState('');
     const [showHistory, setShowHistory] = useState(false);
     const [error, setError] = useState('');
-    const [lastWithdrawal, setLastWithdrawal] = useState<any>(null);
-    const [lastDeposit, setLastDeposit] = useState<any>(null);
 
     const handleWithdraw = async () => {
       if (!user.isActive) {
@@ -8453,7 +8454,7 @@ export default function App() {
               </div>
 
               {/* Tab Navigation */}
-              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+              <div className="flex flex-nowrap gap-2 overflow-x-scroll pb-2 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
                 {[
                   { id: 'gmail', label: 'Gmail', icon: <Mail className="w-3 h-3" />, count: gmailSubmissions.filter(s => s.status === 'pending').length },
                   { id: 'facebook', label: 'Social', icon: <Facebook className="w-3 h-3" />, count: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
