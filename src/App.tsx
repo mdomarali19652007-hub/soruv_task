@@ -463,13 +463,14 @@ export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [isRegistering, setIsRegistering] = useState(false);
+  // Pre-fill referral code from ?ref= URL parameter (from shared referral links)
   const [regData, setRegData] = useState({ 
     name: '', 
     email: '', 
     phone: '', 
     password: '', 
     confirmPassword: '', 
-    refCode: '', 
+    refCode: new URLSearchParams(window.location.search).get('ref') || '', 
     country: 'Bangladesh',
     age: '' 
   });
@@ -746,8 +747,8 @@ export default function App() {
   }, [user.name]);
 
   const handleEmailRegister = async () => {
-    if (!regData.email || !regData.password || !regData.name || !regData.phone || !regData.refCode) {
-      alert('Please fill all required fields, including Referral Code.');
+    if (!regData.email || !regData.password || !regData.name || !regData.phone) {
+      alert('Please fill all required fields.');
       return;
     }
     if (regData.password.length < 6) {
@@ -764,18 +765,25 @@ export default function App() {
     }
 
     try {
-      // First check if referral code is valid
-      
-      
-      const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
-      
-      if (!refSnap || refSnap.length === 0) {
-        alert('Invalid Referral Code. Registration requires a valid code.');
-        return;
-      }
+      // Check if referral code is valid (or allow first user without one)
+      let referrerId = '';
 
-      const referrerDoc = refSnap[0];
-      const referrerId = referrerDoc.id;
+      if (regData.refCode) {
+        const refSnap = await getRows('users', [{ column: 'numericId', value: regData.refCode }]);
+        if (!refSnap || refSnap.length === 0) {
+          alert('Invalid Referral Code. Please enter a valid code.');
+          return;
+        }
+        referrerId = refSnap[0].id;
+      } else {
+        // Allow registration without referral code only if no users exist (first user bootstrap)
+        const existingUsers = await getRows('users');
+        if (existingUsers && existingUsers.length > 0) {
+          alert('Referral Code is required. Please enter a valid referral code.');
+          return;
+        }
+        // First user - no referral needed
+      }
 
       const { data: signUpData, error: signUpError } = await supabase.auth.signUp({
         email: regData.email,
@@ -787,28 +795,29 @@ export default function App() {
       if (signUpError) throw signUpError;
       if (!signUpData.user) throw new Error('Registration failed');
       
-      // Generate unique referral code (numeric ID)
-      const generateNumericId = () => {
-        return Math.floor(100000 + Math.random() * 900000).toString();
-      };
+      // Generate unique referral code (numeric ID) - same value for both fields
+      const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
       
       const newUser: UserProfile = {
         ...INITIAL_USER,
         id: signUpData.user.id,
-        numericId: generateNumericId(),
+        numericId: userNumericId,
         name: regData.name,
         email: regData.email,
         phone: regData.phone,
         country: regData.country,
         age: parseInt(regData.age) || 18,
-        referralCode: '',
+        referralCode: userNumericId,
+        referralLink: `${window.location.origin}?ref=${userNumericId}`,
         referredBy: referrerId,
       };
 
       await upsertRow('users', newUser as any);
 
-      // Increment gen1 count for referrer immediately
-      await incrementField('users', referrerId, 'gen1Count', 1);
+      // Increment gen1 count for referrer immediately (skip if no referrer)
+      if (referrerId) {
+        await incrementField('users', referrerId, 'gen1Count', 1);
+      }
 
       setNeedsEmailVerification(true);
       alert('Registration successful! Please check your email for verification.');
@@ -1106,7 +1115,7 @@ export default function App() {
                     <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
                     <input 
                       type="text" 
-                      placeholder="Referral Code (Mandatory)" 
+                      placeholder="Referral Code (required for new users)" 
                       value={regData.refCode}
                       onChange={e => setRegData({...regData, refCode: e.target.value})}
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
@@ -2038,11 +2047,11 @@ export default function App() {
             <div className="grid grid-cols-3 gap-2 mb-6">
               <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Total</p>
-                <p className="text-sm font-black text-slate-900">{allUsers.filter(u => u.referredBy === user.numericId).length}</p>
+                <p className="text-sm font-black text-slate-900">{allUsers.filter(u => u.referredBy === user.id).length}</p>
               </div>
               <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Active</p>
-                <p className="text-sm font-black text-emerald-600">{allUsers.filter(u => u.referredBy === user.numericId && u.isActive).length}</p>
+                <p className="text-sm font-black text-emerald-600">{allUsers.filter(u => u.referredBy === user.id && u.isActive).length}</p>
               </div>
               <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Earned</p>
