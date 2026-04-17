@@ -580,92 +580,93 @@ export default function App() {
   // --- Supabase Sync ---
   useEffect(() => {
     const unsubs: (() => void)[] = [];
-    let initialSessionChecked = false;
+    // Track currently subscribed user to prevent duplicate realtime channels
+    let currentSubscribedUserId: string | null = null;
+    let currentUserUnsub: (() => void) | null = null;
 
-    // Helper: handle an authenticated session (shared by getSession and onAuthStateChange)
-    const handleAuthSession = async (supaUser: SupabaseUser) => {
-      setIsLoggedIn(true);
-      const emailNotVerified = !supaUser.email_confirmed_at;
-      setNeedsEmailVerification(emailNotVerified);
-
-      // Auto-navigate away from login when authenticated
-      if (!emailNotVerified) {
-        setView(prev => prev === 'login' ? 'home' : prev);
-      }
-
-      // Subscribe to user profile
-      const unsubUser = subscribeToRow<UserProfile>('users', supaUser.id, async (data) => {
-        if (data) {
-          // Check suspension expiry
-          if (data.status === 'suspended' && data.suspensionUntil) {
-            const expiry = new Date(data.suspensionUntil);
-            if (new Date() > expiry) {
-              await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
-            }
-          }
-          // Admin Self-Healing
-          if (['soruvislam51@gmail.com', 'shovonali885@gmail.com'].includes(data.email) && data.status !== 'active') {
-            await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
-          }
-          setUser(data);
-        } else {
-          // New user - create profile (handles both email signup and Google OAuth)
-          const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
-
-          // Check for pending referral code (persisted before Google OAuth redirect)
-          let referredBy = '';
-          const pendingRefCode = localStorage.getItem('pendingReferralCode');
-          if (pendingRefCode) {
-            localStorage.removeItem('pendingReferralCode');
-            try {
-              const { data: refResult } = await supabase.rpc('validate_referral_code', { code: pendingRefCode });
-              if (refResult && refResult.length > 0) {
-                referredBy = refResult[0].user_id;
-                // Increment gen1 count for referrer
-                await incrementField('users', referredBy, 'gen1Count', 1).catch(() => {});
-              }
-            } catch (e) {
-              console.warn('Failed to apply referral code:', e);
-            }
-          }
-
-          const newUser: UserProfile = {
-            ...INITIAL_USER,
-            id: supaUser.id,
-            name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || 'User',
-            email: supaUser.email || '',
-            numericId: userNumericId,
-            referralCode: userNumericId,
-            referralLink: `${window.location.origin}?ref=${userNumericId}`,
-            referredBy,
-          };
-          await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
-        }
-      });
-      unsubs.push(unsubUser);
-      setIsAuthReady(true);
-    };
-
-    // Check existing session first to prevent flash to login on refresh
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      initialSessionChecked = true;
-      if (session?.user) {
-        handleAuthSession(session.user);
-      } else {
-        setIsLoggedIn(false);
-        setView('login');
-        setIsAuthReady(true);
-      }
-    });
-
-    // Auth state listener for subsequent changes (sign in, sign out, token refresh)
+    // Auth state listener -- single source of truth for auth
     const { data: { subscription: authSub } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      // Skip the initial event -- we already handled it via getSession above
-      if (!initialSessionChecked) return;
-
       if (session?.user) {
-        await handleAuthSession(session.user);
+        const supaUser = session.user;
+        setIsLoggedIn(true);
+        const emailNotVerified = !supaUser.email_confirmed_at;
+        setNeedsEmailVerification(emailNotVerified);
+
+        // Auto-navigate away from login when authenticated
+        if (!emailNotVerified) {
+          setView(prev => prev === 'login' ? 'home' : prev);
+        }
+
+        // Only subscribe if we haven't already for this user (prevents duplicate channels)
+        if (currentSubscribedUserId !== supaUser.id) {
+          // Clean up previous subscription if switching users
+          if (currentUserUnsub) {
+            currentUserUnsub();
+            currentUserUnsub = null;
+          }
+          currentSubscribedUserId = supaUser.id;
+
+          // Subscribe to user profile
+          const unsubUser = subscribeToRow<UserProfile>('users', supaUser.id, async (data) => {
+            if (data) {
+              // Check suspension expiry
+              if (data.status === 'suspended' && data.suspensionUntil) {
+                const expiry = new Date(data.suspensionUntil);
+                if (new Date() > expiry) {
+                  await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
+                }
+              }
+              // Admin Self-Healing
+              if (['soruvislam51@gmail.com', 'shovonali885@gmail.com'].includes(data.email) && data.status !== 'active') {
+                await updateRow('users', supaUser.id, { status: 'active', restrictionReason: '', suspensionUntil: '' }).catch(() => { });
+              }
+              setUser(data);
+            } else {
+              // New user - create profile (handles both email signup and Google OAuth)
+              const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+
+              // Check for pending referral code (persisted before Google OAuth redirect)
+              let referredBy = '';
+              const pendingRefCode = localStorage.getItem('pendingReferralCode');
+              if (pendingRefCode) {
+                localStorage.removeItem('pendingReferralCode');
+                try {
+                  const { data: refResult } = await supabase.rpc('validate_referral_code', { code: pendingRefCode });
+                  if (refResult && refResult.length > 0) {
+                    referredBy = refResult[0].user_id;
+                    // Increment gen1 count for referrer
+                    await incrementField('users', referredBy, 'gen1Count', 1).catch(() => {});
+                  }
+                } catch (e) {
+                  console.warn('Failed to apply referral code:', e);
+                }
+              }
+
+              const newUser: UserProfile = {
+                ...INITIAL_USER,
+                id: supaUser.id,
+                name: supaUser.user_metadata?.full_name || supaUser.user_metadata?.name || 'User',
+                email: supaUser.email || '',
+                numericId: userNumericId,
+                referralCode: userNumericId,
+                referralLink: `${window.location.origin}?ref=${userNumericId}`,
+                referredBy,
+              };
+              await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
+            }
+          });
+          currentUserUnsub = unsubUser;
+          unsubs.push(unsubUser);
+        }
+        setIsAuthReady(true);
       } else {
+        // No session -- only show login if this is a definitive sign-out or initial with no session
+        // Clean up user subscription
+        if (currentUserUnsub) {
+          currentUserUnsub();
+          currentUserUnsub = null;
+        }
+        currentSubscribedUserId = null;
         setIsLoggedIn(false);
         setView('login');
         setIsAuthReady(true);
