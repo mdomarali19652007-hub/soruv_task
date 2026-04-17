@@ -611,6 +611,24 @@ export default function App() {
           } else {
             // New user - create profile (handles both email signup and Google OAuth)
             const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+
+            // Check for pending referral code (persisted before Google OAuth redirect)
+            let referredBy = '';
+            const pendingRefCode = localStorage.getItem('pendingReferralCode');
+            if (pendingRefCode) {
+              localStorage.removeItem('pendingReferralCode');
+              try {
+                const { data: refResult } = await supabase.rpc('validate_referral_code', { code: pendingRefCode });
+                if (refResult && refResult.length > 0) {
+                  referredBy = refResult[0].user_id;
+                  // Increment gen1 count for referrer
+                  await incrementField('users', referredBy, 'gen1Count', 1).catch(() => {});
+                }
+              } catch (e) {
+                console.warn('Failed to apply referral code:', e);
+              }
+            }
+
             const newUser: UserProfile = {
               ...INITIAL_USER,
               id: supaUser.id,
@@ -619,6 +637,7 @@ export default function App() {
               numericId: userNumericId,
               referralCode: userNumericId,
               referralLink: `${window.location.origin}?ref=${userNumericId}`,
+              referredBy,
             };
             await upsertRow('users', newUser).catch(e => console.warn('Failed to create user profile:', e));
           }
@@ -928,6 +947,11 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
+      // Persist referral code across OAuth redirect (form state is lost on redirect)
+      if (regData.refCode) {
+        localStorage.setItem('pendingReferralCode', regData.refCode);
+      }
+
       const { error: googleError } = await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: { redirectTo: window.location.origin }
