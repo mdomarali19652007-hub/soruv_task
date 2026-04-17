@@ -96,7 +96,8 @@ async function startServer() {
   });
 
   // Better Auth handler -- handles all /api/auth/* routes
-  app.all("/api/auth/*splat", toNodeHandler(auth));
+  // Express 4 uses * wildcard, not *splat (that's Express 5 syntax)
+  app.all("/api/auth/*", toNodeHandler(auth));
 
   // Application API routes (registration, admin, etc.)
   app.use("/api", apiRoutes);
