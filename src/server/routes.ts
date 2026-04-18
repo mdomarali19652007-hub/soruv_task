@@ -409,4 +409,231 @@ router.post('/admin/users/:id/ban', requireAuth as any, requireAdmin as any, asy
   }
 });
 
+// ============================================================
+// Generic Admin CRUD Routes
+//
+// These routes use the supabaseAdmin (service-role) client to
+// bypass RLS.  All routes require authentication + admin role.
+// A whitelist restricts which tables can be written to.
+// ============================================================
+
+const ADMIN_WRITABLE_TABLES = new Set([
+  'settings',
+  'tasks',
+  'products',
+  'driveOffers',
+  'newsPosts',
+  'ludoTournaments',
+  'gmailSubmissions',
+  'microjobSubmissions',
+  'taskSubmissions',
+  'driveOfferRequests',
+  'smmOrders',
+  'dollarBuyRequests',
+  'productOrders',
+  'subscriptionRequests',
+  'socialSubmissions',
+  'uploads',
+  'users',
+  'ludoSubmissions',
+]);
+
+function validateTable(table: string, res: Response): boolean {
+  if (!table || !ADMIN_WRITABLE_TABLES.has(table)) {
+    res.status(400).json({ error: `Table '${table}' is not allowed` });
+    return false;
+  }
+  return true;
+}
+
+// POST /api/admin/insert -- Insert a row into a whitelisted table
+router.post('/admin/insert', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, data } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!data || typeof data !== 'object') {
+      res.status(400).json({ error: 'data is required' });
+      return;
+    }
+
+    const { data: result, error } = await supabaseAdmin
+      .from(table)
+      .insert(data)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/update -- Update a row by ID in a whitelisted table
+router.post('/admin/update', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, id, data } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!id) {
+      res.status(400).json({ error: 'id is required' });
+      return;
+    }
+    if (!data || typeof data !== 'object') {
+      res.status(400).json({ error: 'data is required' });
+      return;
+    }
+
+    const { error } = await supabaseAdmin
+      .from(table)
+      .update(data)
+      .eq('id', id);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/delete -- Delete a row by ID from a whitelisted table
+router.post('/admin/delete', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, id } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!id) {
+      res.status(400).json({ error: 'id is required' });
+      return;
+    }
+
+    const { error } = await supabaseAdmin
+      .from(table)
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/upsert -- Upsert a row in a whitelisted table
+router.post('/admin/upsert', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, data } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!data || typeof data !== 'object') {
+      res.status(400).json({ error: 'data is required' });
+      return;
+    }
+
+    const { data: result, error } = await supabaseAdmin
+      .from(table)
+      .upsert(data)
+      .select()
+      .single();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/increment -- Atomically increment a numeric field
+router.post('/admin/increment', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, id, column, amount } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!id || !column || typeof amount !== 'number') {
+      res.status(400).json({ error: 'id, column, and amount (number) are required' });
+      return;
+    }
+
+    const { error } = await supabaseAdmin.rpc('increment_field', {
+      p_table: table,
+      p_id: id,
+      p_column: column,
+      p_amount: amount,
+    });
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/admin/increment-fields -- Atomically increment multiple fields
+router.post('/admin/increment-fields', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { table, id, increments } = req.body;
+    if (!validateTable(table, res)) return;
+    if (!id || !increments || typeof increments !== 'object') {
+      res.status(400).json({ error: 'id and increments are required' });
+      return;
+    }
+
+    for (const [column, amount] of Object.entries(increments)) {
+      if (typeof amount !== 'number') continue;
+      const { error } = await supabaseAdmin.rpc('increment_field', {
+        p_table: table,
+        p_id: id,
+        p_column: column,
+        p_amount: amount,
+      });
+      if (error) {
+        res.status(500).json({ error: `Failed to increment ${column}: ${error.message}` });
+        return;
+      }
+    }
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/admin/row -- Get a single row by ID from a whitelisted table
+router.get('/admin/row', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const table = req.query.table as string;
+    const id = req.query.id as string;
+    if (!validateTable(table, res)) return;
+    if (!id) {
+      res.status(400).json({ error: 'id is required' });
+      return;
+    }
+
+    const { data, error } = await supabaseAdmin
+      .from(table)
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      res.status(500).json({ error: error.message });
+      return;
+    }
+    res.json(data);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;

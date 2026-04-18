@@ -88,6 +88,7 @@ import {
   claimDailyReward,
   processSpin
 } from './lib/database';
+import { adminInsert, adminUpdate, adminDelete, adminUpsert, adminIncrement, adminIncrementFields, adminGetRow } from './lib/admin-api';
 import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
 import {
   authClient,
@@ -6973,7 +6974,7 @@ export default function App() {
     const [adminEnabledCards, setAdminEnabledCards] = useState(enabledCards);
     const [adminTotalPaid, setAdminTotalPaid] = useState(totalPaid);
     const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
-    const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'recharge' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads'>('gmail');
+    const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'recharge' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads' | 'subscriptions'>('gmail');
     const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
     const [isUploading, setIsUploading] = useState(false);
     const [userSearch, setUserSearch] = useState('');
@@ -6989,7 +6990,7 @@ export default function App() {
     const postNews = async () => {
       if (!newNews.content.trim()) return;
       try {
-        await insertRow('newsPosts', {
+        await adminInsert('newsPosts', {
           authorName: 'Owner',
           authorBadge: true,
           content: newNews.content.trim(),
@@ -7008,8 +7009,7 @@ export default function App() {
 
     useEffect(() => {
       if (tabContentRef.current && activeAdminTab) {
-        // We don't want to scroll to top of page, just ensure the tab content is visible
-        // But the user said "fix the jumping to top", so we should probably NOT scroll to top
+        tabContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     }, [activeAdminTab]);
 
@@ -7024,8 +7024,8 @@ export default function App() {
       }
 
       try {
-        // Update app-level user status
-        await updateRow('users', userId, {
+        // Update app-level user status via admin API (bypasses RLS)
+        await adminUpdate('users', userId, {
           status,
           restrictionReason: reason,
           suspensionUntil
@@ -7082,7 +7082,7 @@ export default function App() {
         for (let i = 0; i < suspendedUsers.length; i += CHUNK_SIZE) {
           const chunk = suspendedUsers.slice(i, i + CHUNK_SIZE);
           await Promise.all(chunk.map(u =>
-            updateRow('users', u.id, {
+            adminUpdate('users', u.id, {
               status: 'active',
               restrictionReason: '',
               suspensionUntil: ''
@@ -7103,16 +7103,16 @@ export default function App() {
     const processReferralCommission = async (userId: string, amount: number, source: string) => {
       try {
         const userRef_id = userId;
-        const userData = await getRow('users', userRef_id) as UserProfile | null;
+        const userData = await adminGetRow('users', userRef_id) as UserProfile | null;
         if (userData) {
           if (userData.referredBy) {
             const referrerRef_id = userData.referredBy;
-            const referrerData = await getRow('users', referrerRef_id) as UserProfile | null;
+            const referrerData = await adminGetRow('users', referrerRef_id) as UserProfile | null;
             if (referrerData) {
               const commission = (amount * referralCommissionRate) / 100;
               if (commission > 0) {
-                // Use atomic increment for balance fields
-                await incrementFields('users', referrerRef_id, {
+                // Use atomic increment for balance fields via admin API
+                await adminIncrementFields('users', referrerRef_id, {
                   mainBalance: commission,
                   totalEarned: commission,
                   totalCommission: commission
@@ -7133,7 +7133,7 @@ export default function App() {
     const saveChanges = async () => {
       try {
         const settingsRef_id = 'global';
-        await upsertRow('settings', {
+        await adminUpsert('settings', {
           id: settingsRef_id,
           globalNotice: notice,
           isMaintenance: adminMaintenance,
@@ -7174,7 +7174,7 @@ export default function App() {
         // Upserting the full adminUser object risks overwriting balance changes
         // made by other operations between page load and save.
         const { mainBalance, totalEarned, totalCommission, ...safeAdminFields } = adminUser;
-        await upsertRow('users', safeAdminFields);
+        await adminUpsert('users', safeAdminFields);
 
         confetti({ particleCount: 150, spread: 70 });
         alert('All changes saved and applied successfully!');
@@ -7186,16 +7186,14 @@ export default function App() {
     const handleGmailAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid account' : undefined;
       try {
-        // table: gmailSubmissions, id: id
-        await updateRow('gmailSubmissions', id, { status: action, reason });
+        await adminUpdate('gmailSubmissions', id, { status: action, reason });
 
         if (action === 'approved') {
           const s = gmailSubmissions.find(s => s.id === id);
           if (s) {
             const reward = s.reward || gmailReward;
             const userRef_id = s.userId;
-            // Use atomic increment instead of read-modify-write
-            await incrementFields('users', userRef_id, {
+            await adminIncrementFields('users', userRef_id, {
               mainBalance: reward,
               totalEarned: reward
             });
@@ -7211,20 +7209,17 @@ export default function App() {
     const handleMicrojobAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Incomplete work' : undefined;
       try {
-        // table: microjobSubmissions, id: id
-        await updateRow('microjobSubmissions', id, { status: action, reason });
+        await adminUpdate('microjobSubmissions', id, { status: action, reason });
 
         if (action === 'approved') {
           const s = microjobSubmissions.find(s => s.id === id);
           if (s) {
             const userRef_id = s.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
+            const userData = await adminGetRow('users', userRef_id) as UserProfile | null;
             if (userData) {
-              // Find the task to get the reward
               const task = dynamicTasks.find(t => t.id === s.microjobId || t.title === s.microjobId);
               const reward = task ? task.reward : 5.00;
-              // Use atomic increment instead of read-modify-write
-              await incrementFields('users', userRef_id, {
+              await adminIncrementFields('users', userRef_id, {
                 mainBalance: reward,
                 totalEarned: reward
               });
@@ -7273,16 +7268,14 @@ export default function App() {
     const handleTaskAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Proof not valid' : undefined;
       try {
-        // table: taskSubmissions, id: id
-        await updateRow('taskSubmissions', id, { status: action, reason });
+        await adminUpdate('taskSubmissions', id, { status: action, reason });
 
         if (action === 'approved') {
           const s = taskSubmissions.find(s => s.id === id);
           if (s) {
             const reward = s.reward || 2.00;
             const userRef_id = s.userId;
-            // Use atomic increment instead of read-modify-write
-            await incrementFields('users', userRef_id, {
+            await adminIncrementFields('users', userRef_id, {
               mainBalance: reward,
               totalEarned: reward
             });
@@ -7341,14 +7334,12 @@ export default function App() {
     const handleDriveOfferRequestAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
       try {
-        // admin op: driveOfferRequests
-        await updateRow('driveOfferRequests', id, { status: action, reason });
+        await adminUpdate('driveOfferRequests', id, { status: action, reason });
 
         if (action === 'rejected') {
           const r = driveOfferRequests.find(r => r.id === id);
           if (r) {
-            // Use atomic increment for refund
-            await incrementField('users', r.userId, 'mainBalance', r.amount);
+            await adminIncrement('users', r.userId, 'mainBalance', r.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7360,14 +7351,12 @@ export default function App() {
     const handleSmmAction = async (id: string, action: 'processing' | 'completed' | 'cancelled') => {
       const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Invalid link' : undefined;
       try {
-        // admin op: smmOrders
-        await updateRow('smmOrders', id, { status: action });
+        await adminUpdate('smmOrders', id, { status: action });
 
         if (action === 'cancelled') {
           const o = smmOrders.find(o => o.id === id);
           if (o) {
-            // Use atomic increment for refund
-            await incrementField('users', o.userId, 'mainBalance', o.amount);
+            await adminIncrement('users', o.userId, 'mainBalance', o.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7379,14 +7368,12 @@ export default function App() {
     const handleDollarBuyAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
       try {
-        // admin op: dollarBuyRequests
-        await updateRow('dollarBuyRequests', id, { status: action, reason });
+        await adminUpdate('dollarBuyRequests', id, { status: action, reason });
 
         if (action === 'rejected') {
           const r = dollarBuyRequests.find(r => r.id === id);
           if (r) {
-            // Use atomic increment for refund
-            await incrementField('users', r.userId, 'mainBalance', r.price);
+            await adminIncrement('users', r.userId, 'mainBalance', r.price);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7405,7 +7392,7 @@ export default function App() {
       ];
       const sample = samples[Math.floor(Math.random() * samples.length)];
       try {
-        await insertRow('products', { ...sample, image: '' });
+        await adminInsert('products', { ...sample, image: '' });
         confetti({ particleCount: 100, spread: 70 });
       } catch (e) {
         handleFirestoreError(e, OperationType.CREATE, 'products');
@@ -7422,7 +7409,7 @@ export default function App() {
           ...newProduct,
           profitPerUnit: (newProduct.resellPrice || 0) > 0 ? (newProduct.resellPrice - newProduct.price) : newProduct.profitPerUnit
         };
-        await insertRow('products', productData);
+        await adminInsert('products', productData);
         setNewProduct({ name: '', price: 0, resellPrice: 0, profitPerUnit: 0, description: '', category: '', image: '', variants: '', quantityOptions: '' });
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
@@ -7433,7 +7420,7 @@ export default function App() {
     const deleteProduct = async (id: string) => {
       if (!confirm('Delete this product?')) return;
       try {
-        await deleteRow('products', id);
+        await adminDelete('products', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `products/${id}`);
       }
@@ -7442,14 +7429,12 @@ export default function App() {
     const handleProductOrderAction = async (id: string, action: 'processing' | 'shipped' | 'delivered' | 'cancelled') => {
       const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Out of stock' : undefined;
       try {
-        // admin op: productOrders
-        await updateRow('productOrders', id, { status: action, reason });
+        await adminUpdate('productOrders', id, { status: action, reason });
 
         if (action === 'cancelled') {
           const o = productOrders.find(o => o.id === id);
           if (o) {
-            // Use atomic increment to avoid race conditions (was previously read-modify-write)
-            await incrementField('users', o.userId, 'mainBalance', o.amount);
+            await adminIncrement('users', o.userId, 'mainBalance', o.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7461,7 +7446,7 @@ export default function App() {
     const addDriveOffer = async () => {
       if (!newDriveOffer.title || !newDriveOffer.price) return;
       try {
-        await insertRow('driveOffers', newDriveOffer);
+        await adminInsert('driveOffers', newDriveOffer);
         setNewDriveOffer({ title: '', operator: 'GP', price: 0, description: '' });
         alert('Drive offer added successfully!');
       } catch (e) {
@@ -7471,7 +7456,7 @@ export default function App() {
 
     const deleteDriveOffer = async (id: string) => {
       try {
-        await deleteRow('driveOffers', id);
+        await adminDelete('driveOffers', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `driveOffers/${id}`);
       }
@@ -7498,7 +7483,7 @@ export default function App() {
     const addTask = async () => {
       if (!newTask.title || !newTask.link) return;
       try {
-        await insertRow('tasks', newTask);
+        await adminInsert('tasks', newTask);
         setNewTask({ title: '', reward: 0, desc: '', link: '', category: 'micro' });
         alert('Task added successfully!');
       } catch (e) {
@@ -7508,7 +7493,7 @@ export default function App() {
 
     const deleteTask = async (id: string) => {
       try {
-        await deleteRow('tasks', id);
+        await adminDelete('tasks', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `tasks/${id}`);
       }
@@ -7516,13 +7501,11 @@ export default function App() {
 
     const handleSubscriptionAction = async (id: string, status: 'approved' | 'rejected', reason?: string) => {
       try {
-        // table: subscriptionRequests, id: id
-        await updateRow('subscriptionRequests', id, { status, reason });
+        await adminUpdate('subscriptionRequests', id, { status, reason });
 
         const sub = subscriptionRequests.find(r => r.id === id);
         if (sub && status === 'rejected') {
-          // Refund balance atomically (was previously overwriting balance with sub.price)
-          await incrementField('users', sub.userId, 'mainBalance', sub.price);
+          await adminIncrement('users', sub.userId, 'mainBalance', sub.price);
         }
 
         alert(`Subscription ${status}`);
@@ -7534,24 +7517,21 @@ export default function App() {
     const handleSocialAction = async (id: string, action: 'approved' | 'rejected') => {
       const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid proof' : undefined;
       try {
-        // table: socialSubmissions, id: id
-        await updateRow('socialSubmissions', id, { status: action, reason });
+        await adminUpdate('socialSubmissions', id, { status: action, reason });
 
         const s = allSocialSubmissions.find(s => s.id === id);
         if (s && action === 'approved') {
           const reward = s.amount || 0;
-          // Credit reward to user balance (was previously missing -- workers didn't get paid)
           if (reward > 0) {
-            await incrementFields('users', s.userId, {
+            await adminIncrementFields('users', s.userId, {
               mainBalance: reward,
               totalEarned: reward
             });
             await processReferralCommission(s.userId, reward, 'Social Job');
           }
-          // Also add notification
-          const userData = await getRow('users', s.userId) as UserProfile | null;
+          const userData = await adminGetRow('users', s.userId) as UserProfile | null;
           if (userData) {
-            await updateRow('users', s.userId, {
+            await adminUpdate('users', s.userId, {
               notifications: [
                 { id: Date.now().toString(), text: `Social Job Approved: ${s.type}${reward > 0 ? ` (+৳${reward})` : ''}`, date: new Date().toISOString().split('T')[0] },
                 ...userData.notifications
@@ -7568,7 +7548,7 @@ export default function App() {
     const handleDeleteUpload = async (id: string) => {
       if (!confirm('Are you sure you want to delete this upload record?')) return;
       try {
-        await deleteRow('uploads', id);
+        await adminDelete('uploads', id);
       } catch (e) {
         handleFirestoreError(e, OperationType.DELETE, `uploads/${id}`);
       }
@@ -7684,27 +7664,6 @@ export default function App() {
                 >
                   <Zap className="w-5 h-5 text-emerald-500" />
                   <span className="text-[7px] font-black uppercase tracking-widest text-center">Microjobs</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('withdrawals')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-rose-500 hover:bg-rose-50/30"
-                >
-                  <CreditCard className="w-5 h-5 text-rose-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Withdraw</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('recharge')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-blue-500 hover:bg-blue-50/30"
-                >
-                  <Smartphone className="w-5 h-5 text-blue-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Recharge</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('products')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-pink-500 hover:bg-pink-50/30"
-                >
-                  <ShoppingBag className="w-5 h-5 text-pink-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Products</span>
                 </button>
                 <button
                   onClick={() => setActiveAdminTab('users')}
@@ -8241,7 +8200,7 @@ export default function App() {
                   onClick={async () => {
                     if (confirm(`Are you sure you want to DELETE user ${adminUser.email}? This cannot be undone.`)) {
                       try {
-                        await deleteRow('users', adminUser.id);
+                        await adminDelete('users', adminUser.id);
                         alert('User deleted successfully!');
                         // Refresh users list or select another user
                       } catch (e) {
@@ -8451,7 +8410,7 @@ export default function App() {
                 ].map(tab => (
                   <button
                     key={tab.id}
-                    onClick={() => setActiveAdminTab(tab.id as any)}
+                    onClick={() => setActiveAdminTab(tab.id as typeof activeAdminTab)}
                     className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${activeAdminTab === tab.id
                         ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
                         : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
@@ -8541,7 +8500,7 @@ export default function App() {
                                   onClick={async () => {
                                     try {
                                       const userRef_id = u.id;
-                                      await updateRow('users', userRef_id, { isActive: !u.isActive });
+                                      await adminUpdate('users', userRef_id, { isActive: !u.isActive });
                                       alert(`User ${u.isActive ? 'deactivated' : 'activated'} successfully!`);
                                     } catch (e) {
                                       handleFirestoreError(e, OperationType.UPDATE, `users/${u.id}`);
@@ -8678,7 +8637,7 @@ export default function App() {
                           onClick={async () => {
                             if (confirm('Delete this post?')) {
                               try {
-                                await deleteRow('newsPosts', post.id);
+                                await adminDelete('newsPosts', post.id);
                               } catch (e) {
                                 handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
                               }
@@ -9134,7 +9093,7 @@ export default function App() {
 
                         if (!ludoForm.title || !fee || !prize) return alert('Fill all fields');
 
-                        await insertRow('ludoTournaments', {
+                        await adminInsert('ludoTournaments', {
                           title: ludoForm.title, entryFee: fee, prizePool: prize, type: ludoForm.type, description: ludoForm.desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
                           status: 'open', maxPlayers: ludoForm.type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
                           playerIds: []
@@ -9176,7 +9135,7 @@ export default function App() {
                             <select
                               value={t.status}
                               onChange={async (e) => {
-                                await updateRow('ludoTournaments', t.id, { status: e.target.value });
+                                await adminUpdate('ludoTournaments', t.id, { status: e.target.value });
                               }}
                               className="bg-slate-50 border border-slate-100 rounded-xl p-2 text-[8px] font-black uppercase outline-none focus:border-indigo-500"
                             >
@@ -9196,14 +9155,14 @@ export default function App() {
                                   placeholder="Enter Room Code"
                                   defaultValue={t.roomCode || ''}
                                   onBlur={async (e) => {
-                                    await updateRow('ludoTournaments', t.id, { roomCode: e.target.value });
+                                    await adminUpdate('ludoTournaments', t.id, { roomCode: e.target.value });
                                   }}
                                   className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] font-bold outline-none focus:border-indigo-500"
                                 />
                                 <button
                                   onClick={async () => {
                                     if (confirm('Delete this tournament?')) {
-                                      await deleteRow('ludoTournaments', t.id);
+                                      await adminDelete('ludoTournaments', t.id);
                                     }
                                   }}
                                   className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all"
@@ -9278,11 +9237,11 @@ export default function App() {
                                   const tournament = ludoTournaments.find(t => t.id === s.tournamentId);
                                   if (!tournament) return;
                                   // Use atomic increment for prize payout
-                                  await incrementFields('users', s.userId, {
+                                  await adminIncrementFields('users', s.userId, {
                                     mainBalance: tournament.prizePool,
                                     totalEarned: tournament.prizePool
                                   });
-                                  await updateRow('ludoSubmissions', s.id, { status: 'approved' });
+                                  await adminUpdate('ludoSubmissions', s.id, { status: 'approved' });
                                   alert('Submission Approved & Prize Paid!');
                                 }}
                                 className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
@@ -9292,7 +9251,7 @@ export default function App() {
                               </button>
                               <button
                                 onClick={async () => {
-                                  await updateRow('ludoSubmissions', s.id, { status: 'rejected' });
+                                  await adminUpdate('ludoSubmissions', s.id, { status: 'rejected' });
                                   alert('Submission Rejected');
                                 }}
                                 className="flex-1 bg-white text-rose-600 border border-rose-100 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 active:scale-95 transition-all flex items-center justify-center gap-2"
