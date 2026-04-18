@@ -220,9 +220,13 @@ CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   name TEXT DEFAULT '',
   price NUMERIC(12,2) DEFAULT 0,
+  "resellPrice" NUMERIC(12,2) DEFAULT 0,
+  "profitPerUnit" NUMERIC(12,2) DEFAULT 0,
   description TEXT DEFAULT '',
   image TEXT DEFAULT '',
-  category TEXT DEFAULT ''
+  category TEXT DEFAULT '',
+  variants TEXT DEFAULT '',
+  "quantityOptions" TEXT DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS "productOrders" (

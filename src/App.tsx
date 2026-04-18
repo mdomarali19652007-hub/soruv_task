@@ -197,9 +197,13 @@ interface Product {
   id: string;
   name: string;
   price: number;
+  resellPrice?: number;
+  profitPerUnit?: number;
   description?: string;
   image: string;
   category?: string;
+  variants?: string;
+  quantityOptions?: string;
 }
 
 interface ProductOrder {
@@ -4803,12 +4807,46 @@ export default function App() {
             ) : (
               products.map(p => (
                 <div key={p.id} className="glass-card border-white/40 shadow-lg overflow-hidden flex flex-col p-0">
-                  <div className="p-3 flex flex-col flex-1">
-                    <h4 className="text-[10px] font-black text-slate-900 uppercase line-clamp-1">{p.name}</h4>
-                    <p className="text-xs font-black text-indigo-600 mt-1">৳ {p.price.toFixed(2)}</p>
+                  {p.image && (
+                    <img src={p.image} alt={p.name} className="w-full h-28 object-cover" />
+                  )}
+                  <div className="p-3 flex flex-col flex-1 gap-1">
+                    <div className="flex items-start justify-between gap-1">
+                      <h4 className="text-[10px] font-black text-slate-900 uppercase line-clamp-2 flex-1">{p.name}</h4>
+                      {p.category && (
+                        <span className="text-[7px] font-black bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded-full uppercase whitespace-nowrap">{p.category}</span>
+                      )}
+                    </div>
+                    {p.description && (
+                      <p className="text-[8px] text-slate-500 font-medium line-clamp-2 leading-relaxed">{p.description}</p>
+                    )}
+                    <div className="mt-1 space-y-0.5">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[7px] font-bold text-slate-400 uppercase">Sell Price</span>
+                        <span className="text-xs font-black text-indigo-600">৳ {p.price.toFixed(0)}</span>
+                      </div>
+                      {p.resellPrice && p.resellPrice > 0 && (
+                        <div className="flex items-center justify-between">
+                          <span className="text-[7px] font-bold text-slate-400 uppercase">Resell Price</span>
+                          <span className="text-[10px] font-black text-emerald-600">৳ {p.resellPrice.toFixed(0)}</span>
+                        </div>
+                      )}
+                      {(p.profitPerUnit ?? 0) > 0 && (
+                        <div className="flex items-center justify-between bg-emerald-50 rounded-lg px-2 py-1">
+                          <span className="text-[7px] font-black text-emerald-600 uppercase">Profit/Unit</span>
+                          <span className="text-[10px] font-black text-emerald-700">৳ {(p.profitPerUnit ?? 0).toFixed(0)}</span>
+                        </div>
+                      )}
+                    </div>
+                    {p.variants && (
+                      <p className="text-[7px] text-slate-400 font-bold mt-0.5"><span className="text-slate-500">Variants:</span> {p.variants}</p>
+                    )}
+                    {p.quantityOptions && (
+                      <p className="text-[7px] text-slate-400 font-bold"><span className="text-slate-500">Qty:</span> {p.quantityOptions}</p>
+                    )}
                     <button
                       onClick={() => handleBuy(p)}
-                      className="mt-3 w-full py-2 bg-slate-900 text-white rounded-xl font-black text-[8px] uppercase tracking-widest active:scale-95 transition-all"
+                      className="mt-2 w-full py-2.5 bg-slate-900 text-white rounded-xl font-black text-[8px] uppercase tracking-widest active:scale-95 transition-all"
                     >
                       BUY NOW
                     </button>
@@ -7090,7 +7128,7 @@ export default function App() {
 
     const [newTask, setNewTask] = useState({ title: '', reward: 0, desc: '', link: '', category: 'micro' as 'micro' | 'social' | 'gmail' | 'premium' });
     const [newDriveOffer, setNewDriveOffer] = useState({ title: '', operator: 'GP', price: 0, description: '' });
-    const [newProduct, setNewProduct] = useState({ name: '', price: 0, description: '', category: '', image: '' });
+    const [newProduct, setNewProduct] = useState({ name: '', price: 0, resellPrice: 0, profitPerUnit: 0, description: '', category: '', image: '', variants: '', quantityOptions: '' });
 
     const saveChanges = async () => {
       try {
@@ -7358,12 +7396,14 @@ export default function App() {
     };
 
     const seedSampleProduct = async () => {
-      const sample = {
-        name: "Premium Smart Watch Z10",
-        price: 2450,
-        description: "High-quality waterproof smart watch with heart rate monitoring, sleep tracking, and 10-day battery life.",
-        category: "Electronics"
-      };
+      const samples = [
+        { name: 'Premium Smart Watch Z10', price: 1850, resellPrice: 2450, profitPerUnit: 600, description: 'Waterproof smart watch, heart rate + sleep tracking, 10-day battery', category: 'Electronics', variants: 'Black, Silver, Rose Gold', quantityOptions: '1x, 2x, 5x' },
+        { name: 'Wireless Earbuds Pro X3', price: 650, resellPrice: 950, profitPerUnit: 300, description: 'Bluetooth 5.3 earbuds, ANC, 30hr battery with case', category: 'Electronics', variants: 'White, Black', quantityOptions: '1x, 3x, 10x' },
+        { name: 'LED Ring Light 10"', price: 380, resellPrice: 550, profitPerUnit: 170, description: '10-inch ring light with tripod, 3 color modes, USB powered', category: 'Accessories', variants: '10 inch, 12 inch', quantityOptions: '1x, 2x' },
+        { name: 'Phone Holder Car Mount', price: 180, resellPrice: 320, profitPerUnit: 140, description: '360 rotation, dashboard + air vent mount, universal fit', category: 'Accessories', variants: 'Standard, Premium (Suction)', quantityOptions: '1x, 5x, 10x' },
+        { name: 'Portable Mini Fan USB', price: 150, resellPrice: 280, profitPerUnit: 130, description: 'Rechargeable mini desk fan, 3 speeds, quiet motor', category: 'Gadgets', variants: 'White, Pink, Blue', quantityOptions: '1x, 3x, 10x' },
+      ];
+      const sample = samples[Math.floor(Math.random() * samples.length)];
       try {
         await insertRow('products', { ...sample, image: '' });
         confetti({ particleCount: 100, spread: 70 });
@@ -7378,8 +7418,12 @@ export default function App() {
         return;
       }
       try {
-        await insertRow('products', { ...newProduct });
-        setNewProduct({ name: '', price: 0, description: '', category: '', image: '' });
+        const productData = {
+          ...newProduct,
+          profitPerUnit: (newProduct.resellPrice || 0) > 0 ? (newProduct.resellPrice - newProduct.price) : newProduct.profitPerUnit
+        };
+        await insertRow('products', productData);
+        setNewProduct({ name: '', price: 0, resellPrice: 0, profitPerUnit: 0, description: '', category: '', image: '', variants: '', quantityOptions: '' });
         confetti({ particleCount: 50, spread: 60 });
       } catch (e) {
         handleFirestoreError(e, OperationType.CREATE, 'products');
@@ -9482,28 +9526,64 @@ export default function App() {
                       onChange={e => setNewProduct({ ...newProduct, name: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                     />
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-3 gap-3">
                       <input
                         type="number"
-                        placeholder="Price (৳)"
-                        value={newProduct.price}
-                        onChange={e => setNewProduct({ ...newProduct, price: parseFloat(e.target.value) || 0 })}
+                        placeholder="Sell Price (৳)"
+                        value={newProduct.price || ''}
+                        onChange={e => {
+                          const price = parseFloat(e.target.value) || 0;
+                          const profit = (newProduct.resellPrice || 0) > 0 ? (newProduct.resellPrice - price) : 0;
+                          setNewProduct({ ...newProduct, price, profitPerUnit: profit > 0 ? profit : 0 });
+                        }}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
                       <input
+                        type="number"
+                        placeholder="Resell Price (৳)"
+                        value={newProduct.resellPrice || ''}
+                        onChange={e => {
+                          const resell = parseFloat(e.target.value) || 0;
+                          const profit = resell > 0 && newProduct.price > 0 ? (resell - newProduct.price) : 0;
+                          setNewProduct({ ...newProduct, resellPrice: resell, profitPerUnit: profit > 0 ? profit : 0 });
+                        }}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                      />
+                      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex flex-col items-center justify-center">
+                        <span className="text-[7px] font-black text-emerald-500 uppercase">Profit</span>
+                        <span className="text-xs font-black text-emerald-700">৳ {(newProduct.profitPerUnit || 0).toFixed(0)}</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <input
                         type="text"
-                        placeholder="Category"
+                        placeholder="Category (e.g. Electronics)"
                         value={newProduct.category}
                         onChange={e => setNewProduct({ ...newProduct, category: e.target.value })}
                         className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
                       />
+                      <input
+                        type="text"
+                        placeholder="Qty Options (e.g. 1x, 3x, 10x)"
+                        value={newProduct.quantityOptions}
+                        onChange={e => setNewProduct({ ...newProduct, quantityOptions: e.target.value })}
+                        className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                      />
                     </div>
+                    <input
+                      type="text"
+                      placeholder="Variants (e.g. Black, White, Red | S, M, L)"
+                      value={newProduct.variants}
+                      onChange={e => setNewProduct({ ...newProduct, variants: e.target.value })}
+                      className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500"
+                    />
                     <textarea
-                      placeholder="Description"
+                      placeholder="Short description (1-2 lines max)"
                       value={newProduct.description}
                       onChange={e => setNewProduct({ ...newProduct, description: e.target.value })}
                       className="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-900 outline-none focus:border-indigo-500 resize-none"
                       rows={2}
+                      maxLength={150}
                     />
                     <div>
                       <label className="text-[10px] font-black text-slate-400 uppercase ml-1 mb-1 block">Product Image</label>
@@ -9561,22 +9641,34 @@ export default function App() {
                   </div>
 
                   <div className="mt-8 pt-8 border-t border-slate-100">
-                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Live Product Inventory</h5>
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Live Product Inventory ({products.length})</h5>
                     <div className="space-y-3">
                       {products.map(p => (
-                        <div key={p.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center">
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400">
-                              <ShoppingBag className="w-5 h-5" />
+                        <div key={p.id} className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                          <div className="flex justify-between items-start">
+                            <div className="flex items-start gap-3 flex-1">
+                              {p.image ? (
+                                <img src={p.image} alt={p.name} className="w-12 h-12 rounded-lg object-cover" />
+                              ) : (
+                                <div className="w-12 h-12 bg-slate-200 rounded-lg flex items-center justify-center text-slate-400 flex-shrink-0">
+                                  <ShoppingBag className="w-5 h-5" />
+                                </div>
+                              )}
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-black text-slate-900 truncate">{p.name}</p>
+                                <div className="flex items-center gap-3 mt-0.5">
+                                  <span className="text-[8px] text-slate-400 font-bold">Sell: <span className="text-indigo-600">৳{p.price}</span></span>
+                                  {p.resellPrice ? <span className="text-[8px] text-slate-400 font-bold">Resell: <span className="text-emerald-600">৳{p.resellPrice}</span></span> : null}
+                                  {(p.profitPerUnit ?? 0) > 0 ? <span className="text-[8px] font-black text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">+৳{p.profitPerUnit}</span> : null}
+                                </div>
+                                {p.category && <span className="text-[7px] text-slate-400 font-bold uppercase">{p.category}</span>}
+                                {p.variants && <p className="text-[7px] text-slate-400 mt-0.5">Variants: {p.variants}</p>}
+                              </div>
                             </div>
-                            <div>
-                              <p className="text-xs font-black text-slate-900">{p.name}</p>
-                              <p className="text-[8px] text-slate-400 uppercase font-bold">৳{p.price}</p>
-                            </div>
+                            <button onClick={() => deleteProduct(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all flex-shrink-0">
+                              <X className="w-4 h-4" />
+                            </button>
                           </div>
-                          <button onClick={() => deleteProduct(p.id)} className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all">
-                            <X className="w-4 h-4" />
-                          </button>
                         </div>
                       ))}
                     </div>
