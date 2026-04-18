@@ -3,7 +3,7 @@ name: Notify topeliteearning
 on:
   push:
     branches:
-      - main
+      - master  # Changed from main
 
 jobs:
   dispatch:
@@ -16,4 +16,4 @@ jobs:
           token: ${{ secrets.TARGET_REPO_PAT }}
           repository: SwagCoder18/topeliteearning
           event-type: soruv_task_updated
-          client-payload: '{"branch":"main"}'
+          client-payload: '{"branch":"master"}'  # Changed from main
