@@ -99,7 +99,26 @@ router.post('/register', async (req: Request, res: Response) => {
     }
 
     const userId = signUpResult.user.id;
-    const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Generate a unique 6-digit numericId with collision retry
+    let userNumericId = '';
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = Math.floor(100000 + Math.random() * 900000).toString();
+      const { data: existing } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('numericId', candidate)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        userNumericId = candidate;
+        break;
+      }
+    }
+    if (!userNumericId) {
+      // Extremely unlikely -- 10 consecutive collisions
+      res.status(500).json({ error: 'Failed to generate unique ID. Please try again.' });
+      return;
+    }
 
     // Create app user profile in the users table
     const { error: profileError } = await supabaseAdmin.from('users').upsert({
@@ -215,7 +234,24 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
     });
     const userName = session?.user?.name || 'User';
 
-    const userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+    // Generate a unique 6-digit numericId with collision retry
+    let userNumericId = '';
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const candidate = Math.floor(100000 + Math.random() * 900000).toString();
+      const { data: existing } = await supabaseAdmin
+        .from('users')
+        .select('id')
+        .eq('numericId', candidate)
+        .limit(1);
+      if (!existing || existing.length === 0) {
+        userNumericId = candidate;
+        break;
+      }
+    }
+    if (!userNumericId) {
+      res.status(500).json({ error: 'Failed to generate unique ID. Please try again.' });
+      return;
+    }
 
     const { error: profileError } = await supabaseAdmin.from('users').upsert({
       id: userId,
