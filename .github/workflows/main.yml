@@ -1,0 +1,19 @@
+name: Notify topeliteearning
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Send repository dispatch to topeliteearning
+        uses: peter-evans/repository-dispatch@v2
+        with:
+          token: ${{ secrets.TARGET_REPO_PAT }}
+          repository: SwagCoder18/topeliteearning
+          event-type: soruv_task_updated
+          client-payload: '{"branch":"main"}'
