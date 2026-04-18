@@ -6946,6 +6946,7 @@ export default function App() {
     const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
     const [selectedMicrojobs, setSelectedMicrojobs] = useState<string[]>([]);
     const [newNews, setNewNews] = useState({ content: '', imageUrl: '' });
+    const [ludoForm, setLudoForm] = useState({ title: '', fee: '', prize: '', type: '1vs1', desc: '' });
 
     const postNews = async () => {
       if (!newNews.content.trim()) return;
@@ -6985,12 +6986,39 @@ export default function App() {
       }
 
       try {
-        const userRef_id = userId;
-        await updateRow('users', userRef_id, {
+        // Update app-level user status
+        await updateRow('users', userId, {
           status,
           restrictionReason: reason,
           suspensionUntil
         });
+
+        // For bans, also call server-side API to revoke Better Auth sessions
+        // so the banned user is kicked out immediately (not after session expiry)
+        if (status === 'banned') {
+          try {
+            await fetch('/api/admin/users/' + userId + '/ban', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({ reason })
+            });
+          } catch (banErr) {
+            console.error('Failed to revoke auth sessions for banned user:', banErr);
+          }
+        } else if (status === 'suspended') {
+          // Revoke sessions for suspended users too
+          try {
+            await fetch('/api/admin/users/' + userId + '/revoke-sessions', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include'
+            });
+          } catch (revokeErr) {
+            console.error('Failed to revoke auth sessions for suspended user:', revokeErr);
+          }
+        }
+
         alert(`User ${status} successfully!`);
       } catch (e) {
         handleFirestoreError(e, OperationType.UPDATE, `users/${userId}`);
@@ -7011,14 +7039,18 @@ export default function App() {
 
       try {
         let count = 0;
-        for (const u of suspendedUsers) {
-          const userRef_id = u.id;
-          await updateRow('users', userRef_id, {
-            status: 'active',
-            restrictionReason: '',
-            suspensionUntil: ''
-          });
-          count++;
+        const CHUNK_SIZE = 10;
+        // Process in batches of CHUNK_SIZE for performance (was previously sequential)
+        for (let i = 0; i < suspendedUsers.length; i += CHUNK_SIZE) {
+          const chunk = suspendedUsers.slice(i, i + CHUNK_SIZE);
+          await Promise.all(chunk.map(u =>
+            updateRow('users', u.id, {
+              status: 'active',
+              restrictionReason: '',
+              suspensionUntil: ''
+            })
+          ));
+          count += chunk.length;
           setSubmissionProgress((count / suspendedUsers.length) * 100);
         }
         alert(`Successfully reactivated ${count} accounts!`);
@@ -7100,8 +7132,11 @@ export default function App() {
           referralActivationBonus: adminReferralActivationBonus
         });
 
-        const userRef_id = adminUser.id;
-        await upsertRow('users', adminUser);
+        // Only update admin-editable profile fields, NOT financial fields.
+        // Upserting the full adminUser object risks overwriting balance changes
+        // made by other operations between page load and save.
+        const { mainBalance, totalEarned, totalCommission, ...safeAdminFields } = adminUser;
+        await upsertRow('users', safeAdminFields);
 
         confetti({ particleCount: 150, spread: 70 });
         alert('All changes saved and applied successfully!');
@@ -7369,13 +7404,8 @@ export default function App() {
         if (action === 'cancelled') {
           const o = productOrders.find(o => o.id === id);
           if (o) {
-            const userRef_id = o.userId;
-            const userData = await getRow('users', userRef_id) as UserProfile | null;
-            if (userData) {
-              await updateRow('users', userRef_id, {
-                mainBalance: userData.mainBalance + o.amount
-              });
-            }
+            // Use atomic increment to avoid race conditions (was previously read-modify-write)
+            await incrementField('users', o.userId, 'mainBalance', o.amount);
           }
         }
         confetti({ particleCount: 50, spread: 60 });
@@ -7447,11 +7477,8 @@ export default function App() {
 
         const sub = subscriptionRequests.find(r => r.id === id);
         if (sub && status === 'rejected') {
-          // Refund balance
-          const userRef_id = sub.userId;
-          await updateRow('users', userRef_id, {
-            mainBalance: sub.price
-          });
+          // Refund balance atomically (was previously overwriting balance with sub.price)
+          await incrementField('users', sub.userId, 'mainBalance', sub.price);
         }
 
         alert(`Subscription ${status}`);
@@ -7468,12 +7495,21 @@ export default function App() {
 
         const s = allSocialSubmissions.find(s => s.id === id);
         if (s && action === 'approved') {
-          const userRef_id = s.userId;
-          const userData = await getRow('users', userRef_id) as UserProfile | null;
+          const reward = s.amount || 0;
+          // Credit reward to user balance (was previously missing -- workers didn't get paid)
+          if (reward > 0) {
+            await incrementFields('users', s.userId, {
+              mainBalance: reward,
+              totalEarned: reward
+            });
+            await processReferralCommission(s.userId, reward, 'Social Job');
+          }
+          // Also add notification
+          const userData = await getRow('users', s.userId) as UserProfile | null;
           if (userData) {
-            await updateRow('users', userRef_id, {
+            await updateRow('users', s.userId, {
               notifications: [
-                { id: Date.now().toString(), text: `Social Job Approved: ${s.type}`, date: new Date().toISOString().split('T')[0] },
+                { id: Date.now().toString(), text: `Social Job Approved: ${s.type}${reward > 0 ? ` (+৳${reward})` : ''}`, date: new Date().toISOString().split('T')[0] },
                 ...userData.notifications
               ]
             });
@@ -9023,19 +9059,19 @@ export default function App() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div className="space-y-2">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Tournament Title</label>
-                        <input type="text" placeholder="e.g. Daily Mega Match" id="ludo-title" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
+                        <input type="text" placeholder="e.g. Daily Mega Match" value={ludoForm.title} onChange={e => setLudoForm(f => ({ ...f, title: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Entry Fee (৳)</label>
-                        <input type="number" placeholder="50" id="ludo-fee" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
+                        <input type="number" placeholder="50" value={ludoForm.fee} onChange={e => setLudoForm(f => ({ ...f, fee: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Prize Pool (৳)</label>
-                        <input type="number" placeholder="90" id="ludo-prize" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
+                        <input type="number" placeholder="90" value={ludoForm.prize} onChange={e => setLudoForm(f => ({ ...f, prize: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all" />
                       </div>
                       <div className="space-y-2">
                         <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Match Type</label>
-                        <select id="ludo-type" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all appearance-none">
+                        <select value={ludoForm.type} onChange={e => setLudoForm(f => ({ ...f, type: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all appearance-none">
                           <option value="1vs1">1vs1 (2 Players)</option>
                           <option value="4player">4 Players</option>
                         </select>
@@ -9044,29 +9080,23 @@ export default function App() {
 
                     <div className="mt-6 space-y-2">
                       <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-2">Rules & Description</label>
-                      <textarea placeholder="Enter match rules and details..." id="ludo-desc" className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all h-32 resize-none" />
+                      <textarea placeholder="Enter match rules and details..." value={ludoForm.desc} onChange={e => setLudoForm(f => ({ ...f, desc: e.target.value }))} className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-4 text-xs font-bold outline-none focus:border-indigo-500 transition-all h-32 resize-none" />
                     </div>
 
                     <button
                       onClick={async () => {
-                        const title = (document.getElementById('ludo-title') as HTMLInputElement).value;
-                        const fee = parseFloat((document.getElementById('ludo-fee') as HTMLInputElement).value);
-                        const prize = parseFloat((document.getElementById('ludo-prize') as HTMLInputElement).value);
-                        const type = (document.getElementById('ludo-type') as HTMLSelectElement).value;
-                        const desc = (document.getElementById('ludo-desc') as HTMLTextAreaElement).value;
+                        const fee = parseFloat(ludoForm.fee);
+                        const prize = parseFloat(ludoForm.prize);
 
-                        if (!title || !fee || !prize) return alert('Fill all fields');
+                        if (!ludoForm.title || !fee || !prize) return alert('Fill all fields');
 
                         await insertRow('ludoTournaments', {
-                          title, entryFee: fee, prizePool: prize, type, description: desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
-                          status: 'open', maxPlayers: type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
+                          title: ludoForm.title, entryFee: fee, prizePool: prize, type: ludoForm.type, description: ludoForm.desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
+                          status: 'open', maxPlayers: ludoForm.type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
                           playerIds: []
                         });
                         alert('Tournament Created!');
-                        (document.getElementById('ludo-title') as HTMLInputElement).value = '';
-                        (document.getElementById('ludo-fee') as HTMLInputElement).value = '';
-                        (document.getElementById('ludo-prize') as HTMLInputElement).value = '';
-                        (document.getElementById('ludo-desc') as HTMLTextAreaElement).value = '';
+                        setLudoForm({ title: '', fee: '', prize: '', type: '1vs1', desc: '' });
                       }}
                       className="w-full mt-8 bg-indigo-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
                     >
