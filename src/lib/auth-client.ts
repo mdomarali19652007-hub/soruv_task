@@ -39,10 +39,20 @@ export const {
  * Without it, Better Auth cannot deliver the reset link.
  */
 export async function requestPasswordReset(email: string, redirectTo?: string) {
-  return authClient.forgetPassword({
-    email,
-    redirectTo: redirectTo || `${window.location.origin}/reset-password`,
+  // Better Auth's forgetPassword endpoint accepts email + redirectTo via POST
+  const res = await fetch('/api/auth/forget-password', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      email,
+      redirectTo: redirectTo || `${window.location.origin}/reset-password`,
+    }),
   });
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || 'Failed to send password reset email');
+  }
+  return res.json();
 }
 
 /**
@@ -107,6 +117,28 @@ export async function createGoogleProfile(refCode?: string): Promise<{ success: 
   }
 
   return { success: true, numericId: result.numericId };
+}
+
+/**
+ * Migrate an old Supabase Auth profile to the current Better Auth user ID.
+ * Should be called when a user logs in and their profile is not found by ID.
+ * The server will look up the profile by email and re-key it to the new ID.
+ */
+export async function migrateProfile(): Promise<{ success: boolean; migrated: boolean; error?: string }> {
+  try {
+    const res = await fetch('/api/migrate-profile', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      return { success: false, migrated: false, error: result.error };
+    }
+    return { success: result.success, migrated: result.migrated };
+  } catch (err: any) {
+    return { success: false, migrated: false, error: err.message };
+  }
 }
 
 /**

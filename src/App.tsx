@@ -98,6 +98,7 @@ import {
   createGoogleProfile,
   validateReferralCode,
   requestPasswordReset,
+  migrateProfile,
 } from './lib/auth-client';
 
 interface GlobalUpload {
@@ -626,25 +627,31 @@ export default function App() {
             }
             currentSubscribedUserId = authUser.id;
 
-            // For Google OAuth users, ensure profile exists
-            const pendingRefCode = localStorage.getItem('pendingReferralCode');
-            if (pendingRefCode) {
-              localStorage.removeItem('pendingReferralCode');
-              await createGoogleProfile(pendingRefCode).catch(e =>
-                console.warn('Failed to create Google profile:', e)
-              );
-            }
-
             // Subscribe to user profile via Supabase realtime
+            // Profile migration (old Supabase Auth -> Better Auth) and Google OAuth
+            // profile creation are handled inside the subscription callback when
+            // the profile is not found by Better Auth user ID.
             const unsubUser = subscribeToRow<UserProfile>('users', authUser.id, async (data) => {
               if (data) {
                 setUser(data);
               } else {
-                // Profile not found -- may happen for new Google OAuth users
-                // The server-side /api/register/google-profile endpoint handles creation
-                await createGoogleProfile().catch(e =>
-                  console.warn('Failed to create profile:', e)
-                );
+                // Profile not found by Better Auth ID -- try migrating old Supabase Auth profile
+                const migration = await migrateProfile().catch(e => {
+                  console.warn('Profile migration failed:', e);
+                  return { success: false, migrated: false } as const;
+                });
+
+                if (migration.migrated) {
+                  // Migration succeeded -- the realtime subscription will pick up the new row
+                  console.log('Profile migrated from old Supabase Auth ID to Better Auth ID');
+                } else {
+                  // No old profile found -- create new profile (Google OAuth or orphaned user)
+                  const pendingRef = localStorage.getItem('pendingReferralCode');
+                  await createGoogleProfile(pendingRef || undefined).catch(e =>
+                    console.warn('Failed to create profile:', e)
+                  );
+                  if (pendingRef) localStorage.removeItem('pendingReferralCode');
+                }
               }
             });
             currentUserUnsub = unsubUser;

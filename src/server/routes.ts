@@ -202,7 +202,7 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
     const userEmail = req.userEmail!;
     const { refCode } = req.body;
 
-    // Check if profile already exists
+    // Check if profile already exists with current Better Auth ID
     const { data: existing } = await supabaseAdmin
       .from('users')
       .select('id')
@@ -212,6 +212,28 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
     if (existing) {
       res.json({ success: true, message: 'Profile already exists' });
       return;
+    }
+
+    // Check if an old profile exists by email (Supabase Auth migration case)
+    const { data: oldByEmail } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle();
+
+    if (oldByEmail) {
+      // Migrate the old profile instead of creating a new one
+      // This preserves balance, referral code, referral history, etc.
+      const { data: fullOld } = await supabaseAdmin.from('users').select('*').eq('id', oldByEmail.id).single();
+      if (fullOld) {
+        const oldId = fullOld.id;
+        await supabaseAdmin.from('users').upsert({ ...fullOld, id: userId, email: userEmail });
+        await supabaseAdmin.from('users').delete().eq('id', oldId);
+        await supabaseAdmin.from('users').update({ referredBy: userId }).eq('referredBy', oldId);
+        console.log(`[Auth Migration] Google profile migrated: ${oldId} -> ${userId} (${userEmail})`);
+        res.json({ success: true, migrated: true, numericId: fullOld.numericId });
+        return;
+      }
     }
 
     // Validate referral code
@@ -336,6 +358,112 @@ router.post('/validate-referral', async (req: Request, res: Response) => {
     res.json({ valid: true, userId: data[0].id });
   } catch {
     res.json({ valid: false });
+  }
+});
+
+// ============================================================
+// POST /api/migrate-profile -- Migrate old Supabase Auth profile to Better Auth user ID
+// ============================================================
+// When a user originally created via Supabase Auth logs in via Better Auth,
+// their session has a new user ID. This endpoint finds their old profile by
+// email and updates its `id` to the new Better Auth user ID, preserving all
+// data (balance, referral code, referral history, etc.).
+
+router.post('/migrate-profile', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const newUserId = req.userId!;
+    const userEmail = req.userEmail!;
+
+    // Check if a profile already exists with the new Better Auth ID
+    const { data: existingNew } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('id', newUserId)
+      .maybeSingle();
+
+    if (existingNew) {
+      // Profile already migrated or newly created
+      res.json({ success: true, migrated: false, message: 'Profile already exists with current ID' });
+      return;
+    }
+
+    // Look for an old profile by email (from Supabase Auth era)
+    const { data: oldProfile } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('email', userEmail)
+      .maybeSingle();
+
+    if (!oldProfile) {
+      // No old profile found -- user needs to create a new profile
+      res.json({ success: false, migrated: false, message: 'No existing profile found' });
+      return;
+    }
+
+    const oldUserId = oldProfile.id;
+
+    // Migrate: update the profile's id to the new Better Auth user ID
+    // We need to insert a new row with the new ID and delete the old one
+    // because Postgres doesn't allow updating primary keys easily.
+
+    // 1. Get the full old profile
+    const { data: fullOldProfile, error: fetchErr } = await supabaseAdmin
+      .from('users')
+      .select('*')
+      .eq('id', oldUserId)
+      .single();
+
+    if (fetchErr || !fullOldProfile) {
+      res.status(500).json({ error: 'Failed to read old profile' });
+      return;
+    }
+
+    // 2. Insert new row with updated ID (upsert to handle race conditions)
+    const migratedProfile = { ...fullOldProfile, id: newUserId, email: userEmail };
+    const { error: upsertErr } = await supabaseAdmin
+      .from('users')
+      .upsert(migratedProfile);
+
+    if (upsertErr) {
+      console.error('Profile migration upsert failed:', upsertErr);
+      res.status(500).json({ error: 'Migration failed' });
+      return;
+    }
+
+    // 3. Delete the old row
+    await supabaseAdmin
+      .from('users')
+      .delete()
+      .eq('id', oldUserId);
+
+    // 4. Update referredBy references in other users (they point to old ID)
+    await supabaseAdmin
+      .from('users')
+      .update({ referredBy: newUserId })
+      .eq('referredBy', oldUserId);
+
+    // 5. Update userId references in submissions/transactions tables
+    const tablesToMigrate = [
+      'withdrawals', 'gmailSubmissions', 'microjobSubmissions', 'taskSubmissions',
+      'rechargeRequests', 'driveOfferRequests', 'dollarBuyRequests', 'deposits',
+      'subscriptionRequests', 'productOrders', 'socialSubmissions', 'ludoSubmissions',
+      'smmOrders', 'uploads'
+    ];
+    for (const table of tablesToMigrate) {
+      await supabaseAdmin
+        .from(table)
+        .update({ userId: newUserId })
+        .eq('userId', oldUserId)
+        .then(({ error }) => {
+          if (error) console.warn(`Migration: failed to update ${table}:`, error.message);
+        });
+    }
+
+    console.log(`[Auth Migration] Profile migrated: ${oldUserId} -> ${newUserId} (${userEmail})`);
+    res.json({ success: true, migrated: true, oldId: oldUserId, newId: newUserId });
+  } catch (error: any) {
+    console.error('Profile migration error:', error);
+    res.status(500).json({ error: error.message || 'Migration failed' });
   }
 });
 
