@@ -15,7 +15,8 @@ import { adminClient } from 'better-auth/client/plugins';
  *   supabase.auth.getSession         -> authClient.getSession / useSession
  */
 export const authClient = createAuthClient({
-  baseURL: window.location.origin,
+  // Use relative path -- works in both local dev and Vercel deployment
+  baseURL: typeof window !== 'undefined' ? window.location.origin : '',
   basePath: '/api/auth',
   plugins: [adminClient()],
 });

@@ -30,7 +30,8 @@
   },
   "include": [
     "src",
-    "server.ts"
+    "server.ts",
+    "api"
   ],
   "exclude": [
     "node_modules",
