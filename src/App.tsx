@@ -609,11 +609,14 @@ export default function App() {
         if (session?.user) {
           const authUser = session.user;
           setIsLoggedIn(true);
-          setNeedsEmailVerification(!authUser.emailVerified);
+          // NOTE: Email verification is disabled until an email transport
+          // (e.g. Resend, SMTP) is configured in Better Auth.  Without it
+          // emailVerified is always false and users get permanently stuck
+          // on the verification screen.  Re-enable this gate once
+          // sendVerificationEmail is wired up in src/server/auth.ts.
+          setNeedsEmailVerification(false);
 
-          if (authUser.emailVerified) {
-            setView(prev => prev === 'login' ? 'home' : prev);
-          }
+          setView(prev => prev === 'login' ? 'home' : prev);
 
           // Only subscribe if we haven't already for this user
           if (currentSubscribedUserId !== authUser.id) {
@@ -865,13 +868,19 @@ export default function App() {
   };
 
   const handlePasswordReset = async () => {
+    // TODO: Password reset requires an email transport (Resend, SMTP, etc.)
+    // configured in Better Auth.  Until that is set up, the reset email will
+    // never arrive.  Show a helpful message instead of silently failing.
     const email = loginEmail || prompt('Enter your email address:');
     if (!email) return;
     try {
       await requestPasswordReset(email, `${window.location.origin}`);
-      alert('Password reset email sent! Check your inbox.');
+      alert(
+        'If an email transport is configured, a password reset link has been sent to your inbox. ' +
+        'If you do not receive it within a few minutes, please contact support.'
+      );
     } catch (error: any) {
-      alert(error.message || 'Failed to send reset email.');
+      alert(error.message || 'Failed to send reset email. Email delivery may not be configured yet.');
     }
   };
 
@@ -1005,8 +1014,8 @@ export default function App() {
     }
   };
 
-  const handleLogout = () => {
-    signOut();
+  const handleLogout = async () => {
+    await signOut();
     setIsLoggedIn(false);
     setView('login');
     confetti({ particleCount: 50, spread: 60 });
@@ -1601,8 +1610,8 @@ export default function App() {
             Contact Support
           </a>
           <button
-            onClick={() => {
-              signOut();
+            onClick={async () => {
+              await signOut();
               setView('login');
             }}
             className="block w-full bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 active:scale-95 transition-all"
@@ -9813,7 +9822,7 @@ export default function App() {
           </div>
 
           <button
-            onClick={() => { signOut(); setIsLoggedIn(false); setView('login'); }}
+            onClick={async () => { await signOut(); setIsLoggedIn(false); setView('login'); }}
             className="w-full py-5 bg-rose-500/5 text-rose-500 border border-rose-500/20 rounded-2xl font-black text-[10px] uppercase tracking-[0.3em] flex items-center justify-center gap-3 mt-10 hover:bg-rose-500/10 transition-all active:scale-95"
           >
             <LogOut className="w-4 h-4" />
@@ -9986,8 +9995,8 @@ export default function App() {
               RESEND EMAIL
             </button>
             <button
-              onClick={() => {
-                signOut();
+              onClick={async () => {
+                await signOut();
                 setNeedsEmailVerification(false);
                 setView('login');
               }}

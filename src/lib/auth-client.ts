@@ -32,6 +32,10 @@ export const {
 /**
  * Request a password reset email.
  * Uses Better Auth's forgetPassword endpoint.
+ *
+ * NOTE: This will only work once an email transport (e.g. Resend, SMTP)
+ * is configured in the Better Auth server config (src/server/auth.ts).
+ * Without it, Better Auth cannot deliver the reset link.
  */
 export async function requestPasswordReset(email: string, redirectTo?: string) {
   return authClient.forgetPassword({
@@ -43,6 +47,10 @@ export async function requestPasswordReset(email: string, redirectTo?: string) {
 /**
  * Complete password reset with token.
  * Uses Better Auth's resetPassword endpoint.
+ *
+ * NOTE: Requires a frontend route at /reset-password that extracts the
+ * token from the URL and calls this function.  Currently the app uses
+ * state-based navigation (setView) so this route does not exist yet.
  */
 export async function completePasswordReset(newPassword: string, token?: string) {
   return authClient.resetPassword({

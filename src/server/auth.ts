@@ -71,12 +71,23 @@ export const auth = betterAuth({
     enabled: true,
   },
 
-  // Google OAuth
+  // Google OAuth -- warn at startup if credentials are missing
   socialProviders: {
-    google: {
-      clientId: process.env.GOOGLE_CLIENT_ID || '',
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    },
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : (() => {
+          console.warn(
+            '\n[Auth Warning] GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET is missing.\n' +
+            'Google OAuth sign-in will be unavailable.\n' +
+            'Set both environment variables to enable Google login.\n'
+          );
+          return {};
+        })()),
   },
 
   // Session configuration -- DB-backed for instant revocation

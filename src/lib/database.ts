@@ -3,6 +3,17 @@ import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/
 
 // ============================================================
 // CRUD Operations - Firebase-compatible wrappers for Supabase
+//
+// WARNING (RLS Audit Needed):
+// These operations use the Supabase anon client directly.  Since
+// authentication moved from Supabase Auth to Better Auth, any RLS
+// policies that reference auth.uid() will NOT work -- there is no
+// Supabase Auth session on the client.  Either:
+//   1. Update RLS policies to allow anon access where appropriate, or
+//   2. Proxy these operations through the Express server using the
+//      service-role Supabase client (supabaseAdmin).
+// Until this is resolved, client-side writes may silently fail if
+// RLS is enabled on the target tables.
 // ============================================================
 
 /** Insert a row into a table (equivalent to Firestore addDoc) */
