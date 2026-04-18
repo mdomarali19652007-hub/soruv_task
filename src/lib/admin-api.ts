@@ -7,6 +7,11 @@
  * This replaces direct calls to insertRow/updateRow/deleteRow/upsertRow
  * from database.ts for admin operations, fixing the RLS mismatch
  * caused by the Better Auth migration.
+ *
+ * All requests include credentials (cookies) so the server can verify
+ * the admin session via Better Auth before executing the operation.
+ *
+ * See: src/server/routes.ts for the corresponding server-side handlers.
  */
 
 async function adminFetch<T = any>(endpoint: string, body: Record<string, any>): Promise<T> {
