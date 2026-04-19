@@ -150,6 +150,10 @@ import { DriveOfferView as SharedDriveOfferView } from './features/drive-offer/D
 import { ReferralView as SharedReferralView } from './features/referral/ReferralView';
 import { FolderAView as SharedFolderAView } from './features/workstation/FolderAView';
 import { FolderBView as SharedFolderBView } from './features/workstation/FolderBView';
+import { FolderCView as SharedFolderCView } from './features/workstation/FolderCView';
+import { FolderDView as SharedFolderDView } from './features/workstation/FolderDView';
+import { SupportView as SharedSupportView } from './features/support/SupportView';
+import { uploadMedia as sharedUploadMedia } from './lib/upload-media';
 
 // Silence unused-import warnings for types/utilities that may not be
 // referenced yet in this file but are part of the public module surface
@@ -2004,132 +2008,18 @@ export default function App() {
     );
   };
 
-  const SupportView = () => {
-    const [msg, setMsg] = useState('');
-    const myMessages = userMessages.filter(m => m.userId === user.id);
+  // Forward to the extracted SupportView feature module.
+  const SupportView = () => (
+    <SharedSupportView
+      user={user}
+      setView={setView}
+      userMessages={userMessages}
+      insertRow={insertRow}
+    />
+  );
 
-    const sendMessage = async () => {
-      if (!msg.trim()) return;
-      try {
-        await insertRow('messages', {
-          userId: user.id,
-          userName: user.name,
-          text: msg,
-          sender: 'user',
-          date: new Date().toLocaleTimeString()
-        });
-        setMsg('');
-        confetti({ particleCount: 20, spread: 30 });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, 'messages');
-      }
-    };
-
-    return (
-      <div className="min-h-screen pb-32 flex flex-col">
-        <div className="p-6 pt-12 relative z-10 flex-shrink-0">
-          <div className="flex items-center gap-4 mb-6">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Support Uplink">Support Uplink</h2>
-          </div>
-          <div className="glass-card bg-indigo-500/5 border-white/40 mb-4 shadow-lg">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-1">Uplink Status</p>
-                <h3 className="text-lg font-black text-slate-900">Online 24/7</h3>
-                <p className="text-[10px] text-slate-400">Latency: 5-10ms</p>
-              </div>
-              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shadow-md" />
-            </div>
-            <div className="flex gap-3">
-              <a
-                href="https://t.me/smarttask_support"
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-indigo-600/10 text-indigo-600 border border-indigo-500/20 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600/20 transition-all"
-              >
-                <Send className="w-3 h-3" />
-                Telegram
-              </a>
-              <a
-                href="https://wa.me/8801700000000"
-                target="_blank"
-                rel="noreferrer"
-                className="flex-1 flex items-center justify-center gap-2 py-3 bg-emerald-600/10 text-emerald-600 border border-emerald-500/20 rounded-xl text-[10px] font-black uppercase hover:bg-emerald-600/20 transition-all"
-              >
-                <MessageCircle className="w-3 h-3" />
-                WhatsApp
-              </a>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex-grow overflow-y-auto px-6 space-y-4 mb-4 relative z-10 scrollbar-hide">
-          {myMessages.length === 0 ? (
-            <div className="text-center py-20 opacity-50">
-              <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">No transmission logs found</p>
-            </div>
-          ) : (
-            myMessages.map(m => (
-              <div key={m.id} className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[85%] p-4 rounded-2xl border transition-all ${m.sender === 'user'
-                    ? 'bg-gradient-to-br from-indigo-500/20 to-violet-600/20 border-indigo-500/30 text-slate-900 rounded-tr-none shadow-md'
-                    : 'bg-white border-slate-100 text-slate-600 rounded-tl-none shadow-sm'
-                  }`}>
-                  <p className="text-sm font-medium leading-relaxed">{m.text}</p>
-                  <p className={`text-[8px] mt-2 font-black uppercase tracking-tighter ${m.sender === 'user' ? 'text-indigo-600/60' : 'text-slate-400'}`}>
-                    {m.date}
-                  </p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="p-6 bg-white/80 backdrop-blur-xl border-t border-slate-100 flex-shrink-0 relative z-10">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="Enter message..."
-              value={msg}
-              onChange={e => setMsg(e.target.value)}
-              onKeyPress={e => e.key === 'Enter' && sendMessage()}
-              className="flex-grow bg-white border border-slate-200 rounded-2xl px-5 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 transition-all placeholder:text-slate-400 shadow-sm"
-            />
-            <button
-              onClick={sendMessage}
-              className="p-4 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-2xl shadow-xl active:scale-90 transition-all"
-            >
-              <Send className="w-5 h-5" />
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const uploadMedia = async (file: File): Promise<string> => {
-    if (file.type.startsWith('video/')) {
-      throw new Error('Video upload is not supported by the current image hosting service. Please upload an image instead.');
-    }
-    const formData = new FormData();
-    formData.append('image', file);
-    const apiKey = import.meta.env.VITE_IMGBB_API_KEY;
-    if (!apiKey) throw new Error('ImgBB API Key is missing. Please add it in settings.');
-
-    const response = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
-      method: 'POST',
-      body: formData,
-    });
-    const data = await response.json();
-    if (data.success) {
-      return data.data.url;
-    }
-    throw new Error(data.error?.message || 'Upload failed');
-  };
+  // Shared image upload helper (see src/lib/upload-media.ts).
+  const uploadMedia = sharedUploadMedia;
 
   // Forward to the extracted FolderAView feature module.
   const FolderAView = () => (
@@ -2157,343 +2047,28 @@ export default function App() {
     />
   );
 
-  const FolderCView = () => {
-    const [email, setEmail] = useState('');
-    const [step, setStep] = useState<'list' | 'submit' | 'success'>('list');
-    const [selectedTask, setSelectedTask] = useState<any>(null);
-    const [showHistory, setShowHistory] = useState(false);
+  // Forward to the extracted FolderCView feature module.
+  const FolderCView = () => (
+    <SharedFolderCView
+      user={user}
+      setView={setView}
+      gmailSubmissions={gmailSubmissions}
+      dynamicTasks={dynamicTasks}
+      gmailReward={gmailReward}
+      gmailPassword={gmailPassword}
+      handleSubmission={handleSubmission}
+      insertRow={insertRow}
+    />
+  );
 
-    const handleSubmit = async () => {
-      if (!email.trim()) return;
-      await handleSubmission(async () => {
-        const newSub: GmailSubmission = {
-          id: crypto.randomUUID().replace(/-/g, '').substring(0, 12).toUpperCase(),
-          userId: user.id,
-          email,
-          status: 'pending',
-          date: new Date().toLocaleString(),
-          reward: selectedTask ? selectedTask.reward : gmailReward
-        };
-        await insertRow('gmailSubmissions', newSub as any);
-        setEmail('');
-        setStep('success');
-      }, 'Gmail submitted successfully!');
-    };
-
-    if (showHistory) {
-      const mySubmissions = gmailSubmissions.filter(s => s.userId === user.id);
-      return (
-        <div className="min-h-screen pb-32 bg-slate-50">
-          <div className="p-6 pt-12">
-            <div className="flex items-center gap-4 mb-8">
-              <button onClick={() => setShowHistory(false)} className="p-3 glass rounded-2xl text-slate-700">
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <h2 className="text-2xl font-black text-slate-900">Gmail History</h2>
-            </div>
-
-            <div className="space-y-4">
-              {mySubmissions.length === 0 ? (
-                <div className="text-center py-20 opacity-50">
-                  <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">No Gmail logs found</p>
-                </div>
-              ) : (
-                mySubmissions.map(s => (
-                  <div key={s.id} className="glass-card border-white/40 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="text-[10px] font-black text-rose-600 uppercase tracking-widest">{s.taskId}</p>
-                        <p className="text-[8px] font-bold text-slate-400 uppercase mt-1">{s.date}</p>
-                      </div>
-                      <span className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${s.status === 'approved' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' :
-                          s.status === 'rejected' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
-                            'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                        }`}>
-                        {s.status}
-                      </span>
-                    </div>
-                    {s.reason && <p className="text-[8px] font-bold text-rose-500 uppercase mt-2 pt-2 border-t border-slate-100">Note: {s.reason}</p>}
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (step === 'success') {
-      return (
-        <SuccessView
-          title="Account Logged"
-          subtitle="Gmail submission received"
-          onClose={() => setStep('list')}
-          colorClass="bg-rose-500"
-          details={[
-            { label: 'Account', value: email },
-            { label: 'Reward', value: `৳ ${(selectedTask ? selectedTask.reward : gmailReward).toFixed(2)}`, color: 'text-rose-600' },
-            { label: 'Status', value: 'Pending Review' }
-          ]}
-        />
-      );
-    }
-
-    if (step === 'submit') {
-      return (
-        <div className="min-h-screen pb-32 bg-slate-50">
-          <div className="p-6 pt-12">
-            <div className="flex items-center gap-4 mb-8">
-              <button onClick={() => setStep('list')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <h2 className="text-2xl font-black text-slate-900">Submit Task</h2>
-            </div>
-            <div className="glass-card space-y-6 border-white/40 shadow-lg">
-              <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                <h4 className="text-sm font-black text-rose-900 mb-1">{selectedTask?.title || 'Gmail Sale'}</h4>
-                <p className="text-[10px] text-rose-600 font-bold uppercase tracking-widest">Reward: ৳ {(selectedTask ? selectedTask.reward : gmailReward).toFixed(2)}</p>
-                {selectedTask?.link && (
-                  <a
-                    href={selectedTask.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-3 w-full py-2 bg-rose-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 shadow-md active:scale-95 transition-all"
-                  >
-                    <ExternalLink className="w-3 h-3" />
-                    Visit Gmail Link
-                  </a>
-                )}
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Gmail Address</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    placeholder="example@gmail.com"
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-5 text-sm text-black font-medium outline-none focus:border-indigo-500 shadow-sm"
-                  />
-                </div>
-                <button
-                  onClick={handleSubmit}
-                  className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
-                >
-                  SUBMIT WORK
-                </button>
-
-                <div className="mt-6 p-4 bg-slate-100/50 rounded-2xl border border-slate-200">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3">Asset Rules</h4>
-                  <ul className="space-y-2">
-                    <li className="text-[9px] text-slate-400 font-bold flex items-start gap-2">
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full mt-1 shrink-0" />
-                      Gmail accounts must be verified and active.
-                    </li>
-                    <li className="text-[9px] text-slate-400 font-bold flex items-start gap-2">
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full mt-1 shrink-0" />
-                      Use the required app password provided in the dashboard.
-                    </li>
-                    <li className="text-[9px] text-slate-400 font-bold flex items-start gap-2">
-                      <span className="w-1 h-1 bg-indigo-400 rounded-full mt-1 shrink-0" />
-                      Payments are made after account verification.
-                    </li>
-                  </ul>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen pb-32 bg-slate-50">
-        <div className="p-6 pt-12">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <button onClick={() => setView('workstation')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Digital Assets">Digital Assets</h2>
-            </div>
-            <button onClick={() => setShowHistory(true)} className="p-3 glass rounded-2xl text-rose-600">
-              <History className="w-6 h-6" />
-            </button>
-          </div>
-          <div className="glass-card mb-6 border-amber-500/20 bg-amber-50/50 shadow-sm">
-            <p className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-1">Required App Password</p>
-            <h3 className="text-xl font-black text-slate-900 mb-2">{gmailPassword}</h3>
-            <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Use this password for all your Gmail submissions.</p>
-          </div>
-          <div className="glass-card mb-6 border-white/40 shadow-lg">
-            <h3 className="text-lg font-black text-slate-900 mb-2">Bulk Gmail Submission</h3>
-            <p className="text-xs text-slate-500 mb-4">Submit your verified Gmail accounts for bulk sale.</p>
-            <div className="space-y-4">
-              <div className="text-left">
-                <label className="text-[10px] font-bold text-slate-400 uppercase ml-2 mb-1 block">Gmail Address</label>
-                <input
-                  type="email"
-                  placeholder="example@gmail.com"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-xl p-4 text-sm text-black font-medium outline-none focus:border-amber-500 shadow-sm"
-                />
-              </div>
-              <button
-                onClick={handleSubmit}
-                className="w-full bg-gradient-to-r from-amber-500 to-yellow-600 text-white py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
-              >
-                SUBMIT ACCOUNT (৳ {gmailReward.toFixed(2)})
-              </button>
-            </div>
-          </div>
-
-          {/* Dynamic Gmail Tasks */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Special Gmail Tasks</h3>
-            {dynamicTasks.filter(t => t.category === 'gmail').length === 0 ? (
-              <div className="text-center py-10 glass-card border-dashed border-slate-200">
-                <p className="text-[8px] text-slate-400 uppercase font-bold">No special tasks available</p>
-              </div>
-            ) : (
-              dynamicTasks.filter(t => t.category === 'gmail').map((task, i) => (
-                <div key={i} className="glass-card flex justify-between items-center border-white/40 shadow-sm">
-                  <div className="flex-1 mr-4">
-                    <h4 className="text-sm font-black text-slate-900 mb-1">{task.title}</h4>
-                    <p className="text-[10px] text-slate-500">{task.desc}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-amber-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button
-                      onClick={() => { window.open(task.link, '_blank'); setSelectedTask(task); setStep('submit'); }}
-                      className="mt-2 bg-amber-500 text-white px-3 py-1.5 rounded-lg text-[10px] font-black uppercase shadow-md active:scale-95 transition-all"
-                    >
-                      Start
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const FolderDView = () => {
-    const [step, setStep] = useState<'list' | 'submit' | 'success'>('list');
-    const [selectedTask, setSelectedTask] = useState<any>(null);
-
-    if (step === 'success') {
-      return (
-        <SuccessView
-          title="Claim Successful"
-          subtitle="Premium job logged"
-          onClose={() => setStep('list')}
-          colorClass="bg-indigo-600"
-          details={[
-            { label: 'Job', value: selectedTask?.title },
-            { label: 'Reward', value: `৳ ${selectedTask?.reward.toFixed(2)}`, color: 'text-indigo-600' },
-            { label: 'Status', value: 'Pending Review' }
-          ]}
-        />
-      );
-    }
-
-    if (step === 'submit') {
-      return (
-        <div className="min-h-screen pb-32 bg-slate-50">
-          <div className="p-6 pt-12">
-            <div className="flex items-center gap-4 mb-8">
-              <button onClick={() => setStep('list')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <h2 className="text-2xl font-black text-slate-900">Claim Premium</h2>
-            </div>
-            <div className="glass-card space-y-6 border-white/40 shadow-lg">
-              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <h4 className="text-sm font-black text-indigo-900 mb-1">{selectedTask?.title}</h4>
-                <p className="text-[10px] text-indigo-600 font-bold uppercase tracking-widest">Reward: ৳ {selectedTask?.reward.toFixed(2)}</p>
-              </div>
-              <p className="text-xs text-slate-500 leading-relaxed">By claiming this premium job, you agree to the terms of the network marketing program.</p>
-              <button
-                onClick={() => setStep('success')}
-                className="w-full bg-gradient-to-r from-indigo-500 to-violet-600 text-white py-5 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all"
-              >
-                CONFIRM CLAIM
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen pb-32 bg-slate-50">
-        <div className="p-6 pt-12">
-          <div className="flex items-center gap-4 mb-8">
-            <button onClick={() => setView('workstation')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Team Stats">Team Stats</h2>
-          </div>
-          <div className="grid grid-cols-1 gap-4 mb-8">
-            {[
-              { gen: '1st Generation', count: 0, rate: `৳ ${adReward.toFixed(2)}`, total: '৳ 0.00', color: 'indigo' },
-              { gen: '2nd Generation', count: 0, rate: `৳ ${(adReward / 4).toFixed(2)}`, total: '৳ 0.00', color: 'violet' },
-              { gen: '3rd Generation', count: 0, rate: `৳ ${(adReward / 10).toFixed(2)}`, total: '৳ 0.00', color: 'pink' },
-            ].map((item, i) => (
-              <div key={i} className="glass-card flex justify-between items-center border-white/40 shadow-sm">
-                <div>
-                  <h4 className="text-sm font-black text-slate-900 mb-1">{item.gen}</h4>
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full bg-${item.color}-500 animate-pulse`} />
-                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{item.count} Active Workers</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <p className={`text-${item.color}-600 font-black text-sm`}>{item.total}</p>
-                  <p className="text-[8px] text-slate-400 font-bold uppercase tracking-tighter">Rate: {item.rate}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Dynamic Premium Tasks */}
-          <div className="space-y-4">
-            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Premium Income Jobs</h3>
-            {dynamicTasks.filter(t => t.category === 'premium').length === 0 ? (
-              <div className="text-center py-20 glass-card border-dashed border-slate-200 bg-indigo-50/30">
-                <p className="text-[10px] text-indigo-400 uppercase font-black tracking-widest">No premium jobs active</p>
-              </div>
-            ) : (
-              dynamicTasks.filter(t => t.category === 'premium').map((task, i) => (
-                <div key={i} className="glass-card flex justify-between items-center border-white/40 shadow-lg bg-gradient-to-br from-white to-indigo-50/30">
-                  <div className="flex-1 mr-4">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Trophy className="w-3 h-3 text-amber-500" />
-                      <h4 className="text-sm font-black text-slate-900">{task.title}</h4>
-                    </div>
-                    <p className="text-[10px] text-slate-500">{task.desc}</p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-indigo-600 font-black text-sm">৳ {task.reward.toFixed(2)}</p>
-                    <button
-                      onClick={() => { window.open(task.link, '_blank'); setSelectedTask(task); setStep('submit'); }}
-                      className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase shadow-lg active:scale-95 transition-all"
-                    >
-                      Claim
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Forward to the extracted FolderDView feature module.
+  const FolderDView = () => (
+    <SharedFolderDView
+      setView={setView}
+      dynamicTasks={dynamicTasks}
+      adReward={adReward}
+    />
+  );
 
   const leaderboardView = (
     <div className="min-h-screen pb-32">
