@@ -8,6 +8,8 @@ import morgan from "morgan";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./src/server/auth.js";
 import apiRoutes from "./src/server/routes.js";
+import { corsOptions } from "./src/server/cors-config.js";
+import { authLimiter } from "./src/server/rate-limit.js";
 
 interface GamePlayer {
   id: string;
@@ -39,9 +41,12 @@ async function startServer() {
 
   const PORT = 3000;
 
-  app.use(cors());
+  app.use(cors(corsOptions));
   app.use(morgan("dev"));
   app.use(express.json());
+
+  // Trust proxy so rate-limit sees real client IP behind load balancers.
+  app.set("trust proxy", 1);
 
   // Mock database
   const rooms: Record<string, GameRoom> = {};
@@ -97,7 +102,8 @@ async function startServer() {
 
   // Better Auth handler -- handles all /api/auth/* routes
   // Express 4 uses * wildcard, not *splat (that's Express 5 syntax)
-  app.all("/api/auth/*", toNodeHandler(auth));
+  // Rate-limit auth endpoints to slow down credential stuffing / brute force.
+  app.all("/api/auth/*", authLimiter, toNodeHandler(auth));
 
   // Application API routes (registration, admin, etc.)
   app.use("/api", apiRoutes);

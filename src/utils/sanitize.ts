@@ -1,22 +1,35 @@
 /**
- * Sanitize user input to prevent XSS attacks.
- * Escapes HTML entities in user-provided strings before storing in the database.
+ * Input sanitization helpers.
+ *
+ * NOTE: We intentionally do NOT HTML-escape user text before storage.
+ * React auto-escapes interpolated strings at render time, so escaping
+ * again at write time would double-encode ampersands/quotes and show
+ * literal `&amp;`, `&#x27;`, `&#x2F;` in chat and comments.
+ *
+ * DOMPurify (or similar) should only be used where we legitimately need
+ * `dangerouslySetInnerHTML` -- which is currently nowhere in this app.
+ */
+
+// Zero-width / bidi control characters that can be abused for spoofing.
+const INVISIBLE_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
+
+/**
+ * Light-weight sanitization for free-text user input.
+ * - Normalizes to NFC
+ * - Strips invisible/control characters
+ * - Does NOT HTML-escape (React handles that at render)
  */
 export function sanitizeInput(input: string): string {
-  return input
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#x27;')
-    .replace(/\//g, '&#x2F;');
+  if (typeof input !== 'string') return '';
+  return input.normalize('NFC').replace(INVISIBLE_CHARS, '');
 }
 
 /**
- * Sanitize and trim a string, enforcing a max length.
+ * Sanitize, trim, and enforce a max length.
+ * Intended for all user-authored text (chat, comments, profile fields).
  */
 export function sanitizeAndTrim(input: string, maxLength: number = 500): string {
-  return sanitizeInput(input.trim()).substring(0, maxLength);
+  return sanitizeInput(input).trim().slice(0, maxLength);
 }
 
 /**
