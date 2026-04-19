@@ -100,6 +100,7 @@ import {
   validateReferralCode,
   requestPasswordReset,
 } from './lib/auth-client';
+import { ResetPasswordView } from './features/auth/ResetPasswordView';
 
 // --- Types, constants and utilities extracted into dedicated modules ---
 // See src/types.ts, src/constants.tsx, src/utils/db-errors.ts, src/components/*
@@ -194,7 +195,15 @@ export type {
 };
 
 export default function App() {
-  const [view, setView] = useState<View>('login');
+  const [view, setView] = useState<View>(() => {
+    // Password reset link lands on /reset-password?token=...
+    // We detect the path at startup so the SPA can render the reset view
+    // without pulling in a router dependency.
+    if (typeof window !== 'undefined' && window.location.pathname === '/reset-password') {
+      return 'reset-password';
+    }
+    return 'login';
+  });
   const [selectedSocialJob, setSelectedSocialJob] = useState<{ title: string, color: string, icon: any } | null>(null);
   const [financeStep, setFinanceStep] = useState<'form' | 'success' | 'deposit' | 'deposit-success'>('form');
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
@@ -303,6 +312,8 @@ export default function App() {
   }, [view]);
 
   // --- Redirect authenticated users away from login view ---
+  // Do NOT redirect when we are on the `/reset-password` flow; the user
+  // may be logged in elsewhere and still need to complete the reset.
   useEffect(() => {
     if (isAuthReady && isLoggedIn && view === 'login' && !needsEmailVerification) {
       setView('home');
@@ -336,14 +347,18 @@ export default function App() {
         if (session?.user) {
           const authUser = session.user;
           setIsLoggedIn(true);
-          // NOTE: Email verification is disabled until an email transport
-          // (e.g. Resend, SMTP) is configured in Better Auth.  Without it
-          // emailVerified is always false and users get permanently stuck
-          // on the verification screen.  Re-enable this gate once
-          // sendVerificationEmail is wired up in src/server/auth.ts.
-          setNeedsEmailVerification(false);
+          // Email verification is enforced on the server via
+          // `emailAndPassword.requireEmailVerification` in src/server/auth.ts
+          // -- that flag is only true when a real email provider is wired up
+          // (RESEND_API_KEY, etc). The client mirrors the decision so the
+          // overlay only appears when we can actually deliver a verification
+          // email; otherwise users would be stuck on the overlay in dev.
+          const needsVerification = Boolean(
+            (authUser as { emailVerified?: boolean }).emailVerified === false,
+          );
+          setNeedsEmailVerification(needsVerification);
 
-          setView(prev => prev === 'login' ? 'home' : prev);
+          setView(prev => (prev === 'login' ? 'home' : prev));
 
           // Only subscribe if we haven't already for this user
           if (currentSubscribedUserId !== authUser.id) {
@@ -595,19 +610,23 @@ export default function App() {
   };
 
   const handlePasswordReset = async () => {
-    // TODO: Password reset requires an email transport (Resend, SMTP, etc.)
-    // configured in Better Auth.  Until that is set up, the reset email will
-    // never arrive.  Show a helpful message instead of silently failing.
     const email = loginEmail || prompt('Enter your email address:');
     if (!email) return;
     try {
-      await requestPasswordReset(email, `${window.location.origin}`);
+      await requestPasswordReset(
+        email,
+        `${window.location.origin}/reset-password`,
+      );
+      // Always show the same success message regardless of whether the
+      // address exists -- this prevents user-enumeration via the reset form.
       alert(
-        'If an email transport is configured, a password reset link has been sent to your inbox. ' +
-        'If you do not receive it within a few minutes, please contact support.'
+        'If an account exists for this email, a password reset link has been sent. ' +
+        'Please check your inbox (and spam folder).',
       );
     } catch (error: any) {
-      alert(error.message || 'Failed to send reset email. Email delivery may not be configured yet.');
+      // Generic message -- don't leak provider state to the user.
+      console.error('[auth] password reset request failed:', error);
+      alert('Could not start password reset right now. Please try again shortly.');
     }
   };
 
@@ -5181,7 +5200,17 @@ export default function App() {
       )}
 
       {isAuthReady && <AnimatePresence mode="wait">
-        {isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
+        {view === 'reset-password' && (
+          <div key="reset-password">
+            <ResetPasswordView
+              onReturnToLogin={() => {
+                window.history.replaceState({}, '', '/');
+                setView('login');
+              }}
+            />
+          </div>
+        )}
+        {view !== 'reset-password' && isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
         {view === 'login' && !isLoggedIn && loginView}
         {view === 'home' && homeView}
         {view === 'dashboard' && <DashboardView key="dashboard" />}

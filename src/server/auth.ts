@@ -2,6 +2,8 @@ import { betterAuth } from 'better-auth';
 import { admin } from 'better-auth/plugins/admin';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { sendEmail, isEmailConfigured } from './email.js';
+import { verificationEmail, passwordResetEmail } from './email-templates.js';
 
 dotenv.config();
 
@@ -66,9 +68,38 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
   basePath: '/api/auth',
 
-  // Email + password authentication
+  // Email + password authentication.
+  //
+  // `requireEmailVerification` is only turned on when a real email provider
+  // is configured (RESEND_API_KEY, etc.); otherwise users would be unable to
+  // complete signup in local dev where email lands in the server logs.
   emailAndPassword: {
     enabled: true,
+    requireEmailVerification: isEmailConfigured(),
+    sendResetPassword: async ({ user, url }) => {
+      try {
+        await sendEmail(passwordResetEmail(user.email, url));
+      } catch (err) {
+        console.error('[Auth] Failed to send password reset email:', err);
+        throw err;
+      }
+    },
+  },
+
+  // Email verification flow. Better Auth generates a token + URL and calls
+  // us with the payload; we just need to dispatch the templated email.
+  emailVerification: {
+    sendOnSignUp: isEmailConfigured(),
+    autoSignInAfterVerification: true,
+    expiresIn: 60 * 60 * 24, // 24 hours
+    sendVerificationEmail: async ({ user, url }) => {
+      try {
+        await sendEmail(verificationEmail(user.email, url));
+      } catch (err) {
+        console.error('[Auth] Failed to send verification email:', err);
+        throw err;
+      }
+    },
   },
 
   // Google OAuth -- warn at startup if credentials are missing
