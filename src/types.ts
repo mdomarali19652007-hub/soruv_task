@@ -326,6 +326,11 @@ export interface UserProfile {
   suspensionUntil: string;
   totalCommission: number;
   socialSubmissions: SocialSubmission[];
+  /**
+   * DB-backed admin flag. Sourced from `users.isAdmin`; falls back to
+   * a short legacy email allowlist server-side for unmigrated deploys.
+   */
+  isAdmin?: boolean;
 }
 
 export interface UserMessage {

@@ -3,6 +3,7 @@ import { auth } from './auth.js';
 import { supabaseAdmin } from './supabase-admin.js';
 import { fromNodeHeaders } from 'better-auth/node';
 import { registerLimiter, referralLimiter, adminLimiter } from './rate-limit.js';
+import { isUserAdmin } from './admin.js';
 
 const router = Router();
 
@@ -38,9 +39,11 @@ async function requireAuth(req: AuthenticatedRequest, res: Response, next: () =>
   }
 }
 
-function requireAdmin(req: AuthenticatedRequest, res: Response, next: () => void) {
-  const ADMIN_EMAILS = ['soruvislam51@gmail.com', 'shovonali885@gmail.com'];
-  if (!req.userEmail || !ADMIN_EMAILS.includes(req.userEmail)) {
+async function requireAdmin(req: AuthenticatedRequest, res: Response, next: () => void) {
+  // DB-backed: reads `users.isAdmin` (seeded by the admin-role migration).
+  // Falls back to a short legacy email allowlist for unmigrated deployments.
+  const allowed = await isUserAdmin({ userId: req.userId, userEmail: req.userEmail });
+  if (!allowed) {
     res.status(403).json({ error: 'Admin access required' });
     return;
   }
