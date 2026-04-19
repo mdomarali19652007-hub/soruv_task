@@ -14,17 +14,19 @@ import cors from 'cors';
 import { toNodeHandler } from 'better-auth/node';
 import { auth } from '../src/server/auth.js';
 import apiRoutes from '../src/server/routes.js';
+import { corsOptions } from '../src/server/cors-config.js';
+import { authLimiter } from '../src/server/rate-limit.js';
 
 const app = express();
 
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+// Trust Vercel's proxy so rate-limit sees the real client IP.
+app.set('trust proxy', 1);
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // Better Auth handler -- handles all /api/auth/* routes
-app.all('/api/auth/*', toNodeHandler(auth));
+app.all('/api/auth/*', authLimiter, toNodeHandler(auth));
 
 // Application API routes (registration, admin, etc.)
 app.use('/api', apiRoutes);

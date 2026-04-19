@@ -2,8 +2,13 @@ import { Router, Request, Response } from 'express';
 import { auth } from './auth.js';
 import { supabaseAdmin } from './supabase-admin.js';
 import { fromNodeHeaders } from 'better-auth/node';
+import { registerLimiter, referralLimiter, adminLimiter } from './rate-limit.js';
 
 const router = Router();
+
+// Blanket limiter for all admin endpoints. Per-endpoint limiters are
+// added above for higher-value targets (register, validate-referral).
+router.use('/admin', adminLimiter);
 
 // ============================================================
 // Middleware: Extract authenticated user from Better Auth session
@@ -46,7 +51,7 @@ function requireAdmin(req: AuthenticatedRequest, res: Response, next: () => void
 // POST /api/register -- Custom registration with referral code
 // ============================================================
 
-router.post('/register', async (req: Request, res: Response) => {
+router.post('/register', registerLimiter, async (req: Request, res: Response) => {
   try {
     const { email, password, name, phone, country, age, refCode } = req.body;
 
@@ -314,11 +319,18 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
 // POST /api/validate-referral -- Validate referral code (public)
 // ============================================================
 
-router.post('/validate-referral', async (req: Request, res: Response) => {
+router.post('/validate-referral', referralLimiter, async (req: Request, res: Response) => {
   try {
     const { code } = req.body;
-    if (!code) {
+    if (!code || typeof code !== 'string') {
       res.status(400).json({ valid: false });
+      return;
+    }
+
+    // Only allow the expected format (6-digit numeric) to cut down on
+    // enumeration noise and DB load from arbitrary probes.
+    if (!/^\d{4,10}$/.test(code)) {
+      res.json({ valid: false });
       return;
     }
 
@@ -333,7 +345,9 @@ router.post('/validate-referral', async (req: Request, res: Response) => {
       return;
     }
 
-    res.json({ valid: true, userId: data[0].id });
+    // SECURITY: do NOT leak the referrer's user id to anonymous callers.
+    // Returning only a boolean prevents brute-force enumeration of user ids.
+    res.json({ valid: true });
   } catch {
     res.json({ valid: false });
   }
