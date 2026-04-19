@@ -47,6 +47,7 @@ Never commit `.env.local`. Service role key and Better Auth secret must stay ser
 
 1. In the Supabase SQL editor, run [`supabase/schema.sql`](supabase/schema.sql:1) to create app tables, indexes, and the initial `settings` row.
 2. Run [`supabase/migrations/20260419_rls_lockdown.sql`](supabase/migrations/20260419_rls_lockdown.sql:1) to tighten RLS so anon clients can no longer read sensitive tables directly. (This is required -- the initial schema shipped with permissive SELECT USING (true) policies.)
+3. Run [`supabase/migrations/20260419_admin_role.sql`](supabase/migrations/20260419_admin_role.sql:1) to add the `users.isAdmin` column and seed the historical admin emails. The server and client both read this column as the source of truth for admin authorization.
 3. Create a Storage bucket named `uploads` (public-read is fine for screenshots; access is mediated server-side).
 4. Enable Realtime on the publication listed at the bottom of `schema.sql` (the migration leaves public catalog tables in the publication).
 
@@ -78,11 +79,16 @@ npm run dev
 
 This starts the Express app on http://localhost:3000, serving the Vite dev middleware, Better Auth (`/api/auth/*`), and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
 
-## 7. Type-check
+## 7. Type-check, lint, and test
 
 ```bash
-npm run lint   # tsc --noEmit
+npm run typecheck   # tsc --noEmit
+npm run lint        # eslint .
+npm run format      # prettier --write .
+npm test            # vitest run (unit tests under tests/)
 ```
+
+The `lint:strict` script (`eslint . --max-warnings 0`) is the target for CI once the legacy warnings in [`src/App.tsx`](src/App.tsx:1) are cleaned up.
 
 ## Deployment
 

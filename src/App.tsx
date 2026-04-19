@@ -284,8 +284,12 @@ export default function App() {
   const [lastWithdrawal, setLastWithdrawal] = useState<any>(null);
   const [lastDeposit, setLastDeposit] = useState<any>(null);
 
-  const ADMIN_EMAILS = ['soruvislam51@gmail.com', 'shovonali885@gmail.com'];
-  const isAdmin = ADMIN_EMAILS.includes(user.email);
+  // DB-backed admin flag (seeded by supabase/migrations/20260419_admin_role.sql).
+  // We retain a short legacy email allowlist so existing installs keep working
+  // before the migration has been applied. Remove once every deployment is on
+  // the new schema.
+  const LEGACY_ADMIN_EMAILS = ['soruvislam51@gmail.com', 'shovonali885@gmail.com'];
+  const isAdmin = user.isAdmin === true || LEGACY_ADMIN_EMAILS.includes(user.email);
 
   // --- Scroll to Top on View Change ---
   useEffect(() => {

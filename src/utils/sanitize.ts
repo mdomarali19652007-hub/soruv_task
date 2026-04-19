@@ -11,6 +11,7 @@
  */
 
 // Zero-width / bidi control characters that can be abused for spoofing.
+// eslint-disable-next-line no-control-regex
 const INVISIBLE_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g;
 
 /**
