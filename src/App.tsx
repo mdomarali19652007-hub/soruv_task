@@ -141,6 +141,9 @@ import { SuccessView as SharedSuccessView } from './components/SuccessView';
 import { RestrictionScreen as SharedRestrictionScreen } from './components/RestrictionScreen';
 import { WelcomeOverlay as SharedWelcomeOverlay } from './components/WelcomeOverlay';
 import { TopNewsView as SharedTopNewsView } from './features/news/TopNewsView';
+import { SpinView as SharedSpinView } from './features/spin/SpinView';
+import { AdsEarnView as SharedAdsEarnView } from './features/ads/AdsEarnView';
+import { AccountActivationView as SharedAccountActivationView } from './features/activation/AccountActivationView';
 
 // Silence unused-import warnings for types/utilities that may not be
 // referenced yet in this file but are part of the public module surface
@@ -3345,86 +3348,8 @@ export default function App() {
     </div>
   );
 
-  const SpinView = () => {
-    const [isSpinning, setIsSpinning] = useState(false);
-    const [result, setResult] = useState<string | null>(null);
-
-    const spin = () => {
-      if (isSpinning) return;
-      setIsSpinning(true);
-      setResult(null);
-      setTimeout(() => {
-        const rewards = ['৳ 0.50', '৳ 1.00', '৳ 2.00', 'Try Again', '৳ 5.00'];
-        const win = rewards[Math.floor(Math.random() * rewards.length)];
-        setResult(win);
-        setIsSpinning(false);
-        if (win !== 'Try Again') {
-          confetti({ particleCount: 50, spread: 60 });
-        }
-      }, 2000);
-    };
-
-    return (
-      <div className="min-h-screen pb-32">
-        <div className="p-6 pt-12">
-          <div className="flex items-center gap-4 mb-8">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Spin & Win">Spin & Win</h2>
-          </div>
-          <div className="flex flex-col items-center justify-center py-12">
-            <motion.div
-              animate={isSpinning ? { rotate: 360 * 5 } : {}}
-              transition={isSpinning ? { duration: 2, ease: "easeInOut" } : {}}
-              className="w-64 h-64 rounded-full border-8 border-amber-500/10 flex items-center justify-center relative mb-12 shadow-2xl bg-white"
-            >
-              <div className="absolute inset-0 rounded-full border-4 border-dashed border-amber-500/20 animate-spin-slow" />
-              <TrendingUp className="w-20 h-20 text-amber-500" />
-            </motion.div>
-
-            {result && (
-              <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} className="mb-8 text-center">
-                <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-1">You Won</p>
-                <h3 className="text-4xl font-black text-amber-600 neon-text">{result}</h3>
-              </motion.div>
-            )}
-
-            <button
-              onClick={spin}
-              disabled={isSpinning}
-              className="px-12 py-4 bg-gradient-to-r from-amber-500 to-yellow-600 rounded-2xl font-black text-white shadow-xl active:scale-95 transition-all disabled:opacity-50"
-            >
-              {isSpinning ? 'SPINNING...' : `SPIN NOW (৳ ${spinCost.toFixed(2)})`}
-            </button>
-
-            <div className="mt-12 w-full max-w-xs">
-              <div className="glass-card border-amber-500/20 bg-amber-50/30 p-4">
-                <h4 className="text-[10px] font-black text-amber-600 uppercase tracking-widest mb-3 flex items-center gap-2">
-                  <ShieldCheck className="w-3 h-3" />
-                  Spinning Rules
-                </h4>
-                <ul className="space-y-2">
-                  <li className="text-[9px] text-slate-500 font-bold flex items-start gap-2">
-                    <span className="w-1 h-1 bg-amber-400 rounded-full mt-1 shrink-0" />
-                    Each spin costs ৳ {spinCost.toFixed(2)} from your main balance.
-                  </li>
-                  <li className="text-[9px] text-slate-500 font-bold flex items-start gap-2">
-                    <span className="w-1 h-1 bg-amber-400 rounded-full mt-1 shrink-0" />
-                    Rewards are added instantly to your wallet.
-                  </li>
-                  <li className="text-[9px] text-slate-500 font-bold flex items-start gap-2">
-                    <span className="w-1 h-1 bg-amber-400 rounded-full mt-1 shrink-0" />
-                    Fair play system: Results are randomly generated.
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Forward to the extracted SpinView feature module.
+  const SpinView = () => <SharedSpinView setView={setView} spinCost={spinCost} />;
 
   const mobileBankingView = (
     <div className="min-h-screen pb-32 bg-slate-50">
@@ -4937,223 +4862,28 @@ export default function App() {
     </div>
   );
 
-  const AdsEarnView = () => {
-    const today = new Date().toISOString().split('T')[0];
-    const todayWatch = user.adWatches.find(w => w.date === today) || { id: today, date: today, count: 0 };
-    const [isWatching, setIsWatching] = useState(false);
-    const [message, setMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  // Forward to the extracted AdsEarnView feature module.
+  const AdsEarnView = () => (
+    <SharedAdsEarnView
+      user={user}
+      setView={setView}
+      dailyAdLimit={dailyAdLimit}
+      adReward={adReward}
+      updateRow={updateRow}
+    />
+  );
 
-    const watchAd = async () => {
-      setMessage(null);
-      if (todayWatch.count >= dailyAdLimit) {
-        setMessage({ text: 'Daily ad limit reached!', type: 'error' });
-        return;
-      }
-      setIsWatching(true);
-      setTimeout(async () => {
-        setIsWatching(false);
-        const newCount = todayWatch.count + 1;
-        const newAdWatches = user.adWatches.filter(w => w.date !== today);
-        newAdWatches.push({ ...todayWatch, count: newCount });
-
-        try {
-          const userRef_id = user.id;
-          await updateRow('users', userRef_id, {
-            mainBalance: adReward,
-            totalEarned: adReward,
-            adWatches: newAdWatches
-          });
-          confetti({ particleCount: 50, spread: 60 });
-          setMessage({ text: `Ad watched! You earned ৳ ${adReward.toFixed(2)}`, type: 'success' });
-        } catch (e) {
-          handleFirestoreError(e, OperationType.UPDATE, `users/${user.id}`);
-        }
-      }, 5000);
-    };
-
-    return (
-      <div className="min-h-screen pb-32 bg-slate-50">
-        <div className="p-6 pt-12">
-          <div className="flex items-center gap-4 mb-8">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Ads Earn">Ads Earn</h2>
-          </div>
-
-          {message && (
-            <div className={`mb-6 p-4 rounded-2xl border flex items-center gap-3 animate-in fade-in slide-in-from-top-2 ${message.type === 'success' ? 'bg-emerald-50 border-emerald-100 text-emerald-600' : 'bg-rose-50 border-rose-100 text-rose-600'
-              }`}>
-              {message.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
-              <p className="text-xs font-bold uppercase tracking-widest">{message.text}</p>
-            </div>
-          )}
-
-          <div className="glass-card text-center py-10 mb-8 border-white/40 shadow-lg">
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Today's Progress</p>
-            <h3 className="text-4xl font-black text-slate-900 mb-4">{todayWatch.count} / {dailyAdLimit}</h3>
-            <div className="w-full h-2 bg-slate-100 rounded-full overflow-hidden max-w-[200px] mx-auto">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${(todayWatch.count / dailyAdLimit) * 100}%` }}
-                className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(99,102,241,0.5)]"
-              />
-            </div>
-          </div>
-
-          <div className="glass-card border-indigo-500/20 bg-indigo-50/50 mb-8 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <PlayCircle className="w-6 h-6 text-indigo-600" />
-              <h4 className="font-black text-sm text-slate-800 uppercase tracking-widest">Monetag Ads</h4>
-            </div>
-            <p className="text-xs text-slate-500 mb-6 leading-relaxed">Watch short video ads to earn instant rewards. Each ad pays ৳ {adReward.toFixed(2)}. Watch 10 ads to earn ৳ 4.00.</p>
-            <div className="space-y-3">
-              <button
-                onClick={watchAd}
-                disabled={isWatching || todayWatch.count >= dailyAdLimit}
-                className={`w-full py-4 rounded-2xl font-black text-sm shadow-xl active:scale-95 transition-all ${isWatching || todayWatch.count >= dailyAdLimit
-                    ? 'bg-slate-200 text-slate-400'
-                    : 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white'
-                  }`}
-              >
-                {isWatching ? 'WATCHING AD...' : todayWatch.count >= dailyAdLimit ? 'LIMIT REACHED' : 'VIEW ADS'}
-              </button>
-              <a
-                href="https://monetag.com"
-                target="_blank"
-                rel="noreferrer"
-                className="w-full py-3 border border-indigo-200 text-indigo-600 rounded-2xl font-bold text-[10px] uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-indigo-50 transition-all"
-              >
-                <ExternalLink className="w-3 h-3" />
-                Visit Ad Network
-              </a>
-            </div>
-
-            <div className="mt-8 pt-8 border-t border-indigo-100">
-              <h4 className="text-[10px] font-black text-indigo-500 uppercase tracking-widest mb-4">Earning Rules</h4>
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-indigo-50">
-                  <div className="w-8 h-8 bg-indigo-50 rounded-lg flex items-center justify-center text-indigo-500">
-                    <Activity className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-800 uppercase">Daily Limit</p>
-                    <p className="text-[8px] text-slate-400 font-bold">You can watch up to {dailyAdLimit} ads per day.</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-3 bg-white rounded-xl border border-indigo-50">
-                  <div className="w-8 h-8 bg-emerald-50 rounded-lg flex items-center justify-center text-emerald-500">
-                    <DollarSign className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-slate-800 uppercase">Instant Reward</p>
-                    <p className="text-[8px] text-slate-400 font-bold">Earn ৳ {adReward.toFixed(2)} for every successful ad view.</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const AccountActivationView = () => {
-    const [isActivating, setIsActivating] = useState(false);
-    const [showSuccess, setShowSuccess] = useState(false);
-
-    const handleActivate = async () => {
-      if (user.mainBalance < activationFee) {
-        alert(`Insufficient balance. You need ৳ ${activationFee} to activate.`);
-        return;
-      }
-
-      await handleSubmission(async () => {
-        // Use server-side RPC for atomic activation with fee deduction and referral bonus
-        await activateAccount(user.id);
-        setShowSuccess(true);
-      }, 'Account activated successfully!');
-    };
-
-    if (showSuccess) {
-      return (
-        <SuccessView
-          title="Account Activated!"
-          subtitle="You now have full access to withdrawals"
-          onClose={() => setView('home')}
-          colorClass="bg-emerald-600"
-          details={[
-            { label: 'Fee Paid', value: `৳ ${activationFee}` },
-            { label: 'Expiry Date', value: new Date(user.activationExpiry).toLocaleDateString() }
-          ]}
-        />
-      );
-    }
-
-    return (
-      <div className="min-h-screen pb-32 bg-slate-50">
-        <div className="p-6 pt-12">
-          <div className="flex items-center gap-4 mb-8">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black text-slate-900">Account Activation</h2>
-          </div>
-
-          <div className="glass-card border-white/40 shadow-xl p-8 text-center">
-            <div className="w-24 h-24 bg-indigo-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <ShieldCheck className="w-12 h-12 text-indigo-600" />
-            </div>
-            <h3 className="text-xl font-black text-slate-900 mb-2">Activate Your Account</h3>
-            <p className="text-xs text-slate-500 font-medium leading-relaxed mb-8">
-              To unlock withdrawal features and earn referral commissions, you must activate your account.
-            </p>
-
-            <div className="bg-slate-50 rounded-3xl p-6 mb-8 border border-slate-100">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Activation Fee</span>
-                <span className="text-lg font-black text-indigo-600">৳ {activationFee}</span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Validity</span>
-                <span className="text-lg font-black text-slate-900">{activationDuration} Days</span>
-              </div>
-            </div>
-
-            <div className="space-y-4 text-left mb-8">
-              <div className="flex gap-3 items-center">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Check className="w-3 h-3" />
-                </div>
-                <p className="text-[10px] font-bold text-slate-600">Unlock Unlimited Withdrawals</p>
-              </div>
-              <div className="flex gap-3 items-center">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Check className="w-3 h-3" />
-                </div>
-                <p className="text-[10px] font-bold text-slate-600">Earn {referralCommissionRate}% Lifetime Commission from Referrals</p>
-              </div>
-              <div className="flex gap-3 items-center">
-                <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <Check className="w-3 h-3" />
-                </div>
-                <p className="text-[10px] font-bold text-slate-600">Priority Support Access</p>
-              </div>
-            </div>
-
-            <button
-              onClick={handleActivate}
-              disabled={isActivating}
-              className="w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-sm shadow-lg active:scale-95 transition-all disabled:opacity-50"
-            >
-              {isActivating ? 'Activating...' : `ACTIVATE NOW - ৳ ${activationFee}`}
-            </button>
-            <p className="text-[8px] font-bold text-slate-400 uppercase mt-4">Fee will be deducted from your main balance</p>
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Forward to the extracted AccountActivationView feature module.
+  const AccountActivationView = () => (
+    <SharedAccountActivationView
+      user={user}
+      setView={setView}
+      activationFee={activationFee}
+      activationDuration={activationDuration}
+      referralCommissionRate={referralCommissionRate}
+      handleSubmission={handleSubmission}
+    />
+  );
 
   const gamingView = (
     <div className="min-h-screen bg-slate-50 pb-32">
