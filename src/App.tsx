@@ -101,379 +101,75 @@ import {
   requestPasswordReset,
 } from './lib/auth-client';
 
-interface GlobalUpload {
-  id: string;
-  userId: string;
-  userName: string;
-  url: string;
-  context: string;
-  timestamp: number;
-  date: string;
-}
+// --- Types, constants and utilities extracted into dedicated modules ---
+// See src/types.ts, src/constants.tsx, src/utils/db-errors.ts, src/components/*
+// and src/features/news/TopNewsView.tsx for the split modules. App.tsx is
+// being reduced toward a thin composition root; the legacy names below are
+// re-exported so the (still-large) body of this file keeps compiling.
+import type {
+  DbErrorInfo,
+  DollarBuyRequest,
+  DriveOffer,
+  DriveOfferRequest,
+  FirestoreErrorInfo,
+  GlobalUpload,
+  GmailSubmission,
+  LudoSubmission,
+  LudoTournament,
+  MicrojobSubmission,
+  NewsPost,
+  Product,
+  ProductOrder,
+  RechargeRequest,
+  SmmOrder,
+  SocialSubmission,
+  SubscriptionRequest,
+  TaskSubmission,
+  UserMessage,
+  UserProfile,
+  View,
+} from './types';
+import { OperationType } from './types';
+import { INCOME_CARDS, INITIAL_USER, SMM_SERVICES } from './constants';
+import {
+  buildFirestoreErrorInfo,
+  handleFirestoreError,
+  handleListenerError,
+} from './utils/db-errors';
+import { SubmissionLoader as SharedSubmissionLoader } from './components/SubmissionLoader';
+import { SuccessView as SharedSuccessView } from './components/SuccessView';
+import { RestrictionScreen as SharedRestrictionScreen } from './components/RestrictionScreen';
+import { WelcomeOverlay as SharedWelcomeOverlay } from './components/WelcomeOverlay';
+import { TopNewsView as SharedTopNewsView } from './features/news/TopNewsView';
 
-// --- Types ---
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function buildFirestoreErrorInfo(error: unknown, operationType: OperationType, path: string | null): FirestoreErrorInfo {
-  return {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: undefined,
-      email: undefined,
-      emailVerified: undefined,
-      isAnonymous: undefined,
-      tenantId: undefined,
-      providerInfo: []
-    },
-    operationType,
-    path
-  };
-}
-
-// Use for direct operations (create, update, delete) where failure should propagate
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
-}
-
-// Use for onSnapshot listener error callbacks - logs only, does not throw
-// (listeners fire before auth is ready, so permission errors are expected)
-function handleListenerError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo = buildFirestoreErrorInfo(error, operationType, path);
-  // Only log permission errors at warn level since they're expected before auth
-  const msg = errInfo.error;
-  if (msg.includes('permission') || msg.includes('Permission')) {
-    console.warn('Firestore listener permission denied (user may not be authenticated yet):', path);
-  } else {
-    console.error('Firestore Listener Error:', JSON.stringify(errInfo));
-  }
-}
-type View = 'login' | 'home' | 'dashboard' | 'referral' | 'workstation' | 'finance' | 'support' | 'folder-a' | 'folder-b' | 'folder-c' | 'folder-d' | 'leaderboard' | 'spin' | 'profile' | 'salary-sheet' | 'admin' | 'settings' | 'ads-earn' | 'mobile-banking' | 'otp-buy-sell' | 'mobile-recharge' | 'drive-offer' | 'ecommerce' | 'dollar-sell' | 'dollar-buy' | 'social-hub' | 'subscription-boosting' | 'account-activation' | 'gaming' | 'ludo-earn' | 'smm-panel' | 'top-news' | 'social-job';
-
-interface NewsPost {
-  id: string;
-  authorName: string;
-  authorBadge: boolean;
-  content: string;
-  imageUrl?: string;
-  likes: string[];
-  comments: {
-    id: string;
-    userId: string;
-    userName: string;
-    text: string;
-    timestamp: number;
-  }[];
-  timestamp: number;
-}
-
-interface Product {
-  id: string;
-  name: string;
-  price: number;
-  resellPrice?: number;
-  profitPerUnit?: number;
-  description?: string;
-  image: string;
-  category?: string;
-  variants?: string;
-  quantityOptions?: string;
-}
-
-interface ProductOrder {
-  id: string;
-  userId: string;
-  productId: string;
-  address: string;
-  phone: string;
-  amount: number;
-  deliveryFee?: number;
-  totalPaid?: number;
-  paymentStatus?: 'COD' | 'Paid';
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  date: string;
-  reason?: string;
-}
-
-interface SubscriptionRequest {
-  id: string;
-  userId: string;
-  type: 'youtube' | 'telegram';
-  email?: string;
-  telegramId?: string;
-  price: number;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reason?: string;
-}
-
-interface UserProfile {
-  name: string;
-  email: string;
-  phone: string;
-  country: string;
-  age: number;
-  referralCode: string;
-  id: string;
-  numericId: string;
-  rank: 'Bronze' | 'Silver' | 'Gold' | 'Diamond';
-  mainBalance: number;
-  totalEarned: number;
-  pendingPayout: number;
-  referralLink: string;
-  gen1Count: number;
-  dailyClaimed: boolean;
-  notifications: { id: string; text: string; date: string }[];
-  taskHistory: { id: string; title: string; reward: number; date: string }[];
-  achievements: { id: string; title: string; progress: number; goal: number }[];
-  adWatches: { id: string; date: string; count: number }[];
-  isActive: boolean;
-  activationDate: string;
-  activationExpiry: string;
-  referralActiveCount: number;
-  referredBy?: string;
-  status: 'active' | 'banned' | 'suspended';
-  restrictionReason: string;
-  suspensionUntil: string;
-  totalCommission: number;
-  socialSubmissions: SocialSubmission[];
-}
-
-interface SocialSubmission {
-  id: string;
-  userId: string;
-  userName: string;
-  type: string;
-  trxId: string;
-  screenshot: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  amount?: number;
-}
-
-interface GmailSubmission {
-  id: string;
-  userId: string;
-  email: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reward: number;
-  reason?: string;
-}
-
-interface MicrojobSubmission {
-  id: string;
-  userId: string;
-  microjobId: string;
-  userName: string;
-  link: string;
-  screenshot: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reason?: string;
-}
-
-interface TaskSubmission {
-  id: string;
-  userId: string;
-  taskType: string;
-  userName: string;
-  link?: string;
-  screenshot: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reward: number;
-  taskId: string;
-  reason?: string;
-  category?: string;
-}
-
-interface RechargeRequest {
-  id: string;
-  userId: string;
-  phone: string;
-  operator: string;
-  amount: number;
-  type: 'Prepaid' | 'Postpaid';
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reason?: string;
-}
-
-interface LudoTournament {
-  id: string;
-  title: string;
-  entryFee: number;
-  prizePool: number;
-  type: '1vs1' | '4player';
-  rules: string;
-  description: string;
-  status: 'open' | 'closed' | 'ongoing' | 'completed';
-  maxPlayers: number;
-  currentPlayers: number;
-  startTime: string;
-  roomCode?: string;
-  playerIds: string[];
-}
-
-interface LudoSubmission {
-  id: string;
-  userId: string;
-  tournamentId: string;
-  userName: string;
-  ludoUsername: string;
-  screenshot: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  timestamp: number;
-}
-
-interface DriveOffer {
-  id: string;
-  title: string;
-  operator: string;
-  price: number;
-  description: string;
-}
-
-interface DriveOfferRequest {
-  id: string;
-  userId: string;
-  driveOfferId: string;
-  phone: string;
-  amount: number;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  reason?: string;
-}
-
-interface SmmOrder {
-  id: string;
-  userId: string;
-  userName: string;
-  service: string;
-  link: string;
-  amount: number; // Taka spent
-  quantity: number; // Likes/Stars/etc received
-  status: 'pending' | 'processing' | 'completed' | 'cancelled';
-  date: string;
-  timestamp: number;
-}
-
-interface DollarBuyRequest {
-  id: string;
-  userId: string;
-  amount: number;
-  price: number;
-  method: string;
-  wallet: string;
-  status: 'pending' | 'approved' | 'rejected';
-  date: string;
-  timestamp: number;
-  reason?: string;
-}
-
-// --- Constants ---
-const INITIAL_USER: UserProfile = {
-  name: 'Soruv Islam',
-  email: 'soruvislam51@gmail.com',
-  phone: '01700000000',
-  country: 'Bangladesh',
-  age: 20,
-  referralCode: '',
-  id: '#SSC2026-SR',
-  numericId: '100001',
-  rank: 'Bronze',
-  mainBalance: 0.00,
-  totalEarned: 0.00,
-  pendingPayout: 0.00,
-  referralLink: 'https://smarttask.bd/ref/soruv',
-  gen1Count: 0,
-  dailyClaimed: false,
-  notifications: [
-    { id: '1', text: 'Welcome to Top Earning!', date: '2026-04-01' },
-    { id: '2', text: 'New Gmail Sell tasks added.', date: '2026-04-02' }
-  ],
-  taskHistory: [],
-  achievements: [
-    { id: '1', title: 'First Task', progress: 0, goal: 1 },
-    { id: '2', title: 'Team Builder', progress: 0, goal: 10 }
-  ],
-  adWatches: [],
-  isActive: false,
-  activationDate: '',
-  activationExpiry: '',
-  referralActiveCount: 0,
-  status: 'active',
-  restrictionReason: '',
-  suspensionUntil: '',
-  totalCommission: 0.00,
-  socialSubmissions: []
+// Silence unused-import warnings for types/utilities that may not be
+// referenced yet in this file but are part of the public module surface
+// kept for downstream splits.
+void buildFirestoreErrorInfo;
+void handleListenerError;
+export type {
+  DbErrorInfo,
+  DollarBuyRequest,
+  DriveOffer,
+  DriveOfferRequest,
+  FirestoreErrorInfo,
+  GlobalUpload,
+  GmailSubmission,
+  LudoSubmission,
+  LudoTournament,
+  MicrojobSubmission,
+  NewsPost,
+  Product,
+  ProductOrder,
+  RechargeRequest,
+  SmmOrder,
+  SocialSubmission,
+  SubscriptionRequest,
+  TaskSubmission,
+  UserMessage,
+  UserProfile,
+  View,
 };
-
-const INCOME_CARDS = [
-  { title: 'TOP NEWS', icon: <Newspaper className="w-6 h-6" />, color: 'from-blue-600 to-indigo-700', view: 'top-news' },
-  { title: 'Daily Job', icon: <Briefcase className="w-6 h-6" />, color: 'from-cyan-500 to-blue-500', view: 'folder-a' },
-  { title: 'Fb Marketing', icon: <Facebook className="w-6 h-6" />, color: 'from-blue-600 to-indigo-600', view: 'folder-b' },
-  { title: 'Gmail Sell', icon: <Mail className="w-6 h-6" />, color: 'from-red-500 to-orange-500', view: 'folder-c' },
-  { title: 'Ads Earn', icon: <PlayCircle className="w-6 h-6" />, color: 'from-emerald-500 to-teal-500', view: 'ads-earn' },
-  { title: 'Mobile Banking', icon: <Smartphone className="w-6 h-6" />, color: 'from-indigo-500 to-blue-600', view: 'mobile-banking' },
-  { title: 'BUY SELL', icon: <Key className="w-6 h-6" />, color: 'from-rose-500 to-pink-600', view: 'otp-buy-sell' },
-  { title: 'Network Marketing', icon: <Users className="w-6 h-6" />, color: 'from-purple-500 to-pink-500', view: 'folder-d' },
-  { title: 'Micro Tasks', icon: <Smartphone className="w-6 h-6" />, color: 'from-emerald-500 to-teal-500', view: 'folder-a' },
-  { title: 'Asset Trading', icon: <TrendingUp className="w-6 h-6" />, color: 'from-amber-500 to-orange-600', view: 'folder-c' },
-  { title: 'Team Bonus', icon: <Users className="w-6 h-6" />, color: 'from-indigo-500 to-purple-600', view: 'folder-d' },
-  { title: 'Premium Jobs', icon: <ShieldCheck className="w-6 h-6" />, color: 'from-yellow-400 to-amber-600', view: 'folder-a' },
-  { title: 'E-commerce', icon: <ShoppingBag className="w-6 h-6" />, color: 'from-pink-500 to-rose-600', view: 'ecommerce' },
-  { title: 'SOCIAL', icon: <Users className="w-6 h-6" />, color: 'from-indigo-500 to-blue-600', view: 'social-hub' },
-  { title: 'SMM & BOOSTING', icon: <Zap className="w-6 h-6" />, color: 'from-yellow-400 to-orange-500', view: 'subscription-boosting' },
-  { title: 'GAMING', icon: <Gamepad2 className="w-6 h-6" />, color: 'from-violet-500 to-purple-600', view: 'gaming' },
-];
-
-interface UserMessage {
-  id: string;
-  userId: string;
-  userName: string;
-  text: string;
-  sender: 'user' | 'admin';
-  date: string;
-}
-
-const SMM_SERVICES = [
-  { id: 'fb-like', name: 'Facebook Likes', pricePer1k: 50, icon: <Facebook className="w-5 h-5" />, min: 100, tag: 'Popular', color: 'from-blue-500 to-blue-700' },
-  { id: 'fb-star', name: 'Facebook Stars', pricePer1k: 5000, icon: <Sparkles className="w-5 h-5" />, min: 10, tag: 'Premium', color: 'from-amber-400 to-orange-600' },
-  { id: 'fb-follow', name: 'Facebook Page Follow', pricePer1k: 200, icon: <Users className="w-5 h-5" />, min: 100, tag: 'High Quality', color: 'from-indigo-500 to-purple-700' },
-  { id: 'tg-member', name: 'Telegram Members', pricePer1k: 150, icon: <Send className="w-5 h-5" />, min: 100, tag: 'Fast Start', color: 'from-sky-400 to-blue-600' },
-  { id: 'tg-view', name: 'Telegram Channel Views', pricePer1k: 30, icon: <Globe className="w-5 h-5" />, min: 100, tag: 'Best Value', color: 'from-emerald-400 to-teal-600' },
-  { id: 'tg-star', name: 'Telegram Stars', pricePer1k: 4500, icon: <Sparkles className="w-5 h-5" />, min: 10, tag: 'New', color: 'from-violet-500 to-fuchsia-700' },
-];
 
 export default function App() {
   const [view, setView] = useState<View>('login');
@@ -1412,220 +1108,40 @@ export default function App() {
     </div>
   );
 
-  const WelcomeOverlay = () => {
-    const [step, setStep] = useState(1);
-
-    if (!showWelcome) return null;
-
-    return (
-      <AnimatePresence mode="wait">
-        <motion.div
-          key="overlay"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[500] flex items-center justify-center p-6 bg-slate-900/80 backdrop-blur-md"
-        >
-          {step === 1 ? (
-            <motion.div
-              key="step1"
-              initial={{ scale: 0.8, opacity: 0, y: 40 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.8, opacity: 0, y: -40 }}
-              className="w-full max-w-md bg-white rounded-[40px] p-10 shadow-2xl border border-[#D4AF37]/30 text-center relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#D4AF37] via-[#C5A028] to-[#D4AF37]" />
-              <div className="w-24 h-24 bg-[#D4AF37]/10 rounded-[32px] flex items-center justify-center mx-auto mb-8 shadow-inner border border-[#D4AF37]/20">
-                <Zap className="w-12 h-12 text-[#D4AF37] animate-pulse" />
-              </div>
-              <h1 className="text-4xl font-black text-slate-900 mb-2 tracking-tighter uppercase glitch-text" data-text="SMART TASK">SMART TASK</h1>
-              <p className="text-[#D4AF37] text-xs font-black uppercase tracking-[0.3em] mb-12">Next-Gen Earning Platform</p>
-              <button
-                onClick={() => setStep(2)}
-                className="w-full py-5 bg-gradient-to-r from-[#D4AF37] to-[#C5A028] text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-2xl active:scale-95 transition-all"
-              >
-                GET STARTED
-              </button>
-            </motion.div>
-          ) : (
-            <motion.div
-              key="step2"
-              initial={{ scale: 0.8, opacity: 0, y: 40 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.8, opacity: 0, y: -40 }}
-              className="w-full max-w-md bg-white rounded-[40px] p-10 shadow-2xl border border-[#D4AF37]/30 text-center relative overflow-hidden"
-            >
-              <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-[#D4AF37] via-[#C5A028] to-[#D4AF37]" />
-              <div className="w-16 h-16 bg-indigo-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-                <ShieldCheck className="w-8 h-8 text-indigo-600" />
-              </div>
-              <h2 className="text-2xl font-black text-slate-900 mb-4 uppercase tracking-tight">Platform Rules</h2>
-              <div className="bg-slate-50 rounded-2xl p-4 mb-8 max-h-[200px] overflow-y-auto text-left">
-                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap font-medium">
-                  {rulesText}
-                </p>
-              </div>
-              <button
-                onClick={() => {
-                  setShowWelcome(false);
-                  sessionStorage.setItem('hasSeenWelcome', 'true');
-                }}
-                className="w-full py-5 bg-indigo-600 text-white rounded-3xl font-black text-sm uppercase tracking-widest shadow-xl active:scale-95 transition-all"
-              >
-                I AGREE & ENTER
-              </button>
-            </motion.div>
-          )}
-        </motion.div>
-      </AnimatePresence>
-    );
-  };
-
-  const SubmissionLoader = () => (
-    <AnimatePresence>
-      {isSubmitting && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          className="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-slate-900/90 backdrop-blur-xl"
-        >
-          <div className="w-24 h-24 relative mb-8">
-            <svg className="w-full h-full transform -rotate-90">
-              <circle
-                cx="48"
-                cy="48"
-                r="40"
-                stroke="currentColor"
-                strokeWidth="8"
-                fill="transparent"
-                className="text-white/10"
-              />
-              <motion.circle
-                cx="48"
-                cy="48"
-                r="40"
-                stroke="currentColor"
-                strokeWidth="8"
-                fill="transparent"
-                strokeDasharray="251.2"
-                initial={{ strokeDashoffset: 251.2 }}
-                animate={{ strokeDashoffset: 251.2 - (251.2 * submissionProgress) / 100 }}
-                className="text-[#D4AF37]"
-              />
-            </svg>
-            <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xl">
-              {Math.ceil((1.5 * (100 - submissionProgress)) / 100)}s
-            </div>
-          </div>
-          <h3 className="text-white font-black text-xl uppercase tracking-[0.3em] mb-2">Processing...</h3>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">দয়া করে অপেক্ষা করুন</p>
-        </motion.div>
-      )}
-    </AnimatePresence>
+  // Local wrappers forwarding to the extracted shared components.
+  // Keeping the original names + call-sites intact makes this an
+  // opt-in migration -- the rest of this file does not need to change.
+  const WelcomeOverlay = () => (
+    <SharedWelcomeOverlay
+      show={showWelcome}
+      rulesText={rulesText}
+      onDismiss={() => {
+        setShowWelcome(false);
+        sessionStorage.setItem('hasSeenWelcome', 'true');
+      }}
+    />
   );
 
-  const SuccessView = ({
-    title,
-    subtitle,
-    details,
-    onClose,
-    colorClass = "bg-emerald-500"
-  }: {
+  const SubmissionLoader = () => (
+    <SharedSubmissionLoader isSubmitting={isSubmitting} submissionProgress={submissionProgress} />
+  );
+
+  const SuccessView = (props: {
     title: string;
     subtitle: string;
     details: { label: string; value: string; color?: string }[];
     onClose: () => void;
     colorClass?: string;
-  }) => (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 bg-slate-50">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-md glass-card border-slate-200 shadow-2xl overflow-hidden"
-      >
-        <div className={`${colorClass} p-8 flex flex-col items-center text-white`}>
-          <div className="w-16 h-16 bg-white/20 rounded-full flex items-center justify-center mb-4 backdrop-blur-md">
-            <CheckCircle2 className="w-10 h-10 text-white" />
-          </div>
-          <h2 className="text-xl font-black uppercase tracking-widest">{title}</h2>
-          <p className="text-[10px] font-bold opacity-80 mt-1 uppercase tracking-tighter">{subtitle}</p>
-        </div>
-
-        <div className="p-6 space-y-6">
-          <div className="space-y-4">
-            {details.map((d, i) => (
-              <div key={i} className={`flex justify-between items-center ${i !== details.length - 1 ? 'border-b border-slate-50 pb-3' : ''}`}>
-                <span className="text-[10px] font-black text-slate-400 uppercase">{d.label}</span>
-                <span className={`text-[10px] font-black uppercase ${d.color || 'text-slate-900'}`}>{d.value}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-            <p className="text-[9px] font-bold text-slate-500 text-center italic">
-              "Your submission is under review. Our team will verify it shortly."
-            </p>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-          >
-            Continue
-          </button>
-        </div>
-      </motion.div>
-    </div>
-  );
+  }) => <SharedSuccessView {...props} />;
 
   const RestrictionScreen = () => (
-    <div className="fixed inset-0 z-[100] bg-slate-900 flex items-center justify-center p-6 text-center">
-      <motion.div
-        initial={{ scale: 0.9, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        className="glass-card bg-white/10 border-white/20 p-8 max-w-sm w-full"
-      >
-        <div className="w-20 h-20 bg-rose-500/20 rounded-3xl flex items-center justify-center mx-auto mb-6">
-          <ShieldAlert className="w-10 h-10 text-rose-500" />
-        </div>
-        <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">
-          Account {user.status}
-        </h2>
-        <p className="text-rose-200 text-xs font-bold mb-6 leading-relaxed">
-          {user.restrictionReason || 'Your account has been restricted due to a policy violation.'}
-        </p>
-
-        {user.status === 'suspended' && user.suspensionUntil && (
-          <div className="bg-white/5 rounded-2xl p-4 mb-6 border border-white/10">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Suspension Ends</p>
-            <p className="text-lg font-black text-white">
-              {new Date(user.suspensionUntil).toLocaleDateString()}
-            </p>
-          </div>
-        )}
-
-        <div className="space-y-3">
-          <a
-            href="https://t.me/smarttask_support"
-            target="_blank"
-            rel="noreferrer"
-            className="block w-full bg-indigo-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-          >
-            Contact Support
-          </a>
-          <button
-            onClick={async () => {
-              await signOut();
-              setView('login');
-            }}
-            className="block w-full bg-white/10 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 active:scale-95 transition-all"
-          >
-            Logout
-          </button>
-        </div>
-      </motion.div>
-    </div>
+    <SharedRestrictionScreen
+      user={user}
+      onLogout={async () => {
+        await signOut();
+        setView('login');
+      }}
+    />
   );
 
   const homeView = (
@@ -1866,161 +1382,16 @@ export default function App() {
     </div>
   );
 
-  const TopNewsView = () => {
-    const [newComment, setNewComment] = useState<{ [postId: string]: string }>({});
-
-    const handleLike = async (postId: string) => {
-      const post = newsPosts.find(p => p.id === postId);
-      if (!post) return;
-
-      const newLikes = post.likes.includes(user.id)
-        ? post.likes.filter(id => id !== user.id)
-        : [...post.likes, user.id];
-
-      try {
-        await updateRow('newsPosts', postId, { likes: newLikes });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, `newsPosts/${postId}`);
-      }
-    };
-
-    const handleComment = async (postId: string) => {
-      const text = newComment[postId];
-      if (!text?.trim()) return;
-
-      const post = newsPosts.find(p => p.id === postId);
-      if (!post) return;
-
-      const comment = {
-        id: Date.now().toString(),
-        userId: user.id,
-        userName: user.name,
-        text: text.trim(),
-        timestamp: Date.now()
-      };
-
-      try {
-        await updateRow('newsPosts', postId, {
-          comments: [...post.comments, comment]
-        });
-        setNewComment({ ...newComment, [postId]: '' });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.UPDATE, `newsPosts/${postId}`);
-      }
-    };
-
-    return (
-      <div className="min-h-screen pb-32 bg-slate-100">
-        <div className="p-4 pt-12 max-w-lg mx-auto">
-          <div className="flex items-center gap-4 mb-6">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black text-slate-900">Top News</h2>
-          </div>
-
-          <div className="space-y-4">
-            {newsPosts.map(post => (
-              <div key={post.id} className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-                {/* Post Header */}
-                <div className="p-4 flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center text-white font-black">
-                    {post.authorName[0]}
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-1">
-                      <h4 className="font-bold text-sm text-slate-900">{post.authorName}</h4>
-                      {post.authorBadge && (
-                        <div className="bg-blue-500 rounded-full p-0.5">
-                          <Check className="w-2 h-2 text-white" />
-                        </div>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-slate-500">{new Date(post.timestamp).toLocaleString()}</p>
-                  </div>
-                </div>
-
-                {/* Post Content */}
-                <div className="px-4 pb-3">
-                  <p className="text-sm text-slate-800 whitespace-pre-wrap">{post.content}</p>
-                </div>
-
-                {/* Post Image */}
-                {post.imageUrl && (
-                  <div className="w-full aspect-video bg-slate-100">
-                    <img src={post.imageUrl} alt="Post" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  </div>
-                )}
-
-                {/* Stats */}
-                <div className="px-4 py-2 flex items-center justify-between border-t border-slate-50 text-[10px] text-slate-500">
-                  <div className="flex items-center gap-1">
-                    <div className="bg-blue-500 rounded-full p-1">
-                      <ThumbsUp className="w-2 h-2 text-white" />
-                    </div>
-                    <span>{post.likes.length}</span>
-                  </div>
-                  <div>{post.comments.length} comments</div>
-                </div>
-
-                {/* Actions */}
-                <div className="px-2 py-1 flex items-center border-t border-slate-50">
-                  <button
-                    onClick={() => handleLike(post.id)}
-                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg transition-colors ${post.likes.includes(user.id) ? 'text-blue-600' : 'text-slate-600 hover:bg-slate-50'
-                      }`}
-                  >
-                    <ThumbsUp className={`w-4 h-4 ${post.likes.includes(user.id) ? 'fill-current' : ''}`} />
-                    <span className="text-xs font-bold">Like</span>
-                  </button>
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-slate-600 hover:bg-slate-50">
-                    <MessageSquare className="w-4 h-4" />
-                    <span className="text-xs font-bold">Comment</span>
-                  </button>
-                  <button className="flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-slate-600 hover:bg-slate-50">
-                    <Share2 className="w-4 h-4" />
-                    <span className="text-xs font-bold">Share</span>
-                  </button>
-                </div>
-
-                {/* Comments Section */}
-                <div className="bg-slate-50 p-4 space-y-3">
-                  {post.comments.map(comment => (
-                    <div key={comment.id} className="flex gap-2">
-                      <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center text-[10px] font-bold text-slate-600 shrink-0">
-                        {comment.userName[0]}
-                      </div>
-                      <div className="bg-white p-2 rounded-2xl rounded-tl-none border border-slate-100 shadow-sm flex-1">
-                        <h5 className="text-[10px] font-black text-slate-900">{comment.userName}</h5>
-                        <p className="text-xs text-slate-700">{comment.text}</p>
-                      </div>
-                    </div>
-                  ))}
-
-                  {/* Comment Input */}
-                  <div className="flex gap-2 mt-2">
-                    <input
-                      type="text"
-                      placeholder="Write a comment..."
-                      value={newComment[post.id] || ''}
-                      onChange={e => setNewComment({ ...newComment, [post.id]: e.target.value })}
-                      className="flex-1 bg-white border border-slate-200 rounded-full px-4 py-2 text-xs outline-none focus:border-blue-500"
-                    />
-                    <button
-                      onClick={() => handleComment(post.id)}
-                      className="p-2 bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors"
-                    >
-                      <Send className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    );
-  };
+  // Forward to the extracted feature screen.  The props mirror the
+  // closure variables the inline definition used to capture.
+  const TopNewsView = () => (
+    <SharedTopNewsView
+      newsPosts={newsPosts}
+      user={user}
+      setView={setView}
+      updateRow={updateRow}
+    />
+  );
 
   const DashboardView = () => {
     const [copied, setCopied] = useState(false);
