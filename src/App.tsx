@@ -163,6 +163,11 @@ import { SmmPanelView as SharedSmmPanelView } from './features/smm/SmmPanelView'
 import { SubscriptionBoostingView as SharedSubscriptionBoostingView } from './features/smm/SubscriptionBoostingView';
 import { FinanceView as SharedFinanceView } from './features/finance/FinanceView';
 import { OtpBuySellView as SharedOtpBuySellView } from './features/otp-buy-sell/OtpBuySellView';
+import { LeaderboardView as SharedLeaderboardView } from './features/leaderboard/LeaderboardView';
+import { MobileBankingView as SharedMobileBankingView } from './features/mobile-banking/MobileBankingView';
+import { GamingView as SharedGamingView } from './features/gaming/GamingView';
+import { WorkStationView as SharedWorkStationView } from './features/workstation/WorkStationView';
+import { SocialHubView as SharedSocialHubView } from './features/social/SocialHubView';
 
 // Silence unused-import warnings for types/utilities that may not be
 // referenced yet in this file but are part of the public module surface
@@ -1439,78 +1444,13 @@ export default function App() {
     />
   );
 
+  // Forward to the extracted WorkStationView feature module.
   const workStationView = (
-    <div className="min-h-screen pb-32">
-      <div className="p-6 pt-12">
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Work Station">Work Station</h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          {[
-            { id: 'folder-a', title: 'Micro Freelancing', desc: 'Small tasks, big rewards. Complete simple web jobs.', count: '142 Jobs', color: 'from-indigo-400 to-violet-600' },
-            { id: 'folder-b', title: 'Social Media Marketing', desc: 'Like, follow, and share to earn instantly.', count: '89 Jobs', color: 'from-pink-400 to-rose-500' },
-            { id: 'folder-c', title: 'Digital Asset Trading', desc: 'Buy and sell accounts, domains, and more.', count: '24 Assets', color: 'from-emerald-400 to-teal-600' },
-            { id: 'folder-d', title: 'Team Management', desc: 'Manage your network and collect bonuses.', count: 'Active', color: 'from-purple-400 to-indigo-600' },
-          ].map((item, i) => (
-            <motion.button
-              key={i}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setView(item.id as View)}
-              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg ${(!activeFolders.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
-                }`}
-              disabled={!activeFolders.includes(item.id) && !isAdmin}
-            >
-              <div className={`absolute top-0 right-0 w-32 h-full bg-gradient-to-l ${item.color} opacity-5 group-hover:opacity-10 transition-all`} />
-              <div className="flex justify-between items-start relative z-10">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 mb-2">
-                    <FolderOpen className="w-4 h-4 text-indigo-600" />
-                    <span className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">{item.count}</span>
-                  </div>
-                  <h3 className="text-lg font-black text-slate-900 mb-1">{item.title}</h3>
-                  <p className="text-xs font-medium text-slate-500 leading-relaxed max-w-[80%]">{item.desc}</p>
-                </div>
-                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg`}>
-                  <ChevronRight className="w-6 h-6 text-white" />
-                </div>
-              </div>
-              {!activeFolders.includes(item.id) && !isAdmin && (
-                <div className="absolute inset-0 bg-slate-900/5 flex items-center justify-center">
-                  <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">Locked by Admin</span>
-                </div>
-              )}
-            </motion.button>
-          ))}
-        </div>
-
-        <div className="mt-8">
-          <div className="glass-card border-indigo-500/20 bg-indigo-50/30 p-5">
-            <h4 className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-4 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4" />
-              Workstation Rules
-            </h4>
-            <ul className="space-y-3">
-              <li className="text-[11px] text-slate-600 font-medium flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                Always provide accurate proof (screenshots/links) for tasks.
-              </li>
-              <li className="text-[11px] text-slate-600 font-medium flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                Fake submissions will lead to permanent account suspension.
-              </li>
-              <li className="text-[11px] text-slate-600 font-medium flex items-start gap-3">
-                <div className="w-1.5 h-1.5 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                Tasks are reviewed by admins within 24 hours.
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    </div>
+    <SharedWorkStationView
+      setView={setView}
+      activeFolders={activeFolders}
+      isAdmin={isAdmin}
+    />
   );
 
   // Forward to the extracted FinanceView feature module.
@@ -1596,88 +1536,19 @@ export default function App() {
     />
   );
 
-  const leaderboardView = (
-    <div className="min-h-screen pb-32">
-      <div className="p-6 pt-12">
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Leaderboard">Leaderboard</h2>
-        </div>
-        <div className="space-y-4">
-          {[
-            { name: 'Ariful Islam', earned: '৳ 45,200', rank: 1 },
-            { name: 'Mehedi Hasan', earned: '৳ 38,500', rank: 2 },
-            { name: 'Sabbir Ahmed', earned: '৳ 32,100', rank: 3 },
-            { name: 'Tanvir Hossain', earned: '৳ 28,900', rank: 4 },
-            { name: 'Rashed Khan', earned: '৳ 25,400', rank: 5 },
-          ].map((player, i) => (
-            <div key={i} className={`glass-card flex items-center justify-between shadow-sm ${i < 3 ? 'border-amber-500/40 bg-amber-50/50' : 'border-white/40'}`}>
-              <div className="flex items-center gap-4">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs shadow-sm ${i === 0 ? 'bg-amber-500 text-white' : i === 1 ? 'bg-slate-300 text-slate-700' : i === 2 ? 'bg-orange-400 text-white' : 'bg-slate-100 text-slate-500'
-                  }`}>
-                  {player.rank}
-                </div>
-                <div>
-                  <h4 className="text-sm font-black text-slate-900">{player.name}</h4>
-                  <p className="text-[10px] text-slate-400 uppercase font-bold tracking-widest">Top Earner</p>
-                </div>
-              </div>
-              <p className="text-amber-600 font-black">{player.earned}</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
+  // Forward to the extracted LeaderboardView feature module.
+  const leaderboardView = <SharedLeaderboardView setView={setView} />;
 
   // Forward to the extracted SpinView feature module.
   const SpinView = () => <SharedSpinView setView={setView} spinCost={spinCost} />;
 
+  // Forward to the extracted MobileBankingView feature module.
   const mobileBankingView = (
-    <div className="min-h-screen pb-32 bg-slate-50">
-      <div className="p-6 pt-12">
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Mobile Banking">Mobile Banking</h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-6">
-          {[
-            { id: 'mobile-recharge', title: 'Mobile Recharge', desc: 'Recharge any mobile number instantly.', icon: <Smartphone className="w-8 h-8" />, color: 'from-indigo-500 to-blue-600' },
-            { id: 'drive-offer', title: 'Drive Offer', desc: 'Exclusive internet and talk-time offers.', icon: <Zap className="w-8 h-8" />, color: 'from-amber-500 to-orange-600' },
-          ].map((item, i) => (
-            <motion.button
-              key={i}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setView(item.id as View)}
-              className={`glass-card text-left relative overflow-hidden group border-white/40 shadow-lg p-6 ${(!enabledFeatures.includes(item.id) && !isAdmin) ? 'opacity-50 grayscale cursor-not-allowed' : ''
-                }`}
-              disabled={!enabledFeatures.includes(item.id) && !isAdmin}
-            >
-              <div className={`absolute top-0 right-0 w-32 h-full bg-gradient-to-l ${item.color} opacity-5 group-hover:opacity-10 transition-all`} />
-              <div className="flex justify-between items-center relative z-10">
-                <div className="flex-1">
-                  <h3 className="text-lg font-black text-slate-900 mb-1">{item.title}</h3>
-                  <p className="text-xs font-medium text-slate-500 leading-relaxed max-w-[80%]">{item.desc}</p>
-                </div>
-                <div className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center shadow-lg text-white`}>
-                  {item.icon}
-                </div>
-              </div>
-              {!enabledFeatures.includes(item.id) && !isAdmin && (
-                <div className="absolute inset-0 bg-slate-900/5 flex items-center justify-center">
-                  <span className="bg-slate-900 text-white text-[10px] font-black px-4 py-2 rounded-xl uppercase">Locked by Admin</span>
-                </div>
-              )}
-            </motion.button>
-          ))}
-        </div>
-      </div>
-    </div>
+    <SharedMobileBankingView
+      setView={setView}
+      enabledFeatures={enabledFeatures}
+      isAdmin={isAdmin}
+    />
   );
 
   // Forward to the extracted MobileRechargeView feature module.
@@ -1733,66 +1604,14 @@ export default function App() {
     />
   );
 
+  // Forward to the extracted SocialHubView feature module.
   const socialHubView = (
-    <div className="min-h-screen pb-32 bg-slate-50">
-      <div className="p-6 pt-12">
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="SOCIAL HUB">SOCIAL HUB</h2>
-        </div>
-
-        <div className="grid grid-cols-1 gap-4">
-          <div
-            onClick={() => {
-              confetti({ particleCount: 100, spread: 70 });
-              alert('You claimed a FREE gift! +৳ 5.00 added to your balance.');
-              const userRef_id = user.id;
-              updateRow('users', userRef_id, { mainBalance: 5 });
-            }}
-            className="glass-card p-6 flex items-center justify-between border-amber-200 bg-amber-50/50 shadow-lg group relative overflow-hidden cursor-pointer active:scale-95 transition-all"
-          >
-            <div className="absolute inset-0 bg-gradient-to-r from-amber-400 to-orange-500 opacity-0 group-hover:opacity-5 transition-all" />
-            <div className="flex items-center gap-4 relative z-10">
-              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-lg">
-                <Gift className="w-6 h-6" />
-              </div>
-              <div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">FREE KOP</h3>
-                <p className="text-[8px] font-bold text-amber-600 uppercase">Claim ৳ 5.00 Bonus</p>
-              </div>
-            </div>
-            <span className="bg-amber-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter relative z-10">Claim Now</span>
-          </div>
-
-          {[
-            { title: 'Tiktok Earn', color: 'from-pink-500 to-rose-600', icon: <Music className="w-6 h-6" /> },
-            { title: 'Teligram Earn', color: 'from-sky-400 to-blue-500', icon: <Send className="w-6 h-6" /> },
-            { title: 'Taiping Work', color: 'from-slate-600 to-slate-800', icon: <Keyboard className="w-6 h-6" /> },
-            { title: 'Inestragram job', color: 'from-purple-500 to-pink-500', icon: <Instagram className="w-6 h-6" /> },
-          ].map((item, i) => (
-            <div
-              key={i}
-              onClick={() => {
-                setSelectedSocialJob(item);
-                setView('social-job');
-              }}
-              className="glass-card p-6 flex items-center justify-between border-white/40 shadow-lg group relative overflow-hidden cursor-pointer active:scale-95 transition-all"
-            >
-              <div className={`absolute inset-0 bg-gradient-to-r ${item.color} opacity-0 group-hover:opacity-5 transition-all`} />
-              <div className="flex items-center gap-4 relative z-10">
-                <div className={`w-12 h-12 rounded-2xl bg-gradient-to-br ${item.color} flex items-center justify-center text-white shadow-lg`}>
-                  {item.icon}
-                </div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">{item.title}</h3>
-              </div>
-              <span className="bg-indigo-500 text-white text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-tighter relative z-10">Open Job</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    </div>
+    <SharedSocialHubView
+      user={user}
+      setView={setView}
+      setSelectedSocialJob={setSelectedSocialJob}
+      updateRow={updateRow}
+    />
   );
 
   // Forward to the extracted SocialJobView feature module.
@@ -1846,52 +1665,8 @@ export default function App() {
     />
   );
 
-  const gamingView = (
-    <div className="min-h-screen bg-slate-50 pb-32">
-      <div className="bg-gradient-to-br from-violet-600 to-purple-700 pt-12 pb-24 px-6 rounded-b-[40px] shadow-2xl relative overflow-hidden">
-        <div className="absolute top-0 left-0 w-full h-full opacity-10">
-          <div className="absolute top-10 left-10 w-32 h-32 bg-white rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-10 right-10 w-40 h-40 bg-white rounded-full blur-3xl animate-pulse delay-700" />
-        </div>
-
-        <div className="relative z-10">
-          <button onClick={() => setView('home')} className="w-10 h-10 glass rounded-xl flex items-center justify-center text-white mb-6 active:scale-90 transition-all">
-            <ArrowLeft className="w-5 h-5" />
-          </button>
-          <h1 className="text-3xl font-black text-white uppercase tracking-tighter mb-2">Gaming Zone</h1>
-          <p className="text-purple-100 text-xs font-bold uppercase tracking-widest opacity-80">Play & Earn Real Money</p>
-        </div>
-      </div>
-
-      <div className="px-6 -mt-12 space-y-6">
-        <div className="grid grid-cols-1 gap-4">
-          <button
-            onClick={() => setView('ludo-earn')}
-            className="glass-card p-6 flex items-center gap-6 border-white/40 shadow-xl group hover:scale-[1.02] transition-all"
-          >
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center text-white shadow-lg group-hover:rotate-12 transition-transform">
-              <Trophy className="w-8 h-8" />
-            </div>
-            <div className="text-left">
-              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Ludo Earn</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Daily Tournaments</p>
-            </div>
-            <ChevronRight className="w-6 h-6 text-slate-300 ml-auto group-hover:translate-x-1 transition-transform" />
-          </button>
-
-          <div className="glass-card p-6 flex items-center gap-6 border-white/40 shadow-xl opacity-60 grayscale">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-400 to-indigo-500 flex items-center justify-center text-white shadow-lg">
-              <Gamepad2 className="w-8 h-8" />
-            </div>
-            <div className="text-left">
-              <h3 className="text-lg font-black text-slate-800 uppercase tracking-tight">Free Fire</h3>
-              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Upcoming Soon</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  // Forward to the extracted GamingView feature module.
+  const gamingView = <SharedGamingView setView={setView} />;
 
   // Forward to the extracted LudoEarnView feature module.
   const LudoEarnView = () => (
