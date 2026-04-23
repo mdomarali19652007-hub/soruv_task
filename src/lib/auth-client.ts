@@ -111,6 +111,32 @@ export async function createGoogleProfile(refCode?: string): Promise<{ success: 
 }
 
 /**
+ * Fetch the authenticated user's own profile row from the server.
+ * Uses /api/me (service-role backed) so clients no longer need to
+ * read from the `users` table directly via the anon key after the
+ * RLS lockdown in 20260419_rls_lockdown.sql.
+ *
+ * Returns the user row on 200, or `null` if the profile is missing
+ * (e.g. new Google OAuth user before createGoogleProfile ran) or
+ * the session is invalid/expired. Never throws.
+ */
+export async function fetchMyProfile<T = any>(): Promise<T | null> {
+  try {
+    const res = await fetch('/api/me', {
+      method: 'GET',
+      credentials: 'include',
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // /api/me returns the raw row. Support `{user: row}` too for
+    // forward compatibility with any wrapper shape.
+    return (data?.user ?? data) as T;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Validate a referral code (public, no auth required).
  */
 export async function validateReferralCode(code: string): Promise<boolean> {
