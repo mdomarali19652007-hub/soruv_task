@@ -633,6 +633,24 @@ export default function App() {
       alert('Please accept the rules to continue.');
       return;
     }
+    // Referral code is required for every signup outside the very
+    // first bootstrap account. The server enforces this too (/api/register
+    // returns 400 when users already exist), but validating here gives
+    // users an immediate error instead of a delayed network round-trip.
+    const trimmedRefCode = regData.refCode.trim();
+    if (!trimmedRefCode) {
+      alert('Referral code is required. Please enter the code of the person who invited you.');
+      return;
+    }
+    if (!/^\d{4,10}$/.test(trimmedRefCode)) {
+      alert('Referral code must be a 6-digit number.');
+      return;
+    }
+    const refValid = await validateReferralCode(trimmedRefCode);
+    if (!refValid) {
+      alert('This referral code is not valid. Please double-check and try again.');
+      return;
+    }
 
     try {
       // Use server-side registration with referral code validation
@@ -5008,11 +5026,17 @@ export default function App() {
               <button
                 type="button"
                 onClick={async () => {
-                  await signOut();
-                  setNeedsReferralCodePrompt(false);
-                  setRefCodePromptValue('');
-                  setRefCodePromptError(null);
-                  setView('login');
+                  try {
+                    await signOut();
+                  } catch (err) {
+                    console.warn('signOut failed, forcing reload anyway:', err);
+                  }
+                  // Force a full reload so the cookie, in-memory auth
+                  // state, and the session poll all get re-evaluated
+                  // from scratch. Without this, Better Auth's cookie
+                  // can still be present for the next session poll and
+                  // re-open the modal.
+                  window.location.assign('/');
                 }}
                 disabled={refCodePromptSubmitting}
                 className="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest"
