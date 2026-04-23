@@ -871,8 +871,8 @@ export default function App() {
           style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
 
-      {/* Hamburger Menu */}
-      <div ref={authMenuRef} className="absolute top-6 right-6 z-30">
+      {/* Hamburger Menu -- top-left, matching the post-login nav position */}
+      <div ref={authMenuRef} className="absolute top-4 left-4 z-30">
         <button
           type="button"
           aria-label="Open menu"
@@ -891,7 +891,7 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
               role="menu"
-              className="absolute right-0 mt-2 w-56 bg-white border border-[#D4AF37]/20 rounded-2xl shadow-xl overflow-hidden"
+              className="absolute left-0 mt-2 w-56 bg-white border border-[#D4AF37]/20 rounded-2xl shadow-xl overflow-hidden"
             >
               <button
                 type="button"
