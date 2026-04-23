@@ -23,6 +23,17 @@
  * The helper NEVER throws when the dev logger is active; in production
  * (`NODE_ENV === 'production'`) it throws if no provider is configured so
  * you notice a misconfigured deploy immediately.
+ *
+ * Kill switch
+ * -----------
+ * The whole email system is gated behind the `EMAIL_ENABLED` env var.
+ * It defaults to OFF. When disabled:
+ *   - `isEmailConfigured()` returns false regardless of `RESEND_API_KEY`
+ *   - `sendEmail()` is a no-op (logs once at startup so it is discoverable)
+ *   - `pickTransport()` never throws in production
+ *
+ * Flip `EMAIL_ENABLED=true` in the environment to re-enable delivery
+ * (and set `RESEND_API_KEY` / `EMAIL_FROM` for production).
  */
 
 export interface EmailMessage {
@@ -38,6 +49,29 @@ const DEFAULT_FROM = 'no-reply@localhost';
 
 function getFrom(): string {
   return process.env.EMAIL_FROM?.trim() || DEFAULT_FROM;
+}
+
+/**
+ * Master kill switch for the email system.
+ * Must be set to the literal string `"true"` to enable any email behavior.
+ * Defaults to disabled so deployments without email provider credentials
+ * cannot accidentally crash on boot or block user flows.
+ */
+function isEmailEnabled(): boolean {
+  return process.env.EMAIL_ENABLED?.trim().toLowerCase() === 'true';
+}
+
+function disabledTransport(): EmailTransport {
+  let warned = false;
+  return async () => {
+    if (!warned) {
+      warned = true;
+      console.info(
+        '[email] EMAIL_ENABLED is not set to "true" -- email system is a no-op. ' +
+          'Set EMAIL_ENABLED=true (and RESEND_API_KEY in production) to enable delivery.',
+      );
+    }
+  };
 }
 
 /**
@@ -92,13 +126,18 @@ function consoleTransport(): EmailTransport {
 }
 
 function pickTransport(): EmailTransport {
+  // Kill switch: when EMAIL_ENABLED is not explicitly "true", the system
+  // is a no-op. This is the default so missing RESEND_API_KEY does not
+  // crash production boot and missing verification does not block users.
+  if (!isEmailEnabled()) return disabledTransport();
+
   const resendKey = process.env.RESEND_API_KEY?.trim();
   if (resendKey) return resendTransport(resendKey);
 
   if (process.env.NODE_ENV === 'production') {
     throw new Error(
-      '[email] No email provider configured. Set RESEND_API_KEY (or another supported provider) ' +
-        'before deploying to production.',
+      '[email] EMAIL_ENABLED=true but no email provider configured. ' +
+        'Set RESEND_API_KEY (or another supported provider) before deploying to production.',
     );
   }
 
@@ -123,7 +162,11 @@ export async function sendEmail(msg: EmailMessage): Promise<void> {
   return getTransport()(msg);
 }
 
-/** True when a real (non-dev) transport is available. */
+/**
+ * True when a real (non-dev) transport is available AND the master kill
+ * switch is on. Better Auth uses this to decide whether to enforce email
+ * verification and whether to send messages at signup.
+ */
 export function isEmailConfigured(): boolean {
-  return Boolean(process.env.RESEND_API_KEY?.trim());
+  return isEmailEnabled() && Boolean(process.env.RESEND_API_KEY?.trim());
 }

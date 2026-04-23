@@ -9,6 +9,10 @@ beforeEach(() => {
   delete process.env.RESEND_API_KEY;
   delete process.env.EMAIL_FROM;
   delete process.env.NODE_ENV;
+  // All active-delivery tests below flip EMAIL_ENABLED on explicitly.
+  // The kill-switch default (EMAIL_ENABLED unset) is exercised in the
+  // "master kill switch" block.
+  process.env.EMAIL_ENABLED = 'true';
   resetTransportForTests();
 });
 
@@ -81,7 +85,43 @@ describe('email transport', () => {
     process.env.NODE_ENV = 'production';
     await expect(
       sendEmail({ to: 'a@b.com', subject: 'x', html: 'x' }),
-    ).rejects.toThrow(/No email provider configured/);
+    ).rejects.toThrow(/no email provider configured/i);
+  });
+});
+
+describe('master kill switch (EMAIL_ENABLED)', () => {
+  it('isEmailConfigured is false when EMAIL_ENABLED is unset even with an API key', () => {
+    delete process.env.EMAIL_ENABLED;
+    process.env.RESEND_API_KEY = 'real-key';
+    expect(isEmailConfigured()).toBe(false);
+  });
+
+  it('isEmailConfigured is false when EMAIL_ENABLED is "false" with an API key', () => {
+    process.env.EMAIL_ENABLED = 'false';
+    process.env.RESEND_API_KEY = 'real-key';
+    expect(isEmailConfigured()).toBe(false);
+  });
+
+  it('sendEmail is a no-op and does not throw in production when EMAIL_ENABLED is off', async () => {
+    delete process.env.EMAIL_ENABLED;
+    process.env.NODE_ENV = 'production';
+    // No fetch mock installed -- if the transport tried to call Resend
+    // the test would fail with a network error. The no-op transport
+    // should swallow the call entirely.
+    await expect(
+      sendEmail({ to: 'u@e.com', subject: 'x', html: 'x' }),
+    ).resolves.toBeUndefined();
+  });
+
+  it('sendEmail still uses Resend when EMAIL_ENABLED=true and RESEND_API_KEY is set', async () => {
+    process.env.EMAIL_ENABLED = 'true';
+    process.env.RESEND_API_KEY = 'real-key';
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response('{}', { status: 200 }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    await sendEmail({ to: 'u@e.com', subject: 'x', html: 'x' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
