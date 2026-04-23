@@ -66,7 +66,7 @@ import {
   Gamepad2,
   Info,
   Trash2,
-  MoreVertical,
+  Menu,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabase';
@@ -871,7 +871,7 @@ export default function App() {
           style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
 
-      {/* Three-dot Menu */}
+      {/* Hamburger Menu */}
       <div ref={authMenuRef} className="absolute top-6 right-6 z-30">
         <button
           type="button"
@@ -879,9 +879,9 @@ export default function App() {
           aria-haspopup="menu"
           aria-expanded={showAuthMenu}
           onClick={() => setShowAuthMenu((v) => !v)}
-          className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 shadow-lg shadow-[#D4AF37]/5 flex items-center justify-center text-[#C5A028] hover:bg-[#D4AF37] hover:text-white transition-all active:scale-95"
+          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#D4AF37] to-[#C5A028] border border-white/40 shadow-[0_8px_24px_-6px_rgba(212,175,55,0.45)] flex items-center justify-center text-white hover:shadow-[0_12px_28px_-4px_rgba(212,175,55,0.6)] hover:scale-105 active:scale-95 transition-all"
         >
-          <MoreVertical className="w-5 h-5" />
+          <Menu className="w-5 h-5" strokeWidth={2.5} />
         </button>
         <AnimatePresence>
           {showAuthMenu && (
