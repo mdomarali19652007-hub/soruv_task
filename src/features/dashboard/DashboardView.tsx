@@ -124,10 +124,15 @@ export function DashboardView({ user, setView, allUsers, referralCommissionRate 
           <div className="text-center mb-8">
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Your Referral Code</p>
             <div
-              onClick={() => handleCopy(user.numericId)}
-              className="relative inline-flex items-center gap-4 bg-white border-2 border-indigo-100 px-10 py-5 rounded-[32px] cursor-pointer hover:border-indigo-500 transition-all group shadow-sm active:scale-95"
+              onClick={() => user.numericId && handleCopy(user.numericId)}
+              aria-disabled={!user.numericId}
+              className={`relative inline-flex items-center gap-4 bg-white border-2 border-indigo-100 px-10 py-5 rounded-[32px] transition-all group shadow-sm ${
+                user.numericId
+                  ? 'cursor-pointer hover:border-indigo-500 active:scale-95'
+                  : 'cursor-not-allowed opacity-60'
+              }`}
             >
-              <span className="text-4xl font-black text-indigo-600 tracking-[0.1em]">{user.numericId}</span>
+              <span className="text-4xl font-black text-indigo-600 tracking-[0.1em]">{user.numericId || '——'}</span>
               <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
                 <Copy className="w-6 h-6 text-indigo-600" />
               </div>
@@ -147,11 +152,13 @@ export function DashboardView({ user, setView, allUsers, referralCommissionRate 
             </div>
 
             <button
+              disabled={!user.numericId}
               onClick={() => {
+                if (!user.numericId) return;
                 const link = `${window.location.origin}?ref=${user.numericId}`;
                 handleCopy(link);
               }}
-              className="mt-4 flex items-center gap-2 mx-auto text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline"
+              className="mt-4 flex items-center gap-2 mx-auto text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
             >
               <ExternalLink className="w-3 h-3" />
               Copy Referral Link

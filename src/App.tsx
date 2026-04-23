@@ -66,6 +66,7 @@ import {
   Gamepad2,
   Info,
   Trash2,
+  MoreVertical,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { supabase } from './lib/supabase';
@@ -99,6 +100,7 @@ import {
   createGoogleProfile,
   validateReferralCode,
   requestPasswordReset,
+  fetchMyProfile,
 } from './lib/auth-client';
 
 // --- Types, constants and utilities extracted into dedicated modules ---
@@ -295,6 +297,28 @@ export default function App() {
   const [lastWithdrawal, setLastWithdrawal] = useState<any>(null);
   const [lastDeposit, setLastDeposit] = useState<any>(null);
 
+  // Three-dot menu on login/register view
+  const [showAuthMenu, setShowAuthMenu] = useState(false);
+  const authMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showAuthMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (authMenuRef.current && !authMenuRef.current.contains(e.target as Node)) {
+        setShowAuthMenu(false);
+      }
+    };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowAuthMenu(false);
+    };
+    document.addEventListener('mousedown', handleClick);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('keydown', handleKey);
+    };
+  }, [showAuthMenu]);
+
   // DB-backed admin flag (seeded by supabase/migrations/20260419_admin_role.sql).
   // We retain a short legacy email allowlist so existing installs keep working
   // before the migration has been applied. Remove once every deployment is on
@@ -326,11 +350,33 @@ export default function App() {
     }
   }, [isLoggedIn, view]);
 
-  // --- Better Auth Session + Supabase Realtime Sync ---
+  // --- Better Auth Session + Profile Hydration ---
+  // NOTE: Since 20260419_rls_lockdown.sql revoked anon SELECT on `users`, we
+  // can no longer read the current user's profile via supabase.from('users')
+  // with the anon key. We now hydrate the profile from the server via
+  // /api/me (service-role backed, scoped to the caller) and poll it to keep
+  // balances and flags reasonably fresh without needing a signed Supabase
+  // JWT bridge for realtime on the users table.
   useEffect(() => {
     const unsubs: (() => void)[] = [];
-    let currentSubscribedUserId: string | null = null;
-    let currentUserUnsub: (() => void) | null = null;
+    let currentHydratedUserId: string | null = null;
+    let profilePollTimer: ReturnType<typeof setInterval> | null = null;
+
+    const stopProfilePoll = () => {
+      if (profilePollTimer) {
+        clearInterval(profilePollTimer);
+        profilePollTimer = null;
+      }
+    };
+
+    const hydrateProfile = async (authUserId: string): Promise<UserProfile | null> => {
+      const data = await fetchMyProfile<UserProfile>();
+      if (data && data.id === authUserId) {
+        setUser(data);
+        return data;
+      }
+      return null;
+    };
 
     // Poll Better Auth session to determine auth state
     const checkSession = async () => {
@@ -350,15 +396,16 @@ export default function App() {
 
           setView(prev => prev === 'login' ? 'home' : prev);
 
-          // Only subscribe if we haven't already for this user
-          if (currentSubscribedUserId !== authUser.id) {
-            if (currentUserUnsub) {
-              currentUserUnsub();
-              currentUserUnsub = null;
-            }
-            currentSubscribedUserId = authUser.id;
+          // Hydrate once for this session user; start a poll to pick up
+          // balance/rank/activation changes made server-side.
+          if (currentHydratedUserId !== authUser.id) {
+            stopProfilePoll();
+            currentHydratedUserId = authUser.id;
 
-            // For Google OAuth users, ensure profile exists
+            // For Google OAuth users, ensure profile exists before the
+            // first /api/me. If we have a pending referral code, use it;
+            // otherwise fall back to attempting creation only if the
+            // profile is missing.
             const pendingRefCode = localStorage.getItem('pendingReferralCode');
             if (pendingRefCode) {
               localStorage.removeItem('pendingReferralCode');
@@ -367,28 +414,27 @@ export default function App() {
               );
             }
 
-            // Subscribe to user profile via Supabase realtime
-            const unsubUser = subscribeToRow<UserProfile>('users', authUser.id, async (data) => {
-              if (data) {
-                setUser(data);
-              } else {
-                // Profile not found -- may happen for new Google OAuth users
-                // The server-side /api/register/google-profile endpoint handles creation
-                await createGoogleProfile().catch(e =>
-                  console.warn('Failed to create profile:', e)
-                );
-              }
-            });
-            currentUserUnsub = unsubUser;
-            unsubs.push(unsubUser);
+            // First hydrate. If missing, attempt Google profile creation
+            // as a fallback (legacy path) and re-hydrate once.
+            let profile = await hydrateProfile(authUser.id);
+            if (!profile) {
+              await createGoogleProfile().catch(e =>
+                console.warn('Failed to create profile:', e)
+              );
+              profile = await hydrateProfile(authUser.id);
+            }
+
+            // Light poll so the dashboard reflects server-side balance
+            // changes without a full realtime channel.
+            profilePollTimer = setInterval(() => {
+              hydrateProfile(authUser.id).catch(() => { /* swallow */ });
+            }, 15000);
+            unsubs.push(stopProfilePoll);
           }
           setIsAuthReady(true);
         } else {
-          if (currentUserUnsub) {
-            currentUserUnsub();
-            currentUserUnsub = null;
-          }
-          currentSubscribedUserId = null;
+          stopProfilePoll();
+          currentHydratedUserId = null;
           setIsLoggedIn(false);
           setView('login');
           setIsAuthReady(true);
@@ -801,29 +847,67 @@ export default function App() {
           style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
 
-      {/* Info Buttons */}
-      <div className="absolute top-8 left-0 right-0 px-8 flex justify-center gap-4 z-20">
+      {/* Three-dot Menu */}
+      <div ref={authMenuRef} className="absolute top-6 right-6 z-30">
         <button
-          onClick={() => setShowInfoModal('info')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
+          type="button"
+          aria-label="Open menu"
+          aria-haspopup="menu"
+          aria-expanded={showAuthMenu}
+          onClick={() => setShowAuthMenu((v) => !v)}
+          className="w-10 h-10 rounded-full bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 shadow-lg shadow-[#D4AF37]/5 flex items-center justify-center text-[#C5A028] hover:bg-[#D4AF37] hover:text-white transition-all active:scale-95"
         >
-          <Info className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-          <span>Website Info</span>
+          <MoreVertical className="w-5 h-5" />
         </button>
-        <button
-          onClick={() => alert('Upcoming Feature!')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
-        >
-          <HelpCircle className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-          <span>Help Center</span>
-        </button>
-        <button
-          onClick={() => setShowInfoModal('freelance')}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white/80 backdrop-blur-md border border-[#D4AF37]/20 rounded-2xl text-[9px] font-black text-[#C5A028] uppercase tracking-widest shadow-lg shadow-[#D4AF37]/5 hover:bg-[#D4AF37] hover:text-white transition-all group active:scale-95"
-        >
-          <Briefcase className="w-3.5 h-3.5 group-hover:rotate-12 transition-transform" />
-          <span>Freelancing</span>
-        </button>
+        <AnimatePresence>
+          {showAuthMenu && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: -4 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: -4 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              role="menu"
+              className="absolute right-0 mt-2 w-56 bg-white border border-[#D4AF37]/20 rounded-2xl shadow-xl overflow-hidden"
+            >
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setShowInfoModal('info');
+                  setShowAuthMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors"
+              >
+                <Info className="w-3.5 h-3.5" />
+                <span>Website Info</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  alert('Upcoming Feature!');
+                  setShowAuthMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors border-t border-[#D4AF37]/10"
+              >
+                <HelpCircle className="w-3.5 h-3.5" />
+                <span>Help Center</span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setShowInfoModal('freelance');
+                  setShowAuthMenu(false);
+                }}
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors border-t border-[#D4AF37]/10"
+              >
+                <Briefcase className="w-3.5 h-3.5" />
+                <span>Freelancing</span>
+              </button>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <motion.div
