@@ -60,11 +60,12 @@ export function ReferralView({ user, setView, referralActivationBonus, referralC
             <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Your Referral Code</label>
             <div className="flex gap-2">
               <div className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-sm text-slate-900 font-black shadow-inner">
-                {user.numericId}
+                {user.numericId || '——'}
               </div>
               <button
-                onClick={() => handleCopy(user.numericId)}
-                className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all"
+                disabled={!user.numericId}
+                onClick={() => user.numericId && handleCopy(user.numericId)}
+                className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Copy className="w-5 h-5" />
               </button>
@@ -75,11 +76,12 @@ export function ReferralView({ user, setView, referralActivationBonus, referralC
             <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">Referral Link</label>
             <div className="flex gap-2">
               <div className="flex-1 bg-slate-50 border border-slate-100 rounded-2xl p-4 text-[10px] text-slate-900 font-bold shadow-inner truncate">
-                {user.referralLink}
+                {user.referralLink || '——'}
               </div>
               <button
-                onClick={() => handleCopy(user.referralLink)}
-                className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all"
+                disabled={!user.referralLink}
+                onClick={() => user.referralLink && handleCopy(user.referralLink)}
+                className="p-4 bg-indigo-600 text-white rounded-2xl shadow-lg active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Copy className="w-5 h-5" />
               </button>

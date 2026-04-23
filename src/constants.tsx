@@ -31,26 +31,28 @@ import {
 } from 'lucide-react';
 import type { UserProfile } from './types';
 
+// NOTE: These defaults are only used as a zero-state placeholder while the
+// authenticated user's real profile is being hydrated from /api/me. Fields
+// that would be misleading if rendered as if they were real data (numericId,
+// referralLink, name/email/phone) are intentionally empty -- views must
+// treat `numericId === ''` as "not loaded yet" and render a placeholder.
 export const INITIAL_USER: UserProfile = {
-  name: 'Soruv Islam',
-  email: 'soruvislam51@gmail.com',
-  phone: '01700000000',
+  name: '',
+  email: '',
+  phone: '',
   country: 'Bangladesh',
-  age: 20,
+  age: 0,
   referralCode: '',
-  id: '#SSC2026-SR',
-  numericId: '100001',
+  id: '',
+  numericId: '',
   rank: 'Bronze',
   mainBalance: 0.0,
   totalEarned: 0.0,
   pendingPayout: 0.0,
-  referralLink: 'https://smarttask.bd/ref/soruv',
+  referralLink: '',
   gen1Count: 0,
   dailyClaimed: false,
-  notifications: [
-    { id: '1', text: 'Welcome to Top Earning!', date: '2026-04-01' },
-    { id: '2', text: 'New Gmail Sell tasks added.', date: '2026-04-02' },
-  ],
+  notifications: [],
   taskHistory: [],
   achievements: [
     { id: '1', title: 'First Task', progress: 0, goal: 1 },
