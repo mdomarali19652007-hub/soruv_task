@@ -5,11 +5,10 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import cors from "cors";
 import morgan from "morgan";
-import { toNodeHandler } from "better-auth/node";
-import { auth } from "./src/server/auth.js";
+import { clerkMiddleware } from "@clerk/express";
 import apiRoutes from "./src/server/routes.js";
+import clerkWebhooks from "./src/server/webhooks.js";
 import { corsOptions } from "./src/server/cors-config.js";
-import { authLimiter } from "./src/server/rate-limit.js";
 
 interface GamePlayer {
   id: string;
@@ -43,10 +42,24 @@ async function startServer() {
 
   app.use(cors(corsOptions));
   app.use(morgan("dev"));
-  app.use(express.json());
 
   // Trust proxy so rate-limit sees real client IP behind load balancers.
   app.set("trust proxy", 1);
+
+  // Clerk webhooks MUST be mounted before `express.json()` because Svix
+  // signature verification needs the untouched raw request body. We
+  // scope the raw parser to the exact webhook path so the rest of the
+  // API still gets normal JSON parsing.
+  app.use("/api/webhooks/clerk", express.raw({ type: "application/json" }));
+  app.use("/api", clerkWebhooks);
+
+  app.use(express.json());
+
+  // Clerk middleware: populates `req.auth` for downstream handlers. It
+  // is safe to run globally because it just extracts the session from
+  // cookies / bearer token -- it does not reject unauthenticated
+  // traffic on its own.
+  app.use(clerkMiddleware());
 
   // Mock database
   const rooms: Record<string, GameRoom> = {};
@@ -99,11 +112,6 @@ async function startServer() {
       console.log("User disconnected:", socket.id);
     });
   });
-
-  // Better Auth handler -- handles all /api/auth/* routes
-  // Express 4 uses * wildcard, not *splat (that's Express 5 syntax)
-  // Rate-limit auth endpoints to slow down credential stuffing / brute force.
-  app.all("/api/auth/*", authLimiter, toNodeHandler(auth));
 
   // Application API routes (registration, admin, etc.)
   app.use("/api", apiRoutes);

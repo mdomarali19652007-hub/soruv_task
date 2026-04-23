@@ -1,5 +1,6 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+import { ClerkProvider } from '@clerk/clerk-react';
 import App from './App.tsx';
 import './index.css';
 
@@ -30,11 +31,23 @@ function renderFallback(target: HTMLElement, error: unknown) {
   target.appendChild(container);
 }
 
+const clerkPublishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY as string | undefined;
+
+if (!clerkPublishableKey) {
+  // We intentionally log instead of throwing so the fallback UI still
+  // renders a readable error message instead of a blank screen.
+  console.error(
+    '[Clerk] VITE_CLERK_PUBLISHABLE_KEY is missing. Set it in .env.local (see .env.example).',
+  );
+}
+
 if (root) {
   try {
     createRoot(root).render(
       <StrictMode>
-        <App />
+        <ClerkProvider publishableKey={clerkPublishableKey || ''} afterSignOutUrl="/">
+          <App />
+        </ClerkProvider>
       </StrictMode>,
     );
   } catch (error) {

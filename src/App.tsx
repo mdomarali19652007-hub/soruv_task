@@ -103,6 +103,7 @@ import {
   fetchMyProfile,
 } from './lib/auth-client';
 import { ResetPasswordView } from './features/auth/ResetPasswordView';
+import { EmailVerificationOverlay } from './features/auth/EmailVerificationOverlay';
 
 // --- Types, constants and utilities extracted into dedicated modules ---
 // See src/types.ts, src/constants.tsx, src/utils/db-errors.ts, src/components/*
@@ -669,11 +670,16 @@ export default function App() {
         return;
       }
 
-      // Auto-login after registration
-      await signIn.email({
-        email: regData.email,
-        password: regData.password,
-      });
+      // With Clerk, signup is a two-step flow: we've just triggered an
+      // email with a 6-digit verification code. Flip the overlay on so
+      // the user can enter it. The Clerk webhook will create the DB
+      // profile once the user is verified.
+      if (result.needsEmailVerification) {
+        setNeedsEmailVerification(true);
+        setView('login');
+        alert('We sent a verification code to your email. Enter it to finish signing up.');
+        return;
+      }
 
       alert('Registration successful!');
       setView('home');
@@ -5058,54 +5064,21 @@ export default function App() {
         </div>
       )}
 
-      {/* Email Verification Overlay */}
+      {/* Email Verification Overlay (Clerk 6-digit code flow) */}
       {needsEmailVerification && view !== 'admin' && (
-        <div className="fixed inset-0 z-[400] bg-white flex flex-col items-center justify-center p-8 text-center">
-          <div className="w-24 h-24 bg-indigo-500/10 rounded-full flex items-center justify-center mb-6">
-            <Mail className="w-12 h-12 text-indigo-500" />
-          </div>
-          <h2 className="text-2xl font-black text-slate-900 mb-2 uppercase tracking-widest">VERIFY YOUR EMAIL</h2>
-          <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-            We've sent a verification link to your email. Please verify your account to continue.
-          </p>
-          <div className="w-full space-y-4">
-            <button
-              onClick={async () => {
-                // Re-check session to see if email is verified
-                const sessionResult = await authClient.getSession();
-                const sess = sessionResult?.data;
-                if (sess?.user?.emailVerified) {
-                  setNeedsEmailVerification(false);
-                  setView('home');
-                } else {
-                  alert('Email not verified yet. Please check your inbox.');
-                }
-              }}
-              className="w-full py-4 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-            >
-              I HAVE VERIFIED
-            </button>
-            <button
-              onClick={async () => {
-                // Better Auth handles email verification via its built-in flow
-                alert('Please check your inbox for the verification email. If you did not receive it, try logging in again.');
-              }}
-              className="w-full py-4 bg-slate-50 text-slate-600 border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
-            >
-              RESEND EMAIL
-            </button>
-            <button
-              onClick={async () => {
-                await signOut();
-                setNeedsEmailVerification(false);
-                setView('login');
-              }}
-              className="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest"
-            >
-              LOGOUT & TRY AGAIN
-            </button>
-          </div>
-        </div>
+        <EmailVerificationOverlay
+          onVerified={() => {
+            setNeedsEmailVerification(false);
+            setView('home');
+          }}
+          onCancel={async () => {
+            try {
+              await signOut();
+            } catch { /* ignore */ }
+            setNeedsEmailVerification(false);
+            setView('login');
+          }}
+        />
       )}
 
       {/* Feature 5: Notification Modal */}
