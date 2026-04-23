@@ -57,6 +57,35 @@ if (!authSecret || authSecret.length < 32) {
 //   GOOGLE_CLIENT_SECRET      - Google OAuth client secret
 // ============================================================
 
+/**
+ * Resolve the public base URL for Better Auth.
+ *
+ * Preference order:
+ *   1. `BETTER_AUTH_URL`                -- explicit override
+ *   2. `VERCEL_PROJECT_PRODUCTION_URL`  -- stable production alias on Vercel
+ *   3. `VERCEL_URL`                     -- per-deployment hostname
+ *   4. `http://localhost:3000`          -- dev default
+ *
+ * Without this auto-detection, Google OAuth redirects land on
+ * http://localhost:3000/api/auth/callback/google even from a Vercel deploy,
+ * because Better Auth builds the callback from `baseURL`.
+ */
+function resolveBaseURL(): string {
+  const explicit = process.env.BETTER_AUTH_URL?.trim();
+  if (explicit) return explicit;
+
+  const vercel =
+    process.env.VERCEL_PROJECT_PRODUCTION_URL?.trim() ||
+    process.env.VERCEL_URL?.trim();
+  if (vercel) {
+    return vercel.startsWith('http') ? vercel : `https://${vercel}`;
+  }
+
+  return 'http://localhost:3000';
+}
+
+const resolvedBaseURL = resolveBaseURL();
+
 export const auth = betterAuth({
   database: new Pool({
     connectionString: databaseUrl,
@@ -65,7 +94,7 @@ export const auth = betterAuth({
   // Only define secret/baseURL if env vars are NOT set (per best practices skill)
   // Since we validated above, we can pass them directly
   secret: authSecret,
-  baseURL: process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+  baseURL: resolvedBaseURL,
   basePath: '/api/auth',
 
   // Email + password authentication.
@@ -173,9 +202,7 @@ export const auth = betterAuth({
   // when BETTER_AUTH_URL has not been set. Vercel's per-deployment URLs
   // are auto-included here so sign-in works immediately after a deploy.
   trustedOrigins: (() => {
-    const list: string[] = [
-      process.env.BETTER_AUTH_URL || 'http://localhost:3000',
-    ];
+    const list: string[] = [resolvedBaseURL];
     const maybe = (v?: string) => {
       if (!v) return;
       const url = v.startsWith('http') ? v : `https://${v}`;

@@ -400,24 +400,193 @@ router.post('/validate-referral', referralLimiter, async (req: Request, res: Res
 
 // ============================================================
 // GET /api/me -- Get current user's app profile
+//
+// Self-healing: this endpoint makes sure the caller's row in `users`
+// (the app-level profile table) has the fields the client relies on
+// before returning it. In order:
+//
+//   1. If the row does not exist (e.g. a Better Auth user who never
+//      went through /api/register/google-profile), create a minimal
+//      profile with a unique numericId.
+//   2. If the row exists but `numericId` is missing/empty, assign a
+//      fresh unique one and update the row. This covers Supabase-era
+//      rows and any row that failed to receive a numericId in the
+//      past.
+//   3. If the row has an empty `referralLink`, backfill it from the
+//      numericId.
+//   4. Backfill `users.isAdmin = true` for legacy hard-coded admin
+//      emails so returning admins from the Supabase-auth days keep
+//      their privileges once they sign in under Better Auth.
+//
+// All heals are idempotent; running /api/me twice is safe and cheap
+// once the row is healthy.
 // ============================================================
+
+const LEGACY_ADMIN_EMAILS_SERVER = new Set<string>([
+  'soruvislam51@gmail.com',
+  'shovonali885@gmail.com',
+]);
+
+async function generateUniqueNumericId(): Promise<string> {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const candidate = Math.floor(100000 + Math.random() * 900000).toString();
+    const { data: existing } = await supabaseAdmin
+      .from('users')
+      .select('id')
+      .eq('numericId', candidate)
+      .limit(1);
+    if (!existing || existing.length === 0) return candidate;
+  }
+  // Extreme collision -- let the unique index catch it via upsert retry.
+  return Math.floor(100000 + Math.random() * 900000).toString();
+}
+
+function publicBaseURL(): string {
+  return (
+    process.env.BETTER_AUTH_URL?.trim() ||
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : 'http://localhost:3000')
+  );
+}
 
 router.get('/me', requireAuth as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const userId = req.userId!;
+    const userEmail = req.userEmail || '';
+
+    // 1. Load current row (may not exist yet for fresh OAuth users).
+    const { data: existing, error: selErr } = await supabaseAdmin
       .from('users')
       .select('*')
-      .eq('id', req.userId)
+      .eq('id', userId)
       .maybeSingle();
 
-    if (error || !data) {
-      res.status(404).json({ error: 'Profile not found' });
+    if (selErr) {
+      res.status(500).json({ error: selErr.message });
       return;
     }
 
-    res.json(data);
+    const legacyAdmin = LEGACY_ADMIN_EMAILS_SERVER.has(userEmail.toLowerCase());
+
+    // 2. Create-if-missing path.
+    if (!existing) {
+      const session = await auth.api.getSession({
+        headers: fromNodeHeaders(req.headers),
+      });
+      const userName = session?.user?.name || 'User';
+      const numericId = await generateUniqueNumericId();
+
+      const insertPayload = {
+        id: userId,
+        name: userName,
+        email: userEmail,
+        phone: '',
+        country: 'Bangladesh',
+        age: 18,
+        numericId,
+        referralCode: numericId,
+        referralLink: `${publicBaseURL()}?ref=${numericId}`,
+        referredBy: '',
+        mainBalance: 0,
+        totalEarned: 0,
+        pendingPayout: 0,
+        isActive: false,
+        isAdmin: legacyAdmin,
+        rank: 'Bronze',
+        dailyClaimed: false,
+        notifications: [],
+        taskHistory: [],
+        achievements: [
+          { id: '1', title: 'First Task', progress: 0, goal: 1 },
+          { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
+        ],
+        adWatches: [],
+        referralActiveCount: 0,
+        gen1Count: 0,
+        totalCommission: 0,
+        socialSubmissions: [],
+        status: 'active',
+        activationDate: '',
+        activationExpiry: '',
+        restrictionReason: '',
+        suspensionUntil: '',
+      };
+
+      const { data: created, error: insertErr } = await supabaseAdmin
+        .from('users')
+        .upsert(insertPayload)
+        .select('*')
+        .single();
+
+      if (insertErr || !created) {
+        res.status(500).json({ error: insertErr?.message || 'Failed to create profile' });
+        return;
+      }
+      res.json(created);
+      return;
+    }
+
+    // 3. Heal existing row if any of the self-heal conditions trigger.
+    const patch: Record<string, unknown> = {};
+    let needsNumericIdFix = false;
+
+    if (!existing.numericId || existing.numericId === '') {
+      const numericId = await generateUniqueNumericId();
+      patch.numericId = numericId;
+      patch.referralCode = numericId;
+      if (!existing.referralLink || existing.referralLink === '') {
+        patch.referralLink = `${publicBaseURL()}?ref=${numericId}`;
+      }
+      needsNumericIdFix = true;
+    } else if (!existing.referralLink || existing.referralLink === '') {
+      patch.referralLink = `${publicBaseURL()}?ref=${existing.numericId}`;
+    }
+
+    if (legacyAdmin && existing.isAdmin !== true) {
+      patch.isAdmin = true;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      // Retry once on 23505 if the numericId we just picked raced.
+      let updateErr: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error } = await supabaseAdmin
+          .from('users')
+          .update(patch)
+          .eq('id', userId);
+        if (!error) {
+          updateErr = null;
+          break;
+        }
+        if ((error as any).code === '23505' && needsNumericIdFix) {
+          const retryId = await generateUniqueNumericId();
+          patch.numericId = retryId;
+          patch.referralCode = retryId;
+          if (patch.referralLink) {
+            patch.referralLink = `${publicBaseURL()}?ref=${retryId}`;
+          }
+          updateErr = error;
+          continue;
+        }
+        updateErr = error;
+        break;
+      }
+      if (updateErr) {
+        console.error('[/api/me] Self-heal update failed:', updateErr);
+        // Fall through and return the un-patched row rather than 500;
+        // the client will still get something to work with.
+      } else {
+        Object.assign(existing, patch);
+      }
+    }
+
+    res.json(existing);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error('[/api/me] error:', error);
+    res.status(500).json({ error: error?.message || 'Failed to load profile' });
   }
 });
 
