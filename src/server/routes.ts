@@ -244,17 +244,30 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
       return;
     }
 
-    // Validate referral code
+    // Validate referral code. Mirrors /api/register semantics:
+    // required in normal operation, optional only during the very
+    // first bootstrap signup (when the users table is empty).
     let referrerId = '';
     if (refCode) {
-      const { data: refResult } = await supabaseAdmin
+      const { data: refResult, error: refError } = await supabaseAdmin
         .from('users')
         .select('id')
         .eq('numericId', refCode)
         .limit(1);
 
-      if (refResult && refResult.length > 0) {
-        referrerId = refResult[0].id;
+      if (refError || !refResult || refResult.length === 0) {
+        res.status(400).json({ error: 'Invalid referral code' });
+        return;
+      }
+      referrerId = refResult[0].id;
+    } else {
+      // Allow missing refCode only if no users exist yet (bootstrap).
+      const { count } = await supabaseAdmin
+        .from('users')
+        .select('id', { count: 'exact', head: true });
+      if (count && count > 0) {
+        res.status(400).json({ error: 'Referral code is required', needsReferralCode: true });
+        return;
       }
     }
 

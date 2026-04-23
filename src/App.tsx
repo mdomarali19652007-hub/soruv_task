@@ -310,6 +310,14 @@ export default function App() {
   const [showAuthMenu, setShowAuthMenu] = useState(false);
   const authMenuRef = useRef<HTMLDivElement>(null);
 
+  // Google OAuth: we require a referral code before creating the user
+  // profile. If the OAuth flow completes without a pendingReferralCode,
+  // we surface a modal asking the user to enter one. Sign-out bails.
+  const [needsReferralCodePrompt, setNeedsReferralCodePrompt] = useState(false);
+  const [refCodePromptValue, setRefCodePromptValue] = useState('');
+  const [refCodePromptError, setRefCodePromptError] = useState<string | null>(null);
+  const [refCodePromptSubmitting, setRefCodePromptSubmitting] = useState(false);
+
   useEffect(() => {
     if (!showAuthMenu) return;
     const handleClick = (e: MouseEvent) => {
@@ -423,9 +431,7 @@ export default function App() {
             currentHydratedUserId = authUser.id;
 
             // For Google OAuth users, ensure profile exists before the
-            // first /api/me. If we have a pending referral code, use it;
-            // otherwise fall back to attempting creation only if the
-            // profile is missing.
+            // first /api/me. If we have a pending referral code, use it.
             const pendingRefCode = localStorage.getItem('pendingReferralCode');
             if (pendingRefCode) {
               localStorage.removeItem('pendingReferralCode');
@@ -434,14 +440,12 @@ export default function App() {
               );
             }
 
-            // First hydrate. If missing, attempt Google profile creation
-            // as a fallback (legacy path) and re-hydrate once.
-            let profile = await hydrateProfile(authUser.id);
+            // Hydrate. If the profile still does not exist, the OAuth
+            // user has not yet provided a referral code -- surface the
+            // refCode prompt instead of silently creating an orphan row.
+            const profile = await hydrateProfile(authUser.id);
             if (!profile) {
-              await createGoogleProfile().catch(e =>
-                console.warn('Failed to create profile:', e)
-              );
-              profile = await hydrateProfile(authUser.id);
+              setNeedsReferralCodePrompt(true);
             }
 
             // Light poll so the dashboard reflects server-side balance
@@ -4918,6 +4922,104 @@ export default function App() {
               transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
               className="w-full h-full bg-amber-500"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Referral code prompt -- shown when a signed-in user has no
+          profile row yet (typically first Google OAuth sign-in without
+          a pending referral code). Blocks until they enter a valid
+          code or sign out. */}
+      {needsReferralCodePrompt && (
+        <div className="fixed inset-0 z-[400] bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
+          <div className="w-full max-w-md bg-white border border-[#D4AF37]/20 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(212,175,55,0.2)]">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] rounded-2xl flex items-center justify-center shadow-lg mb-6 mx-auto">
+              <Users className="w-8 h-8 text-white" />
+            </div>
+            <h2 className="text-xl font-black text-slate-900 text-center mb-2 uppercase tracking-widest">
+              Referral Code Required
+            </h2>
+            <p className="text-xs text-slate-500 text-center mb-6 leading-relaxed">
+              Enter the referral code of the person who invited you to finish creating your account.
+            </p>
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                const code = refCodePromptValue.trim();
+                setRefCodePromptError(null);
+                if (!code) {
+                  setRefCodePromptError('Please enter a referral code.');
+                  return;
+                }
+                if (!/^\d{4,10}$/.test(code)) {
+                  setRefCodePromptError('Referral code must be a 6-digit number.');
+                  return;
+                }
+                setRefCodePromptSubmitting(true);
+                try {
+                  const valid = await validateReferralCode(code);
+                  if (!valid) {
+                    setRefCodePromptError('This referral code is not valid.');
+                    return;
+                  }
+                  const result = await createGoogleProfile(code);
+                  if (!result.success) {
+                    setRefCodePromptError(result.error || 'Failed to create profile. Please try again.');
+                    return;
+                  }
+                  // Hydrate immediately so the rest of the app unblocks.
+                  const data = await fetchMyProfile<UserProfile>();
+                  if (data) {
+                    setUser(data);
+                    setNeedsReferralCodePrompt(false);
+                    setRefCodePromptValue('');
+                    setRefCodePromptError(null);
+                  } else {
+                    setRefCodePromptError('Profile was created but could not be loaded. Please refresh.');
+                  }
+                } catch (err: any) {
+                  setRefCodePromptError(err?.message || 'Unexpected error. Please try again.');
+                } finally {
+                  setRefCodePromptSubmitting(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <input
+                type="text"
+                inputMode="numeric"
+                autoFocus
+                placeholder="e.g. 100234"
+                value={refCodePromptValue}
+                onChange={(e) => setRefCodePromptValue(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                disabled={refCodePromptSubmitting}
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-center text-lg font-black tracking-[0.2em] text-slate-900 placeholder:text-slate-300 outline-none transition-colors disabled:opacity-60"
+              />
+              {refCodePromptError && (
+                <p className="text-[11px] font-bold text-rose-600 text-center">{refCodePromptError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={refCodePromptSubmitting}
+                className="w-full py-4 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-60"
+              >
+                {refCodePromptSubmitting ? 'Verifying…' : 'Continue'}
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOut();
+                  setNeedsReferralCodePrompt(false);
+                  setRefCodePromptValue('');
+                  setRefCodePromptError(null);
+                  setView('login');
+                }}
+                disabled={refCodePromptSubmitting}
+                className="w-full py-2 text-slate-400 font-bold text-[10px] uppercase tracking-widest"
+              >
+                Sign out
+              </button>
+            </form>
           </div>
         </div>
       )}
