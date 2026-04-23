@@ -752,26 +752,36 @@ export default function App() {
 
   const handleGoogleLogin = async () => {
     try {
-      // When on registration form, enforce referral code if users exist
+      // On the registration form, a referral code is always required
+      // (the server makes the same decision via /api/register/google-profile).
+      // We validate client-side first so users see the error before the
+      // OAuth redirect, not after.
+      //
+      // NOTE: we deliberately DO NOT try to read `users` via the anon
+      // key here -- the RLS lockdown (20260419_rls_lockdown.sql) revokes
+      // anon SELECT on that table, so the count-based "bootstrap" check
+      // that used to short-circuit this gate silently returned 0 and
+      // let empty-refCode signups through. If you really need a first
+      // bootstrap user, temporarily flip EMAIL_ENABLED-style or run the
+      // first signup from the email/password form instead.
       if (isRegistering) {
-        if (regData.refCode) {
-          // Validate referral code before redirecting
-          const isValid = await validateReferralCode(regData.refCode);
-          if (!isValid) {
-            alert('Invalid Referral Code. Please enter a valid code before signing up with Google.');
-            return;
-          }
-          // Save validated referral code for after OAuth redirect
-          localStorage.setItem('pendingReferralCode', regData.refCode);
-        } else {
-          // Check if users exist - if so, referral code is mandatory
-          const { count } = await supabase.from('users').select('id', { count: 'exact', head: true });
-          if (count && count > 0) {
-            alert('Referral Code is required. Please enter a valid referral code before signing up with Google.');
-            return;
-          }
-          // First user bootstrap - no referral needed
+        const trimmedRefCode = regData.refCode.trim();
+        if (!trimmedRefCode) {
+          alert('Referral code is required. Please enter the code of the person who invited you before continuing with Google.');
+          return;
         }
+        if (!/^\d{4,10}$/.test(trimmedRefCode)) {
+          alert('Referral code must be a 6-digit number.');
+          return;
+        }
+        const isValid = await validateReferralCode(trimmedRefCode);
+        if (!isValid) {
+          alert('This referral code is not valid. Please double-check and try again.');
+          return;
+        }
+        // Stash the validated code so the post-OAuth /api/register/google-profile
+        // call knows which referrer to attach.
+        localStorage.setItem('pendingReferralCode', trimmedRefCode);
       }
 
       // Use Better Auth Google OAuth
