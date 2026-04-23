@@ -38,7 +38,9 @@ Fill in [`.env.example`](.env.example:1) / `.env.local` with values from your Su
 | `VITE_SUPABASE_URL` | Same project URL, exposed to the browser for Realtime. |
 | `VITE_SUPABASE_ANON_KEY` | Anon key, exposed to the browser. Only for public reads + realtime. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (optional) Google OAuth credentials. |
-| `RESEND_API_KEY` | Email provider API key used for verification + password-reset emails. Required in production. |
+| `EMAIL_ENABLED` | Master kill switch for the email system (server). Must be `"true"` to enable delivery. Defaults to disabled. |
+| `VITE_EMAIL_ENABLED` | Client-side mirror of the kill switch. Must be `"true"` to surface the verify-email overlay. Defaults to disabled. |
+| `RESEND_API_KEY` | Email provider API key. Only consulted when `EMAIL_ENABLED=true`. Required in production when the gate is flipped on. |
 | `EMAIL_FROM` | "From" address used for outbound email. Must be verified in your provider. |
 | `CORS_ALLOWED_ORIGINS` | (optional) Comma-separated extra origins allowed to call the API. |
 | `SITE_URL` | (optional) Public site origin. Added to the CORS allowlist. |
@@ -65,12 +67,24 @@ This reads `DATABASE_URL` and applies the migrations against Postgres.
 
 ## 5. Email delivery (verification + password reset)
 
-Better Auth handles email verification and password resets via callbacks wired up in [`src/server/auth.ts`](src/server/auth.ts:1). Those callbacks dispatch through [`src/server/email.ts`](src/server/email.ts:1), which currently supports:
+The email system is **disabled by default**. All code paths are in place in [`src/server/email.ts`](src/server/email.ts:1), [`src/server/auth.ts`](src/server/auth.ts:1) and [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1); they activate when both kill switches are flipped on.
 
-- **Resend** (recommended): set `RESEND_API_KEY` and verify your sending domain at https://resend.com/domains. Populate `EMAIL_FROM` with an address on that verified domain.
-- **Dev console logger** (automatic fallback): when `RESEND_API_KEY` is unset and `NODE_ENV !== 'production'`, the full email body (including the verification / reset link) is printed to the server log. This keeps local development unblocked but is NOT sent to the user. The process refuses to boot in production without a provider.
+### To enable
 
-When an email provider is configured, signup enforces verification (`emailAndPassword.requireEmailVerification: true`) and users see the "Verify your email" overlay in the app until they click the link. Password resets deliver to `/reset-password?token=...`, which the SPA handles via [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1).
+1. Set `EMAIL_ENABLED=true` in the server environment.
+2. Set `VITE_EMAIL_ENABLED=true` in the client environment (so the "Verify your email" overlay re-appears for unverified users).
+3. Configure a provider:
+   - **Resend** (recommended): set `RESEND_API_KEY` and verify your sending domain at https://resend.com/domains. Populate `EMAIL_FROM` with an address on that verified domain.
+   - **Dev console logger**: when only `EMAIL_ENABLED=true` is set and `NODE_ENV !== 'production'`, the full email body (including the verification / reset link) is printed to the server log. Keeps local development unblocked without a real provider. In production with `EMAIL_ENABLED=true` and no provider, the server refuses to boot.
+
+When the gate is on, signup enforces verification (`emailAndPassword.requireEmailVerification: true`) and users see the "Verify your email" overlay until they click the link. Password resets deliver to `/reset-password?token=...`, handled by [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1).
+
+### While disabled (default)
+
+- Signup completes immediately with no verification email.
+- The verify-email overlay never appears.
+- Password-reset requests silently no-op on the server (the request still returns a generic success message to prevent email enumeration).
+- Production boot does NOT require `RESEND_API_KEY`.
 
 ## 6. Google OAuth (optional)
 

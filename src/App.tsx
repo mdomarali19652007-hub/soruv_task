@@ -400,14 +400,19 @@ export default function App() {
           setIsLoggedIn(true);
           // Email verification is enforced on the server via
           // `emailAndPassword.requireEmailVerification` in src/server/auth.ts
-          // -- that flag is only true when a real email provider is wired up
-          // (RESEND_API_KEY, etc). The client mirrors the decision so the
-          // overlay only appears when we can actually deliver a verification
-          // email; otherwise users would be stuck on the overlay in dev.
-          const needsVerification = Boolean(
-            (authUser as { emailVerified?: boolean }).emailVerified === false,
-          );
-          setNeedsEmailVerification(needsVerification);
+          // -- that flag is only true when EMAIL_ENABLED=true AND a real
+          // email provider is wired up (RESEND_API_KEY, etc). The client
+          // mirrors the decision via VITE_EMAIL_ENABLED so the overlay
+          // only appears when we can actually deliver a verification email.
+          // Default: disabled. Flip VITE_EMAIL_ENABLED=true (and the
+          // matching server-side EMAIL_ENABLED=true) to reactivate the
+          // verification gate.
+          const emailGateEnabled =
+            (import.meta.env.VITE_EMAIL_ENABLED as string | undefined)?.toLowerCase() === 'true';
+          const needsVerification =
+            emailGateEnabled &&
+            (authUser as { emailVerified?: boolean }).emailVerified === false;
+          setNeedsEmailVerification(Boolean(needsVerification));
 
           setView(prev => (prev === 'login' ? 'home' : prev));
 
