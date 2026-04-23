@@ -128,41 +128,63 @@ router.post('/register', registerLimiter, async (req: Request, res: Response) =>
       return;
     }
 
-    // Create app user profile in the users table
-    const { error: profileError } = await supabaseAdmin.from('users').upsert({
-      id: userId,
-      name,
-      email,
-      phone: phone || '',
-      country: country || 'Bangladesh',
-      age: parseInt(age) || 18,
-      numericId: userNumericId,
-      referralCode: userNumericId,
-      referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
-      referredBy: referrerId,
-      mainBalance: 0,
-      totalEarned: 0,
-      pendingPayout: 0,
-      isActive: false,
-      rank: 'Bronze',
-      dailyClaimed: false,
-      notifications: [],
-      taskHistory: [],
-      achievements: [
-        { id: '1', title: 'First Task', progress: 0, goal: 1 },
-        { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
-      ],
-      adWatches: [],
-      referralActiveCount: 0,
-      gen1Count: 0,
-      totalCommission: 0,
-      socialSubmissions: [],
-      status: 'active',
-      activationDate: '',
-      activationExpiry: '',
-      restrictionReason: '',
-      suspensionUntil: '',
-    });
+    // Create app user profile in the users table.
+    // Retry on 23505 (unique_violation) in case the numericId we picked
+    // races with another concurrent signup. The unique index on
+    // users.numericId (migration 20260424_numericid_unique.sql) is what
+    // surfaces that error.
+    let profileError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await supabaseAdmin.from('users').upsert({
+        id: userId,
+        name,
+        email,
+        phone: phone || '',
+        country: country || 'Bangladesh',
+        age: parseInt(age) || 18,
+        numericId: userNumericId,
+        referralCode: userNumericId,
+        referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
+        referredBy: referrerId,
+        mainBalance: 0,
+        totalEarned: 0,
+        pendingPayout: 0,
+        isActive: false,
+        rank: 'Bronze',
+        dailyClaimed: false,
+        notifications: [],
+        taskHistory: [],
+        achievements: [
+          { id: '1', title: 'First Task', progress: 0, goal: 1 },
+          { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
+        ],
+        adWatches: [],
+        referralActiveCount: 0,
+        gen1Count: 0,
+        totalCommission: 0,
+        socialSubmissions: [],
+        status: 'active',
+        activationDate: '',
+        activationExpiry: '',
+        restrictionReason: '',
+        suspensionUntil: '',
+      });
+
+      if (!result.error) {
+        profileError = null;
+        break;
+      }
+
+      // 23505 = Postgres unique_violation. Regenerate the numericId and retry.
+      if ((result.error as any).code === '23505') {
+        userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+        profileError = result.error;
+        continue;
+      }
+
+      profileError = result.error;
+      break;
+    }
 
     if (profileError) {
       console.error('Failed to create user profile:', profileError);
@@ -261,40 +283,60 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
       return;
     }
 
-    const { error: profileError } = await supabaseAdmin.from('users').upsert({
-      id: userId,
-      name: userName,
-      email: userEmail,
-      phone: '',
-      country: 'Bangladesh',
-      age: 18,
-      numericId: userNumericId,
-      referralCode: userNumericId,
-      referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
-      referredBy: referrerId,
-      mainBalance: 0,
-      totalEarned: 0,
-      pendingPayout: 0,
-      isActive: false,
-      rank: 'Bronze',
-      dailyClaimed: false,
-      notifications: [],
-      taskHistory: [],
-      achievements: [
-        { id: '1', title: 'First Task', progress: 0, goal: 1 },
-        { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
-      ],
-      adWatches: [],
-      referralActiveCount: 0,
-      gen1Count: 0,
-      totalCommission: 0,
-      socialSubmissions: [],
-      status: 'active',
-      activationDate: '',
-      activationExpiry: '',
-      restrictionReason: '',
-      suspensionUntil: '',
-    });
+    // Retry on 23505 unique_violation in case of numericId race with
+    // another signup. The unique index is added by migration
+    // 20260424_numericid_unique.sql.
+    let profileError: any = null;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const result = await supabaseAdmin.from('users').upsert({
+        id: userId,
+        name: userName,
+        email: userEmail,
+        phone: '',
+        country: 'Bangladesh',
+        age: 18,
+        numericId: userNumericId,
+        referralCode: userNumericId,
+        referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
+        referredBy: referrerId,
+        mainBalance: 0,
+        totalEarned: 0,
+        pendingPayout: 0,
+        isActive: false,
+        rank: 'Bronze',
+        dailyClaimed: false,
+        notifications: [],
+        taskHistory: [],
+        achievements: [
+          { id: '1', title: 'First Task', progress: 0, goal: 1 },
+          { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
+        ],
+        adWatches: [],
+        referralActiveCount: 0,
+        gen1Count: 0,
+        totalCommission: 0,
+        socialSubmissions: [],
+        status: 'active',
+        activationDate: '',
+        activationExpiry: '',
+        restrictionReason: '',
+        suspensionUntil: '',
+      });
+
+      if (!result.error) {
+        profileError = null;
+        break;
+      }
+
+      if ((result.error as any).code === '23505') {
+        userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
+        profileError = result.error;
+        continue;
+      }
+
+      profileError = result.error;
+      break;
+    }
 
     if (profileError) {
       res.status(500).json({ error: 'Failed to create profile' });
