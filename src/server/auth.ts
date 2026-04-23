@@ -168,10 +168,25 @@ export const auth = betterAuth({
     },
   },
 
-  // CSRF trusted origins
-  trustedOrigins: [
-    process.env.BETTER_AUTH_URL || 'http://localhost:3000',
-  ],
+  // CSRF trusted origins. Mirror what the CORS layer allows so Better
+  // Auth's CSRF guard does not reject callbacks from the live deploy URL
+  // when BETTER_AUTH_URL has not been set. Vercel's per-deployment URLs
+  // are auto-included here so sign-in works immediately after a deploy.
+  trustedOrigins: (() => {
+    const list: string[] = [
+      process.env.BETTER_AUTH_URL || 'http://localhost:3000',
+    ];
+    const maybe = (v?: string) => {
+      if (!v) return;
+      const url = v.startsWith('http') ? v : `https://${v}`;
+      if (!list.includes(url)) list.push(url);
+    };
+    maybe(process.env.VERCEL_URL);
+    maybe(process.env.VERCEL_PROJECT_PRODUCTION_URL);
+    maybe(process.env.VERCEL_BRANCH_URL);
+    maybe(process.env.SITE_URL);
+    return list;
+  })(),
 });
 
 export type Auth = typeof auth;
