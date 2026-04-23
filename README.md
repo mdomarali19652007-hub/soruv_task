@@ -38,6 +38,8 @@ Fill in [`.env.example`](.env.example:1) / `.env.local` with values from your Su
 | `VITE_SUPABASE_URL` | Same project URL, exposed to the browser for Realtime. |
 | `VITE_SUPABASE_ANON_KEY` | Anon key, exposed to the browser. Only for public reads + realtime. |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (optional) Google OAuth credentials. |
+| `RESEND_API_KEY` | Email provider API key used for verification + password-reset emails. Required in production. |
+| `EMAIL_FROM` | "From" address used for outbound email. Must be verified in your provider. |
 | `CORS_ALLOWED_ORIGINS` | (optional) Comma-separated extra origins allowed to call the API. |
 | `SITE_URL` | (optional) Public site origin. Added to the CORS allowlist. |
 
@@ -61,7 +63,16 @@ npx @better-auth/cli@latest migrate
 
 This reads `DATABASE_URL` and applies the migrations against Postgres.
 
-## 5. Google OAuth (optional)
+## 5. Email delivery (verification + password reset)
+
+Better Auth handles email verification and password resets via callbacks wired up in [`src/server/auth.ts`](src/server/auth.ts:1). Those callbacks dispatch through [`src/server/email.ts`](src/server/email.ts:1), which currently supports:
+
+- **Resend** (recommended): set `RESEND_API_KEY` and verify your sending domain at https://resend.com/domains. Populate `EMAIL_FROM` with an address on that verified domain.
+- **Dev console logger** (automatic fallback): when `RESEND_API_KEY` is unset and `NODE_ENV !== 'production'`, the full email body (including the verification / reset link) is printed to the server log. This keeps local development unblocked but is NOT sent to the user. The process refuses to boot in production without a provider.
+
+When an email provider is configured, signup enforces verification (`emailAndPassword.requireEmailVerification: true`) and users see the "Verify your email" overlay in the app until they click the link. Password resets deliver to `/reset-password?token=...`, which the SPA handles via [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1).
+
+## 6. Google OAuth (optional)
 
 If you want Sign in with Google:
 
@@ -71,7 +82,7 @@ If you want Sign in with Google:
    - `https://your-vercel-app.vercel.app/api/auth/callback/google`
 3. Fill `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local` and your deployment env.
 
-## 6. Run locally
+## 7. Run locally
 
 ```bash
 npm run dev
@@ -79,7 +90,7 @@ npm run dev
 
 This starts the Express app on http://localhost:3000, serving the Vite dev middleware, Better Auth (`/api/auth/*`), and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
 
-## 7. Type-check, lint, and test
+## 8. Type-check, lint, and test
 
 ```bash
 npm run typecheck   # tsc --noEmit

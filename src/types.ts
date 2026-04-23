@@ -81,7 +81,8 @@ export type View =
   | 'ludo-earn'
   | 'smm-panel'
   | 'top-news'
-  | 'social-job';
+  | 'social-job'
+  | 'reset-password';
 
 // ---------------------------------------------------------------
 // Content / catalog types
