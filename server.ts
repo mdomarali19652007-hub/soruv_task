@@ -7,7 +7,6 @@ import cors from "cors";
 import morgan from "morgan";
 import { clerkMiddleware } from "@clerk/express";
 import apiRoutes from "./src/server/routes.js";
-import clerkWebhooks from "./src/server/webhooks.js";
 import { corsOptions } from "./src/server/cors-config.js";
 
 interface GamePlayer {
@@ -46,12 +45,11 @@ async function startServer() {
   // Trust proxy so rate-limit sees real client IP behind load balancers.
   app.set("trust proxy", 1);
 
-  // Clerk webhooks MUST be mounted before `express.json()` because Svix
-  // signature verification needs the untouched raw request body. We
-  // scope the raw parser to the exact webhook path so the rest of the
-  // API still gets normal JSON parsing.
-  app.use("/api/webhooks/clerk", express.raw({ type: "application/json" }));
-  app.use("/api", clerkWebhooks);
+  // NOTE: Clerk webhooks are intentionally NOT handled here. They live
+  // as a dedicated Supabase Edge Function at
+  // `supabase/functions/clerk-webhook` (Deno, Svix-verified). Point the
+  // Clerk dashboard webhook at
+  // `https://<project-ref>.supabase.co/functions/v1/clerk-webhook`.
 
   app.use(express.json());
 

@@ -13,7 +13,6 @@ import express, { Request, Response } from 'express';
 import cors from 'cors';
 import { clerkMiddleware } from '@clerk/express';
 import apiRoutes from '../src/server/routes.js';
-import clerkWebhooks from '../src/server/webhooks.js';
 import { corsOptions } from '../src/server/cors-config.js';
 
 const app = express();
@@ -23,10 +22,9 @@ app.set('trust proxy', 1);
 
 app.use(cors(corsOptions));
 
-// Clerk webhooks must receive the raw body for Svix signature
-// verification, so we mount them before `express.json()`.
-app.use('/api/webhooks/clerk', express.raw({ type: 'application/json' }));
-app.use('/api', clerkWebhooks);
+// Clerk webhooks are handled by the Supabase Edge Function at
+// `supabase/functions/clerk-webhook` (Deno, Svix-verified). No Express
+// route for webhooks here.
 
 app.use(express.json());
 app.use(clerkMiddleware());
