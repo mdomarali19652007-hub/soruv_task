@@ -257,6 +257,38 @@ async function handleUserCreated(data: ClerkWebhookUser): Promise<void> {
   console.log(`[clerk-webhook] Created profile ${data.id} numericId=${insert.numericId} ref=${refCode}`);
 }
 
+async function handleUserUpdated(data: ClerkWebhookUser): Promise<void> {
+  // We only sync the handful of fields that Clerk owns authoritatively
+  // (email, display name). Everything else -- balances, referrals,
+  // status flags -- is app-owned and must not be overwritten here.
+  const email = data.email_addresses?.[0]?.email_address;
+  const meta = (data.unsafe_metadata || {}) as { name?: string };
+  const composedName =
+    meta.name ||
+    [data.first_name, data.last_name].filter(Boolean).join(' ') ||
+    undefined;
+
+  const patch: Record<string, unknown> = {};
+  if (email) patch.email = email;
+  if (composedName) patch.name = composedName;
+
+  if (Object.keys(patch).length === 0) {
+    return;
+  }
+
+  const { error } = await supabase
+    .from('users')
+    .update(patch)
+    .eq('id', data.id);
+
+  if (error) {
+    console.warn(`[clerk-webhook] Failed to sync user.updated for ${data.id}:`, error);
+    return;
+  }
+
+  console.log(`[clerk-webhook] Synced user.updated for ${data.id} (${Object.keys(patch).join(', ')})`);
+}
+
 async function handleUserDeleted(data: ClerkWebhookUser): Promise<void> {
   const { error } = await supabase.from('users').delete().eq('id', data.id);
   if (error) console.warn(`[clerk-webhook] Failed to delete users row for ${data.id}:`, error);
@@ -305,6 +337,9 @@ Deno.serve(async (req) => {
     switch (evt.type) {
       case 'user.created':
         await handleUserCreated(evt.data);
+        break;
+      case 'user.updated':
+        await handleUserUpdated(evt.data);
         break;
       case 'user.deleted':
         await handleUserDeleted(evt.data);
