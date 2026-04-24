@@ -2,9 +2,9 @@
  * Shared CORS configuration for both the long-running Express server
  * (`server.ts`) and the Vercel serverless entry (`api/index.ts`).
  *
- * We keep a strict allowlist because the API relies on cookie-based
- * sessions (Better Auth). Wildcard origins + credentials is a standard
- * CSRF footgun.
+ * We keep a strict allowlist because the API accepts bearer/cookie
+ * Clerk sessions with credentials. Wildcard origins + credentials is
+ * a standard CSRF footgun.
  *
  * Extra origins can be supplied via the `CORS_ALLOWED_ORIGINS` env var
  * as a comma-separated list.
@@ -24,7 +24,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
  *
  * Sources (merged, de-duplicated):
  *   - `DEFAULT_ALLOWED_ORIGINS`        -- local dev
- *   - `BETTER_AUTH_URL` env            -- public server URL
+ *   - `APP_PUBLIC_URL` env             -- public server URL (Clerk era)
+ *   - `BETTER_AUTH_URL` env            -- legacy public server URL
  *   - `SITE_URL` env                   -- public site URL
  *   - `CORS_ALLOWED_ORIGINS` env       -- comma-separated extras
  *   - Vercel deployment URLs:
@@ -39,7 +40,7 @@ function buildAllowlist(): string[] {
     .map((o) => o.trim())
     .filter(Boolean);
 
-  const authUrl = process.env.BETTER_AUTH_URL?.trim();
+  const authUrl = (process.env.APP_PUBLIC_URL || process.env.BETTER_AUTH_URL)?.trim();
   const siteUrl = process.env.SITE_URL?.trim();
 
   const vercelUrls = [

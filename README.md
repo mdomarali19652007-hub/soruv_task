@@ -5,7 +5,7 @@ A Bengali earning platform SPA with news, micro-tasks, finance, e-commerce, SMM,
 Stack:
 
 - Frontend: Vite + React 19 + Tailwind CSS + Motion
-- Auth: [Better Auth](https://better-auth.com) (cookie sessions) backed by Postgres
+- Auth: [Clerk](https://clerk.com) via custom headless flows (see [`src/lib/auth-client.ts`](src/lib/auth-client.ts:1))
 - Database / Realtime / Storage: Supabase Postgres
 - Server: Express ([`server.ts`](server.ts:1)) for local dev with Socket.io (Ludo multiplayer), plus a Vercel serverless wrapper at [`api/index.ts`](api/index.ts:1)
 
@@ -13,7 +13,7 @@ Stack:
 
 - Node.js 20+
 - A Supabase project (free tier is fine)
-- A Better Auth secret and, optionally, a Google OAuth client
+- A [Clerk](https://clerk.com) application (publishable + secret keys, and a webhook signing secret)
 
 ## 1. Clone and install
 
@@ -26,26 +26,22 @@ cp .env.example .env.local
 
 ## 2. Configure environment variables
 
-Fill in [`.env.example`](.env.example:1) / `.env.local` with values from your Supabase dashboard and a freshly generated Better Auth secret (`openssl rand -hex 32`).
+Fill in [`.env.example`](.env.example:1) / `.env.local` with values from your Supabase and Clerk dashboards.
 
 | Variable | Purpose |
 | --- | --- |
-| `DATABASE_URL` | Postgres connection string used by Better Auth for its auth tables. Use the Supabase "Connection Pooling" URL (port 6543). |
-| `BETTER_AUTH_SECRET` | 32-byte hex secret signing session cookies. |
-| `BETTER_AUTH_URL` | Public URL your server is reachable at (e.g. `http://localhost:3000` in dev). Must match your deployed domain in production. |
+| `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (safe to embed in the browser bundle). From Clerk dashboard -> API Keys. |
+| `CLERK_SECRET_KEY` | Clerk server-side secret (bans users, reads user details, etc.). MUST stay server-side. |
+| `CLERK_WEBHOOK_SECRET` | Signing secret for the Clerk webhook (Clerk dashboard -> Webhooks). Svix uses this to verify `user.created` / `user.deleted` payloads. |
+| `APP_PUBLIC_URL` | Public URL your server is reachable at (e.g. `http://localhost:3000` in dev). Used as the referral link base. |
 | `SUPABASE_URL` | Supabase project URL (server-side). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-side only; bypasses RLS). |
 | `VITE_SUPABASE_URL` | Same project URL, exposed to the browser for Realtime. |
 | `VITE_SUPABASE_ANON_KEY` | Anon key, exposed to the browser. Only for public reads + realtime. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | (optional) Google OAuth credentials. |
-| `EMAIL_ENABLED` | Master kill switch for the email system (server). Must be `"true"` to enable delivery. Defaults to disabled. |
-| `VITE_EMAIL_ENABLED` | Client-side mirror of the kill switch. Must be `"true"` to surface the verify-email overlay. Defaults to disabled. |
-| `RESEND_API_KEY` | Email provider API key. Only consulted when `EMAIL_ENABLED=true`. Required in production when the gate is flipped on. |
-| `EMAIL_FROM` | "From" address used for outbound email. Must be verified in your provider. |
 | `CORS_ALLOWED_ORIGINS` | (optional) Comma-separated extra origins allowed to call the API. |
 | `SITE_URL` | (optional) Public site origin. Added to the CORS allowlist. |
 
-Never commit `.env.local`. Service role key and Better Auth secret must stay server-side.
+Never commit `.env.local`. The Clerk secret key and Supabase service-role key must stay server-side.
 
 ## 3. Provision Supabase
 
@@ -55,46 +51,25 @@ Never commit `.env.local`. Service role key and Better Auth secret must stay ser
 3. Create a Storage bucket named `uploads` (public-read is fine for screenshots; access is mediated server-side).
 4. Enable Realtime on the publication listed at the bottom of `schema.sql` (the migration leaves public catalog tables in the publication).
 
-## 4. Provision Better Auth tables
+## 4. Configure Clerk
 
-Better Auth maintains its own `user`, `account`, `session`, and `verification` tables. Generate + apply its schema:
+1. Create a Clerk application at https://dashboard.clerk.com.
+2. Under **User & Authentication**, enable **Email address + Password** and **Google** as the sign-in options. Make `email_address` the only required identifier -- we collect `name`/`phone`/`country`/`age`/`refCode` ourselves and store them on the Clerk user's `unsafeMetadata`.
+3. Under **Sessions**, set the session lifetime to 7 days (matches the prior Better Auth config).
+4. Under **Webhooks**, add an endpoint pointing at `https://<your-host>/api/webhooks/clerk` and subscribe it to `user.created` and `user.deleted`. Copy the signing secret into `CLERK_WEBHOOK_SECRET`.
+5. Copy the publishable key into `VITE_CLERK_PUBLISHABLE_KEY` and the secret key into `CLERK_SECRET_KEY`.
 
-```bash
-npx @better-auth/cli@latest migrate
-```
+The `user.created` webhook is what creates the app-level `users` row, validates the referral code, and generates the 6-digit `numericId`. See [`src/server/webhooks.ts`](src/server/webhooks.ts:1).
 
-This reads `DATABASE_URL` and applies the migrations against Postgres.
+## 5. Email delivery
 
-## 5. Email delivery (verification + password reset)
+Clerk handles verification and password-reset email delivery for you -- no provider setup required. The UI uses the 6-digit code flow (`prepareEmailAddressVerification` + `attemptEmailAddressVerification`, `reset_password_email_code`); see [`src/features/auth/EmailVerificationOverlay.tsx`](src/features/auth/EmailVerificationOverlay.tsx:1) and [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1).
 
-The email system is **disabled by default**. All code paths are in place in [`src/server/email.ts`](src/server/email.ts:1), [`src/server/auth.ts`](src/server/auth.ts:1) and [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1); they activate when both kill switches are flipped on.
+## 6. Google OAuth
 
-### To enable
+Enable Google as a social provider inside the Clerk dashboard. By default Clerk hosts the OAuth credentials; to keep the consent screen on your own brand, supply your own Google client id/secret in Clerk's dashboard.
 
-1. Set `EMAIL_ENABLED=true` in the server environment.
-2. Set `VITE_EMAIL_ENABLED=true` in the client environment (so the "Verify your email" overlay re-appears for unverified users).
-3. Configure a provider:
-   - **Resend** (recommended): set `RESEND_API_KEY` and verify your sending domain at https://resend.com/domains. Populate `EMAIL_FROM` with an address on that verified domain.
-   - **Dev console logger**: when only `EMAIL_ENABLED=true` is set and `NODE_ENV !== 'production'`, the full email body (including the verification / reset link) is printed to the server log. Keeps local development unblocked without a real provider. In production with `EMAIL_ENABLED=true` and no provider, the server refuses to boot.
-
-When the gate is on, signup enforces verification (`emailAndPassword.requireEmailVerification: true`) and users see the "Verify your email" overlay until they click the link. Password resets deliver to `/reset-password?token=...`, handled by [`src/features/auth/ResetPasswordView.tsx`](src/features/auth/ResetPasswordView.tsx:1).
-
-### While disabled (default)
-
-- Signup completes immediately with no verification email.
-- The verify-email overlay never appears.
-- Password-reset requests silently no-op on the server (the request still returns a generic success message to prevent email enumeration).
-- Production boot does NOT require `RESEND_API_KEY`.
-
-## 6. Google OAuth (optional)
-
-If you want Sign in with Google:
-
-1. Create credentials at https://console.cloud.google.com/apis/credentials
-2. Add authorized redirect URIs for every environment, for example:
-   - `http://localhost:3000/api/auth/callback/google`
-   - `https://your-vercel-app.vercel.app/api/auth/callback/google`
-3. Fill `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` in `.env.local` and your deployment env.
+After a Google sign-in we still require a referral code. The user is redirected back to the app, where the existing "referral code prompt" modal (see [`src/App.tsx`](src/App.tsx:316)) POSTs to [`/api/register/google-profile`](src/server/routes.ts:241) to create the `users` row.
 
 ## 7. Run locally
 
@@ -102,7 +77,9 @@ If you want Sign in with Google:
 npm run dev
 ```
 
-This starts the Express app on http://localhost:3000, serving the Vite dev middleware, Better Auth (`/api/auth/*`), and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
+This starts the Express app on http://localhost:3000, serving the Vite dev middleware, the Clerk webhook at `/api/webhooks/clerk`, and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
+
+To receive Clerk webhooks locally, use [ngrok](https://ngrok.com) or the Clerk CLI to proxy your `localhost:3000/api/webhooks/clerk` to a public URL registered in the Clerk dashboard.
 
 ## 8. Type-check, lint, and test
 
@@ -128,9 +105,9 @@ Minimum Vercel env vars: every variable listed above except `VITE_*` (those are 
 
 ## Security notes
 
-- All mutating client traffic MUST go through `/api/*` endpoints, which authenticate via Better Auth cookies and use the Supabase service role key. Direct writes from the browser are blocked by RLS.
+- All mutating client traffic MUST go through `/api/*` endpoints, which authenticate via Clerk (session cookies / Bearer token) and use the Supabase service role key. Direct writes from the browser are blocked by RLS.
 - `/api/validate-referral` returns only `{ valid: boolean }`; it does NOT leak user ids.
-- Rate limits are applied to `/api/register`, `/api/validate-referral`, `/api/auth/*`, and `/api/admin/*`.
+- Rate limits are applied to `/api/validate-referral` and `/api/admin/*`. Signup throttling is handled by Clerk.
 - CORS is an explicit allowlist (see [`src/server/cors-config.ts`](src/server/cors-config.ts:1)). Add your production origin via `SITE_URL` or `CORS_ALLOWED_ORIGINS`.
 
 ## Repository layout
@@ -138,7 +115,7 @@ Minimum Vercel env vars: every variable listed above except `VITE_*` (those are 
 ```
 src/App.tsx                # SPA entry (monolithic -- slated for split)
 src/lib/                   # client helpers (auth-client, database, admin-api)
-src/server/                # Express router, Better Auth config, service-role client
+src/server/                # Express router, Clerk webhook, service-role client
 src/utils/sanitize.ts      # input sanitization helpers
 supabase/schema.sql        # initial schema + seed
 supabase/migrations/*.sql  # follow-up migrations (run after schema.sql)

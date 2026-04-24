@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
-import { auth } from './auth.js';
+import { getAuth, createClerkClient } from '@clerk/express';
 import { supabaseAdmin } from './supabase-admin.js';
-import { fromNodeHeaders } from 'better-auth/node';
-import { registerLimiter, referralLimiter, adminLimiter } from './rate-limit.js';
+import { referralLimiter, adminLimiter } from './rate-limit.js';
 import { isUserAdmin } from './admin.js';
+
+const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
 const router = Router();
 
@@ -23,16 +24,27 @@ interface AuthenticatedRequest extends Request {
 
 async function requireAuth(req: AuthenticatedRequest, res: Response, next: () => void) {
   try {
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
-    if (!session?.user) {
+    const { userId, sessionClaims } = getAuth(req as Request);
+    if (!userId) {
       res.status(401).json({ error: 'Unauthorized' });
       return;
     }
-    req.userId = session.user.id;
-    req.userEmail = session.user.email;
-    req.userRole = (session.user as any).role || 'user';
+    req.userId = userId;
+    // Clerk may include the email in `sessionClaims` when the JWT
+    // template is configured; fall back to the User API otherwise.
+    const claimEmail = (sessionClaims as { email?: string } | null | undefined)?.email;
+    if (claimEmail) {
+      req.userEmail = claimEmail;
+    } else {
+      try {
+        const user = await clerkClient.users.getUser(userId);
+        req.userEmail = user.emailAddresses?.[0]?.emailAddress;
+      } catch {
+        // best-effort; admin fallback uses userId below
+      }
+    }
+    const claimRole = (sessionClaims as { metadata?: { role?: string } } | null | undefined)?.metadata?.role;
+    req.userRole = claimRole || 'user';
     next();
   } catch {
     res.status(401).json({ error: 'Unauthorized' });
@@ -51,176 +63,15 @@ async function requireAdmin(req: AuthenticatedRequest, res: Response, next: () =
 }
 
 // ============================================================
-// POST /api/register -- Custom registration with referral code
+// POST /api/register -- REMOVED.
+//
+// Registration now goes through Clerk (`signUp.create` on the client,
+// see src/lib/auth-client.ts#registerWithReferral). The app-level
+// `users` row is created by the Clerk webhook in src/server/webhooks.ts
+// when Clerk fires `user.created`, which also validates the referral
+// code and generates the 6-digit numericId.
 // ============================================================
 
-router.post('/register', registerLimiter, async (req: Request, res: Response) => {
-  try {
-    const { email, password, name, phone, country, age, refCode } = req.body;
-
-    if (!email || !password || !name) {
-      res.status(400).json({ error: 'Email, password, and name are required' });
-      return;
-    }
-    if (password.length < 6) {
-      res.status(400).json({ error: 'Password must be at least 6 characters' });
-      return;
-    }
-
-    // Validate referral code server-side
-    let referrerId = '';
-    if (refCode) {
-      const { data: refResult, error: refError } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('numericId', refCode)
-        .limit(1);
-
-      if (refError || !refResult || refResult.length === 0) {
-        res.status(400).json({ error: 'Invalid referral code' });
-        return;
-      }
-      referrerId = refResult[0].id;
-    } else {
-      // Allow registration without referral code only if no users exist (bootstrap)
-      const { count } = await supabaseAdmin
-        .from('users')
-        .select('id', { count: 'exact', head: true });
-      if (count && count > 0) {
-        res.status(400).json({ error: 'Referral code is required' });
-        return;
-      }
-    }
-
-    // Create user via Better Auth
-    const signUpResult = await auth.api.signUpEmail({
-      body: {
-        email,
-        password,
-        name,
-      },
-    });
-
-    if (!signUpResult?.user) {
-      res.status(400).json({ error: 'Registration failed' });
-      return;
-    }
-
-    const userId = signUpResult.user.id;
-
-    // Generate a unique 6-digit numericId with collision retry
-    let userNumericId = '';
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const candidate = Math.floor(100000 + Math.random() * 900000).toString();
-      const { data: existing } = await supabaseAdmin
-        .from('users')
-        .select('id')
-        .eq('numericId', candidate)
-        .limit(1);
-      if (!existing || existing.length === 0) {
-        userNumericId = candidate;
-        break;
-      }
-    }
-    if (!userNumericId) {
-      // Extremely unlikely -- 10 consecutive collisions
-      res.status(500).json({ error: 'Failed to generate unique ID. Please try again.' });
-      return;
-    }
-
-    // Create app user profile in the users table.
-    // Retry on 23505 (unique_violation) in case the numericId we picked
-    // races with another concurrent signup. The unique index on
-    // users.numericId (migration 20260424_numericid_unique.sql) is what
-    // surfaces that error.
-    let profileError: any = null;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const result = await supabaseAdmin.from('users').upsert({
-        id: userId,
-        name,
-        email,
-        phone: phone || '',
-        country: country || 'Bangladesh',
-        age: parseInt(age) || 18,
-        numericId: userNumericId,
-        referralCode: userNumericId,
-        referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
-        referredBy: referrerId,
-        mainBalance: 0,
-        totalEarned: 0,
-        pendingPayout: 0,
-        isActive: false,
-        rank: 'Bronze',
-        dailyClaimed: false,
-        notifications: [],
-        taskHistory: [],
-        achievements: [
-          { id: '1', title: 'First Task', progress: 0, goal: 1 },
-          { id: '2', title: 'Team Builder', progress: 0, goal: 10 },
-        ],
-        adWatches: [],
-        referralActiveCount: 0,
-        gen1Count: 0,
-        totalCommission: 0,
-        socialSubmissions: [],
-        status: 'active',
-        activationDate: '',
-        activationExpiry: '',
-        restrictionReason: '',
-        suspensionUntil: '',
-      });
-
-      if (!result.error) {
-        profileError = null;
-        break;
-      }
-
-      // 23505 = Postgres unique_violation. Regenerate the numericId and retry.
-      if ((result.error as any).code === '23505') {
-        userNumericId = Math.floor(100000 + Math.random() * 900000).toString();
-        profileError = result.error;
-        continue;
-      }
-
-      profileError = result.error;
-      break;
-    }
-
-    if (profileError) {
-      console.error('Failed to create user profile:', profileError);
-      res.status(500).json({ error: 'Failed to create user profile' });
-      return;
-    }
-
-    // Increment gen1 count for referrer
-    if (referrerId) {
-      await supabaseAdmin.rpc('increment_field', {
-        p_table: 'users',
-        p_id: referrerId,
-        p_column: 'gen1Count',
-        p_amount: 1,
-      }).then(({ error: rpcErr }) => { if (rpcErr) console.warn('Failed to increment gen1Count:', rpcErr); });
-    }
-
-    res.json({
-      success: true,
-      user: {
-        id: userId,
-        email,
-        name,
-        numericId: userNumericId,
-      },
-    });
-  } catch (error: any) {
-    console.error('Registration error:', error);
-
-    if (error?.message?.includes('already') || error?.code === 'USER_ALREADY_EXISTS') {
-      res.status(409).json({ error: 'This email is already registered' });
-      return;
-    }
-    res.status(500).json({ error: error.message || 'Registration failed' });
-  }
-});
 
 // ============================================================
 // POST /api/register/google-profile -- Create profile after Google OAuth
@@ -271,11 +122,19 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
       }
     }
 
-    // Get user name from Better Auth user record
-    const session = await auth.api.getSession({
-      headers: fromNodeHeaders(req.headers),
-    });
-    const userName = session?.user?.name || 'User';
+    // Pull the user's display name from Clerk.
+    let userName = 'User';
+    try {
+      const clerkUser = await clerkClient.users.getUser(userId);
+      userName =
+        (clerkUser.unsafeMetadata as { name?: string } | undefined)?.name ||
+        [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
+        clerkUser.fullName ||
+        userEmail ||
+        'User';
+    } catch {
+      userName = userEmail || 'User';
+    }
 
     // Generate a unique 6-digit numericId with collision retry
     let userNumericId = '';
@@ -310,7 +169,7 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
         age: 18,
         numericId: userNumericId,
         referralCode: userNumericId,
-        referralLink: `${process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
+        referralLink: `${process.env.APP_PUBLIC_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,
         referredBy: referrerId,
         mainBalance: 0,
         totalEarned: 0,
@@ -442,11 +301,16 @@ router.post('/admin/users/:id/revoke-sessions', requireAuth as any, requireAdmin
   try {
     const targetUserId = req.params.id;
 
-    // Use Better Auth admin API to revoke sessions
-    await auth.api.revokeUserSessions({
-      body: { userId: targetUserId },
-      headers: fromNodeHeaders(req.headers),
-    });
+    // Revoke every active Clerk session for the target user. Clerk
+    // propagates this to all devices -- refresh tokens are invalidated
+    // on the next request.
+    const sessions = await clerkClient.sessions.getSessionList({ userId: targetUserId });
+    const list = Array.isArray(sessions) ? sessions : (sessions as { data?: Array<{ id: string }> }).data || [];
+    await Promise.all(
+      list.map((s: { id: string }) => clerkClient.sessions.revokeSession(s.id).catch((err) => {
+        console.warn('[admin] revokeSession failed:', s.id, err);
+      })),
+    );
 
     res.json({ success: true, message: 'All sessions revoked' });
   } catch (error: any) {
@@ -469,11 +333,19 @@ router.post('/admin/users/:id/ban', requireAuth as any, requireAdmin as any, asy
       .update({ status: 'banned', restrictionReason: reason || 'Policy violation' })
       .eq('id', targetUserId);
 
-    // Ban via Better Auth admin plugin
-    await auth.api.banUser({
-      body: { userId: targetUserId },
-      headers: fromNodeHeaders(req.headers),
-    });
+    // Ban via Clerk. Banned users lose the ability to create new
+    // sessions; we also revoke any live ones below so the effect is
+    // immediate instead of next-token-refresh.
+    await clerkClient.users.banUser(targetUserId);
+    try {
+      const sessions = await clerkClient.sessions.getSessionList({ userId: targetUserId });
+      const list = Array.isArray(sessions) ? sessions : (sessions as { data?: Array<{ id: string }> }).data || [];
+      await Promise.all(
+        list.map((s: { id: string }) => clerkClient.sessions.revokeSession(s.id).catch(() => undefined)),
+      );
+    } catch (err) {
+      console.warn('[admin] Failed to revoke sessions after ban:', err);
+    }
 
     res.json({ success: true });
   } catch (error: any) {

@@ -11,11 +11,10 @@
  */
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { toNodeHandler } from 'better-auth/node';
-import { auth } from '../src/server/auth.js';
+import { clerkMiddleware } from '@clerk/express';
 import apiRoutes from '../src/server/routes.js';
+import clerkWebhooks from '../src/server/webhooks.js';
 import { corsOptions } from '../src/server/cors-config.js';
-import { authLimiter } from '../src/server/rate-limit.js';
 
 const app = express();
 
@@ -23,10 +22,14 @@ const app = express();
 app.set('trust proxy', 1);
 
 app.use(cors(corsOptions));
-app.use(express.json());
 
-// Better Auth handler -- handles all /api/auth/* routes
-app.all('/api/auth/*', authLimiter, toNodeHandler(auth));
+// Clerk webhooks must receive the raw body for Svix signature
+// verification, so we mount them before `express.json()`.
+app.use('/api/webhooks/clerk', express.raw({ type: 'application/json' }));
+app.use('/api', clerkWebhooks);
+
+app.use(express.json());
+app.use(clerkMiddleware());
 
 // Application API routes (registration, admin, etc.)
 app.use('/api', apiRoutes);
