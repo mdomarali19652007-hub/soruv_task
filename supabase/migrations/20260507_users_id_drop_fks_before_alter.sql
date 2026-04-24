@@ -107,7 +107,23 @@ BEGIN
   END IF;
 END $$;
 
--- (6) Recreate the admin-facing view. Mirrors the canonical definition
+-- (6) Ensure the admin-role column exists. On environments where
+-- 20260419_admin_role.sql was never applied (the view below would
+-- otherwise fail with `column "isAdmin" does not exist`), we add it
+-- here idempotently and seed the historical admins. This makes
+-- 20260507 self-sufficient: it can be applied to a stock schema.sql
+-- database that skipped straight to the Clerk cutover.
+ALTER TABLE public.users
+  ADD COLUMN IF NOT EXISTS "isAdmin" BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Historical admin seed, mirrored from 20260419_admin_role.sql.
+-- Safe to re-run; only flips rows that currently evaluate to false.
+UPDATE public.users
+   SET "isAdmin" = TRUE
+ WHERE "isAdmin" = FALSE
+   AND LOWER(email) IN ('soruvislam51@gmail.com', 'shovonali885@gmail.com');
+
+-- (7) Recreate the admin-facing view. Mirrors the canonical definition
 -- in 20260419_admin_role.sql so reapplying this file is a no-op on
 -- databases that never needed the type change.
 CREATE VIEW public.public_user_profiles AS
