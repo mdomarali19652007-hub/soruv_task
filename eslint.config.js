@@ -17,6 +17,7 @@ export default tseslint.config(
       'package-lock.json',
       'bun.lock',
       'supabase/**/*.sql',
+      'supabase/functions/**', // Deno runtime, typed separately via deno.json
     ],
   },
   js.configs.recommended,

@@ -32,8 +32,9 @@ Fill in [`.env.example`](.env.example:1) / `.env.local` with values from your Su
 | --- | --- |
 | `VITE_CLERK_PUBLISHABLE_KEY` | Clerk publishable key (safe to embed in the browser bundle). From Clerk dashboard -> API Keys. |
 | `CLERK_SECRET_KEY` | Clerk server-side secret (bans users, reads user details, etc.). MUST stay server-side. |
-| `CLERK_WEBHOOK_SECRET` | Signing secret for the Clerk webhook (Clerk dashboard -> Webhooks). Svix uses this to verify `user.created` / `user.deleted` payloads. |
 | `APP_PUBLIC_URL` | Public URL your server is reachable at (e.g. `http://localhost:3000` in dev). Used as the referral link base. |
+
+The Clerk webhook signing secret (`CLERK_WEBHOOK_SECRET`) is NOT set on the Node app. It is a Supabase function secret -- see section 4a.
 | `SUPABASE_URL` | Supabase project URL (server-side). |
 | `SUPABASE_SERVICE_ROLE_KEY` | Service role key (server-side only; bypasses RLS). |
 | `VITE_SUPABASE_URL` | Same project URL, exposed to the browser for Realtime. |
@@ -56,10 +57,38 @@ Never commit `.env.local`. The Clerk secret key and Supabase service-role key mu
 1. Create a Clerk application at https://dashboard.clerk.com.
 2. Under **User & Authentication**, enable **Email address + Password** and **Google** as the sign-in options. Make `email_address` the only required identifier -- we collect `name`/`phone`/`country`/`age`/`refCode` ourselves and store them on the Clerk user's `unsafeMetadata`.
 3. Under **Sessions**, set the session lifetime to 7 days (matches the prior Better Auth config).
-4. Under **Webhooks**, add an endpoint pointing at `https://<your-host>/api/webhooks/clerk` and subscribe it to `user.created` and `user.deleted`. Copy the signing secret into `CLERK_WEBHOOK_SECRET`.
-5. Copy the publishable key into `VITE_CLERK_PUBLISHABLE_KEY` and the secret key into `CLERK_SECRET_KEY`.
+4. Copy the publishable key into `VITE_CLERK_PUBLISHABLE_KEY` and the secret key into `CLERK_SECRET_KEY`.
+5. Deploy the Clerk webhook as a Supabase Edge Function (see section 4a below) and point the Clerk dashboard webhook at its public URL.
 
-The `user.created` webhook is what creates the app-level `users` row, validates the referral code, and generates the 6-digit `numericId`. See [`src/server/webhooks.ts`](src/server/webhooks.ts:1).
+The `user.created` webhook is what creates the app-level `users` row, validates the referral code, and generates the 6-digit `numericId`. The handler lives at [`supabase/functions/clerk-webhook/index.ts`](supabase/functions/clerk-webhook/index.ts:1) and runs on Supabase Edge Functions (Deno). There is intentionally **no** Express route for webhooks.
+
+### 4a. Deploy the Clerk webhook edge function
+
+```bash
+# Link the repo to your Supabase project once:
+supabase link --project-ref <your-project-ref>
+
+# Set the function's secrets (kept out of the function's bundle):
+supabase secrets set \
+  CLERK_WEBHOOK_SECRET=whsec_xxx \
+  CLERK_SECRET_KEY=sk_test_xxx \
+  APP_PUBLIC_URL=https://your-app.example.com
+
+# Deploy. This uploads supabase/functions/clerk-webhook/index.ts.
+supabase functions deploy clerk-webhook --no-verify-jwt
+```
+
+We pass `--no-verify-jwt` because Clerk is the authenticator here, not Supabase -- the function performs its own Svix signature verification against `CLERK_WEBHOOK_SECRET` before trusting the body.
+
+The deployed URL will be:
+
+```
+https://<project-ref>.supabase.co/functions/v1/clerk-webhook
+```
+
+Back in the Clerk dashboard, create a webhook endpoint targeting that URL, subscribe to `user.created` and `user.deleted`, and paste its signing secret into the function's `CLERK_WEBHOOK_SECRET` env var.
+
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically into every Supabase Edge Function, so you do not need to set them explicitly.
 
 ## 5. Email delivery
 
@@ -77,9 +106,9 @@ After a Google sign-in we still require a referral code. The user is redirected 
 npm run dev
 ```
 
-This starts the Express app on http://localhost:3000, serving the Vite dev middleware, the Clerk webhook at `/api/webhooks/clerk`, and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
+This starts the Express app on http://localhost:3000, serving the Vite dev middleware and the application API (`/api/*`). Socket.io Ludo multiplayer is only available in this mode.
 
-To receive Clerk webhooks locally, use [ngrok](https://ngrok.com) or the Clerk CLI to proxy your `localhost:3000/api/webhooks/clerk` to a public URL registered in the Clerk dashboard.
+Webhooks from Clerk go directly to the Supabase Edge Function, so you do NOT need to expose `localhost` with ngrok to receive them. For fast local iteration on the function itself, run `supabase functions serve clerk-webhook` and point a dev Clerk webhook at the tunnel Supabase prints.
 
 ## 8. Type-check, lint, and test
 

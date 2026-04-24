@@ -1,0 +1,10 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns", "esnext"],
+    "strict": true
+  },
+  "imports": {
+    "svix": "npm:svix@1.42.0",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.103.3"
+  }
+}
