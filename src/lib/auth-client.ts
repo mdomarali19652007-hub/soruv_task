@@ -413,6 +413,24 @@ export async function fetchMyProfile<T = unknown>(): Promise<T | null> {
 }
 
 /**
+ * Ask the server whether a referral code is required for the next
+ * signup. Returns `false` only during bootstrap (empty `users` table).
+ *
+ * This lives on the server because the RLS lockdown prevents the
+ * browser from counting `users` with the anon key.
+ */
+export async function isReferralRequired(): Promise<boolean> {
+  try {
+    const res = await fetch('/api/referral-required', { method: 'GET' });
+    if (!res.ok) return true; // fail closed
+    const data = await res.json();
+    return data?.required !== false;
+  } catch {
+    return true;
+  }
+}
+
+/**
  * Public validation of a referral code. Accepts any 4-10 digit numeric
  * code and returns `true` iff a matching `users.numericId` exists.
  */
