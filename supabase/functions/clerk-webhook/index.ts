@@ -211,19 +211,29 @@ async function handleUserCreated(data: ClerkWebhookUser): Promise<void> {
     email ||
     'User';
 
-  // Google OAuth users land here without a refCode -- they are
-  // prompted for one by the client, which then calls
-  // /api/register/google-profile. Only proactively create the DB row
-  // when we have a refCode already (email/password signup path).
+  // Decision tree for `user.created`:
+  //
+  //   refCode present  + valid   -> insert profile with referrerId
+  //   refCode present  + invalid -> delete the Clerk user (rollback)
+  //   refCode empty    + table empty (bootstrap) -> insert with no referrer
+  //   refCode empty    + table non-empty         -> defer to the client's
+  //                                                  /api/register/google-profile
+  //                                                  prompt (Google OAuth path)
+  //
+  // `resolveReferrerId` collapses all four cases into {ok, referrerId}.
   const refCode = (meta.refCode || '').trim();
-  if (!refCode) {
-    console.log(`[clerk-webhook] user.created ${data.id} -- no refCode, deferring to google-profile`);
-    return;
-  }
-
   const { ok: refOk, referrerId } = await resolveReferrerId(refCode);
+
   if (!refOk) {
-    console.warn(`[clerk-webhook] Invalid refCode for ${data.id}; deleting Clerk account`);
+    if (!refCode) {
+      // No refCode AND the users table is non-empty -- this is the
+      // OAuth path; let the client's prompt modal handle it.
+      console.log(`[clerk-webhook] user.created ${data.id} -- no refCode, deferring to google-profile`);
+      return;
+    }
+    // refCode supplied but unresolved. Roll back the Clerk user so we
+    // do not end up with an auth account that has no app profile.
+    console.warn(`[clerk-webhook] Invalid refCode '${refCode}' for ${data.id}; deleting Clerk account`);
     await deleteClerkUser(data.id);
     return;
   }

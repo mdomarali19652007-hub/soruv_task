@@ -236,6 +236,36 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
 // POST /api/validate-referral -- Validate referral code (public)
 // ============================================================
 
+// ============================================================
+// GET /api/referral-required -- Public: is a refCode required?
+//
+// Returns `{ required: false }` only during bootstrap (the `users`
+// table is empty) and `{ required: true }` afterwards. The client
+// uses this to decide whether to allow an empty refCode on the very
+// first signup.
+//
+// This cannot be decided client-side: the RLS lockdown
+// (20260419_rls_lockdown.sql) revokes anon SELECT on `users`, so a
+// direct count from the browser always returns 0 and would let every
+// signup through as "bootstrap".
+// ============================================================
+
+router.get('/referral-required', referralLimiter, async (_req: Request, res: Response) => {
+  try {
+    const { count, error } = await supabaseAdmin
+      .from('users')
+      .select('id', { count: 'exact', head: true });
+    if (error) {
+      // Fail closed: if we cannot confirm emptiness, demand a refCode.
+      res.json({ required: true });
+      return;
+    }
+    res.json({ required: (count || 0) > 0 });
+  } catch {
+    res.json({ required: true });
+  }
+});
+
 router.post('/validate-referral', referralLimiter, async (req: Request, res: Response) => {
   try {
     const { code } = req.body;

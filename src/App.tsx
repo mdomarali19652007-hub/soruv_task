@@ -99,6 +99,7 @@ import {
   registerWithReferral,
   createGoogleProfile,
   validateReferralCode,
+  isReferralRequired,
   requestPasswordReset,
   fetchMyProfile,
 } from './lib/auth-client';
@@ -635,22 +636,27 @@ export default function App() {
       return;
     }
     // Referral code is required for every signup outside the very
-    // first bootstrap account. The server enforces this too (/api/register
-    // returns 400 when users already exist), but validating here gives
-    // users an immediate error instead of a delayed network round-trip.
+    // first bootstrap account. Because the client cannot read the
+    // users table directly (RLS lockdown), we ask the server via
+    // /api/referral-required whether bootstrap mode applies.
     const trimmedRefCode = regData.refCode.trim();
     if (!trimmedRefCode) {
-      alert('Referral code is required. Please enter the code of the person who invited you.');
-      return;
-    }
-    if (!/^\d{4,10}$/.test(trimmedRefCode)) {
-      alert('Referral code must be a 6-digit number.');
-      return;
-    }
-    const refValid = await validateReferralCode(trimmedRefCode);
-    if (!refValid) {
-      alert('This referral code is not valid. Please double-check and try again.');
-      return;
+      const required = await isReferralRequired();
+      if (required) {
+        alert('Referral code is required. Please enter the code of the person who invited you.');
+        return;
+      }
+      // Bootstrap: users table is empty, skip refCode validation.
+    } else {
+      if (!/^\d{4,10}$/.test(trimmedRefCode)) {
+        alert('Referral code must be a 6-digit number.');
+        return;
+      }
+      const refValid = await validateReferralCode(trimmedRefCode);
+      if (!refValid) {
+        alert('This referral code is not valid. Please double-check and try again.');
+        return;
+      }
     }
 
     try {
@@ -773,21 +779,31 @@ export default function App() {
       if (isRegistering) {
         const trimmedRefCode = regData.refCode.trim();
         if (!trimmedRefCode) {
-          alert('Referral code is required. Please enter the code of the person who invited you before continuing with Google.');
-          return;
+          // Ask the server whether we are in bootstrap mode (empty
+          // users table). If not, demand a refCode before the OAuth
+          // redirect so the user gets the error up-front.
+          const required = await isReferralRequired();
+          if (required) {
+            alert('Referral code is required. Please enter the code of the person who invited you before continuing with Google.');
+            return;
+          }
+          // Bootstrap: no refCode is fine; leave pendingReferralCode unset.
+          localStorage.removeItem('pendingReferralCode');
+        } else {
+          if (!/^\d{4,10}$/.test(trimmedRefCode)) {
+            alert('Referral code must be a 6-digit number.');
+            return;
+          }
+          const isValid = await validateReferralCode(trimmedRefCode);
+          if (!isValid) {
+            alert('This referral code is not valid. Please double-check and try again.');
+            return;
+          }
+          // Stash the validated code so the post-OAuth
+          // /api/register/google-profile call knows which referrer to
+          // attach.
+          localStorage.setItem('pendingReferralCode', trimmedRefCode);
         }
-        if (!/^\d{4,10}$/.test(trimmedRefCode)) {
-          alert('Referral code must be a 6-digit number.');
-          return;
-        }
-        const isValid = await validateReferralCode(trimmedRefCode);
-        if (!isValid) {
-          alert('This referral code is not valid. Please double-check and try again.');
-          return;
-        }
-        // Stash the validated code so the post-OAuth /api/register/google-profile
-        // call knows which referrer to attach.
-        localStorage.setItem('pendingReferralCode', trimmedRefCode);
       }
 
       // Use Better Auth Google OAuth
