@@ -81,7 +81,17 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
   try {
     const userId = req.userId!;
     const userEmail = req.userEmail!;
-    const { refCode } = req.body;
+    const {
+      refCode,
+      // Optional profile fields collected by the post-OAuth completion
+      // modal (or recovered from `pendingSignUpMetadata` localStorage)
+      // -- Google does not give us phone/country/age, so the client
+      // forwards them here. All four are sanitised below.
+      name: nameFromBody,
+      phone: phoneFromBody,
+      country: countryFromBody,
+      age: ageFromBody,
+    } = req.body || {};
 
     // Check if profile already exists
     const { data: existing } = await supabaseAdmin
@@ -122,18 +132,44 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
       }
     }
 
-    // Pull the user's display name from Clerk.
+    // Resolve the display name with this priority:
+    //   1. Caller-supplied `name` from the post-OAuth completion modal
+    //   2. Clerk unsafeMetadata.name (set by signUp.social)
+    //   3. Clerk firstName + lastName / fullName
+    //   4. Email
+    //   5. Literal 'User'
     let userName = 'User';
     try {
       const clerkUser = await clerkClient.users.getUser(userId);
       userName =
+        (typeof nameFromBody === 'string' && nameFromBody.trim()) ||
         (clerkUser.unsafeMetadata as { name?: string } | undefined)?.name ||
         [clerkUser.firstName, clerkUser.lastName].filter(Boolean).join(' ') ||
         clerkUser.fullName ||
         userEmail ||
         'User';
     } catch {
-      userName = userEmail || 'User';
+      userName =
+        (typeof nameFromBody === 'string' && nameFromBody.trim()) ||
+        userEmail ||
+        'User';
+    }
+
+    // Sanitise the optional caller-supplied profile fields. We trim
+    // strings, cap their length, and clamp `age` to a sane range so
+    // a malformed body cannot poison the row.
+    const safePhone =
+      typeof phoneFromBody === 'string' ? phoneFromBody.trim().slice(0, 32) : '';
+    const allowedCountries = new Set(['Bangladesh', 'India', 'Pakistan']);
+    const requestedCountry =
+      typeof countryFromBody === 'string' ? countryFromBody.trim() : '';
+    const safeCountry = allowedCountries.has(requestedCountry)
+      ? requestedCountry
+      : 'Bangladesh';
+    let safeAge = 18;
+    const parsedAge = parseInt(typeof ageFromBody === 'string' ? ageFromBody : '', 10);
+    if (Number.isFinite(parsedAge) && parsedAge >= 13 && parsedAge <= 120) {
+      safeAge = parsedAge;
     }
 
     // Generate a unique 6-digit numericId with collision retry
@@ -164,9 +200,9 @@ router.post('/register/google-profile', requireAuth as any, async (req: Authenti
         id: userId,
         name: userName,
         email: userEmail,
-        phone: '',
-        country: 'Bangladesh',
-        age: 18,
+        phone: safePhone,
+        country: safeCountry,
+        age: safeAge,
         numericId: userNumericId,
         referralCode: userNumericId,
         referralLink: `${process.env.APP_PUBLIC_URL || process.env.BETTER_AUTH_URL || 'http://localhost:3000'}?ref=${userNumericId}`,

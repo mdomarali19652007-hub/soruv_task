@@ -321,6 +321,13 @@ export default function App() {
   const [refCodePromptValue, setRefCodePromptValue] = useState('');
   const [refCodePromptError, setRefCodePromptError] = useState<string | null>(null);
   const [refCodePromptSubmitting, setRefCodePromptSubmitting] = useState(false);
+  // Extra fields collected by the post-OAuth profile completion modal
+  // (name/phone/country) -- Google does not give us these, so when the
+  // form was bypassed (or only partially filled before "Sign Up with
+  // Google") we ask the user once before creating the Supabase row.
+  const [profilePromptName, setProfilePromptName] = useState('');
+  const [profilePromptPhone, setProfilePromptPhone] = useState('');
+  const [profilePromptCountry, setProfilePromptCountry] = useState('Bangladesh');
 
   useEffect(() => {
     if (!showAuthMenu) return;
@@ -444,21 +451,54 @@ export default function App() {
             stopProfilePoll();
             currentHydratedUserId = authUser.id;
 
-            // For Google OAuth users, ensure profile exists before the
-            // first /api/me. If we have a pending referral code, use it.
+            // For Google OAuth users, ensure the app-level profile
+            // exists before the first /api/me. We recover any data the
+            // user typed on the registration form before being
+            // redirected to Google -- both the legacy `pendingReferralCode`
+            // key and the richer `pendingSignUpMetadata` blob written by
+            // signUp.social. Whatever we find is forwarded to
+            // /api/register/google-profile so the row can be created
+            // with phone/country/age in one shot.
             const pendingRefCode = localStorage.getItem('pendingReferralCode');
-            if (pendingRefCode) {
+            let pendingMeta: { name?: string; phone?: string; country?: string; age?: string; refCode?: string } = {};
+            try {
+              const raw = localStorage.getItem('pendingSignUpMetadata');
+              if (raw) pendingMeta = JSON.parse(raw);
+            } catch { /* ignore parse errors */ }
+            const refCodeForProfile = pendingRefCode || pendingMeta.refCode || '';
+            if (refCodeForProfile) {
               localStorage.removeItem('pendingReferralCode');
-              await createGoogleProfile(pendingRefCode).catch(e =>
-                console.warn('Failed to create Google profile:', e)
-              );
+              localStorage.removeItem('pendingSignUpMetadata');
+              await createGoogleProfile(refCodeForProfile, {
+                name: pendingMeta.name,
+                phone: pendingMeta.phone,
+                country: pendingMeta.country,
+                age: pendingMeta.age,
+              }).catch(e => console.warn('Failed to create Google profile:', e));
             }
 
             // Hydrate. If the profile still does not exist, the OAuth
-            // user has not yet provided a referral code -- surface the
-            // refCode prompt instead of silently creating an orphan row.
+            // user has not yet provided a referral code (or the form
+            // was skipped) -- surface the profile-completion prompt
+            // instead of silently creating an orphan row. Prefill
+            // whatever we already know from the pending metadata blob
+            // and the Clerk user, so the user only has to fill what
+            // is actually missing.
             const profile = await hydrateProfile(authUser.id);
             if (!profile) {
+              const clerkUser = (typeof window !== 'undefined' ? window.Clerk?.user : undefined) as
+                | { firstName?: string | null; lastName?: string | null; fullName?: string | null }
+                | undefined;
+              const fallbackName =
+                pendingMeta.name ||
+                clerkUser?.fullName ||
+                [clerkUser?.firstName, clerkUser?.lastName].filter(Boolean).join(' ') ||
+                authUser.name ||
+                '';
+              setProfilePromptName(fallbackName);
+              setProfilePromptPhone(pendingMeta.phone || '');
+              setProfilePromptCountry(pendingMeta.country || 'Bangladesh');
+              setRefCodePromptValue(pendingMeta.refCode || pendingRefCode || '');
               setNeedsReferralCodePrompt(true);
             }
 
@@ -5012,10 +5052,12 @@ export default function App() {
         </div>
       )}
 
-      {/* Referral code prompt -- shown when a signed-in user has no
-          profile row yet (typically first Google OAuth sign-in without
-          a pending referral code). Blocks until they enter a valid
-          code or sign out. */}
+      {/* Profile completion prompt -- shown when a signed-in user has
+          no profile row yet (typically Google OAuth sign-in where the
+          form fields were skipped or only partially filled). Collects
+          name + phone + country + referral code so the Supabase row
+          can be created with the same data the manual sign-up form
+          captures. Blocks until submitted or signed out. */}
       {needsReferralCodePrompt && (
         <div className="fixed inset-0 z-[400] bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
           <div className="w-full max-w-md bg-white border border-[#D4AF37]/20 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(212,175,55,0.2)]">
@@ -5023,16 +5065,29 @@ export default function App() {
               <Users className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-xl font-black text-slate-900 text-center mb-2 uppercase tracking-widest">
-              Referral Code Required
+              Complete Your Profile
             </h2>
             <p className="text-xs text-slate-500 text-center mb-6 leading-relaxed">
-              Enter the referral code of the person who invited you to finish creating your account.
+              We need a few more details to finish creating your account.
             </p>
             <form
               onSubmit={async (e) => {
                 e.preventDefault();
-                const code = refCodePromptValue.trim();
                 setRefCodePromptError(null);
+
+                const trimmedName = profilePromptName.trim();
+                const trimmedPhone = profilePromptPhone.trim();
+                const trimmedCountry = profilePromptCountry.trim() || 'Bangladesh';
+                const code = refCodePromptValue.trim();
+
+                if (!trimmedName) {
+                  setRefCodePromptError('Please enter your full name.');
+                  return;
+                }
+                if (!trimmedPhone) {
+                  setRefCodePromptError('Please enter your mobile number.');
+                  return;
+                }
                 if (!code) {
                   setRefCodePromptError('Please enter a referral code.');
                   return;
@@ -5041,6 +5096,7 @@ export default function App() {
                   setRefCodePromptError('Referral code must be a 6-digit number.');
                   return;
                 }
+
                 setRefCodePromptSubmitting(true);
                 try {
                   const valid = await validateReferralCode(code);
@@ -5048,7 +5104,11 @@ export default function App() {
                     setRefCodePromptError('This referral code is not valid.');
                     return;
                   }
-                  const result = await createGoogleProfile(code);
+                  const result = await createGoogleProfile(code, {
+                    name: trimmedName,
+                    phone: trimmedPhone,
+                    country: trimmedCountry,
+                  });
                   if (!result.success) {
                     setRefCodePromptError(result.error || 'Failed to create profile. Please try again.');
                     return;
@@ -5059,6 +5119,9 @@ export default function App() {
                     setUser(data);
                     setNeedsReferralCodePrompt(false);
                     setRefCodePromptValue('');
+                    setProfilePromptName('');
+                    setProfilePromptPhone('');
+                    setProfilePromptCountry('Bangladesh');
                     setRefCodePromptError(null);
                   } else {
                     setRefCodePromptError('Profile was created but could not be loaded. Please refresh.');
@@ -5069,13 +5132,39 @@ export default function App() {
                   setRefCodePromptSubmitting(false);
                 }
               }}
-              className="space-y-4"
+              className="space-y-3"
             >
               <input
                 type="text"
+                placeholder="Full Name"
+                value={profilePromptName}
+                onChange={(e) => setProfilePromptName(e.target.value.slice(0, 100))}
+                disabled={refCodePromptSubmitting}
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
+              />
+              <input
+                type="tel"
+                inputMode="tel"
+                placeholder="Mobile Number"
+                value={profilePromptPhone}
+                onChange={(e) => setProfilePromptPhone(e.target.value.slice(0, 32))}
+                disabled={refCodePromptSubmitting}
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
+              />
+              <select
+                value={profilePromptCountry}
+                onChange={(e) => setProfilePromptCountry(e.target.value)}
+                disabled={refCodePromptSubmitting}
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 outline-none transition-colors disabled:opacity-60 appearance-none"
+              >
+                <option value="Bangladesh">Bangladesh</option>
+                <option value="India">India</option>
+                <option value="Pakistan">Pakistan</option>
+              </select>
+              <input
+                type="text"
                 inputMode="numeric"
-                autoFocus
-                placeholder="e.g. 100234"
+                placeholder="Referral Code (e.g. 100234)"
                 value={refCodePromptValue}
                 onChange={(e) => setRefCodePromptValue(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 disabled={refCodePromptSubmitting}

@@ -534,10 +534,20 @@ async function authHeaders(): Promise<Record<string, string>> {
 }
 
 /**
- * Create the app-level profile row after Google OAuth. Called from
- * App.tsx's existing refCode-prompt modal.
+ * Create the app-level profile row after Google OAuth.
+ *
+ * The `profile` argument is forwarded so the caller (typically the
+ * post-OAuth profile-completion modal in App.tsx, or the cached
+ * `pendingSignUpMetadata` blob from `signUp.social`) can fill in the
+ * fields that Google's profile does NOT give us -- phone, country,
+ * age, and a referral code. The server route
+ * (`/api/register/google-profile`) treats them as optional and falls
+ * back to Clerk-derived defaults when missing.
  */
-export async function createGoogleProfile(refCode?: string): Promise<{ success: boolean; numericId?: string; error?: string }> {
+export async function createGoogleProfile(
+  refCode?: string,
+  profile?: { name?: string; phone?: string; country?: string; age?: string },
+): Promise<{ success: boolean; numericId?: string; error?: string; needsReferralCode?: boolean }> {
   const res = await fetch('/api/register/google-profile', {
     method: 'POST',
     headers: {
@@ -545,13 +555,19 @@ export async function createGoogleProfile(refCode?: string): Promise<{ success: 
       ...(await authHeaders()),
     },
     credentials: 'include',
-    body: JSON.stringify({ refCode: refCode || '' }),
+    body: JSON.stringify({
+      refCode: refCode || '',
+      name: profile?.name,
+      phone: profile?.phone,
+      country: profile?.country,
+      age: profile?.age,
+    }),
   });
 
   const result = await res.json();
 
   if (!res.ok) {
-    return { success: false, error: result.error };
+    return { success: false, error: result.error, needsReferralCode: result.needsReferralCode };
   }
 
   return { success: true, numericId: result.numericId };
