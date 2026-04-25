@@ -94,6 +94,7 @@ import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTr
 import {
   authClient,
   signIn,
+  signUp,
   signOut,
   useSession,
   registerWithReferral,
@@ -102,6 +103,7 @@ import {
   isReferralRequired,
   requestPasswordReset,
   fetchMyProfile,
+  completeOauthTransferIfNeeded,
 } from './lib/auth-client';
 import { ResetPasswordView } from './features/auth/ResetPasswordView';
 import { EmailVerificationOverlay } from './features/auth/EmailVerificationOverlay';
@@ -402,6 +404,16 @@ export default function App() {
     // Poll Better Auth session to determine auth state
     const checkSession = async () => {
       try {
+        // Recover from a half-finished OAuth round-trip. Clerk can leave
+        // the in-flight signIn/signUp resource in `transferable` state
+        // (e.g. when a brand-new email comes back from Google through
+        // the sign-in flow, or vice versa). Without this transfer the
+        // OAuth callback completes but no Clerk user/session is ever
+        // created, the `user.created` webhook never fires and the
+        // dashboard hard-bounces back to /login. See
+        // src/lib/auth-client.ts#completeOauthTransferIfNeeded.
+        await completeOauthTransferIfNeeded().catch(() => false);
+
         const sessionResult = await authClient.getSession();
         const session = sessionResult?.data;
 
@@ -804,9 +816,33 @@ export default function App() {
           // attach.
           localStorage.setItem('pendingReferralCode', trimmedRefCode);
         }
+
+        // CRITICAL: for new users we MUST go through Clerk's signUp
+        // resource, not signIn -- otherwise Clerk returns a
+        // `transferable` verification with `external_account_not_found`
+        // and the OAuth flow stalls without ever creating a user (no
+        // `user.created` webhook -> no Supabase row -> back to /login).
+        // The custom profile fields piggy-back on `unsafeMetadata` so
+        // the Clerk webhook can write them straight into the `users`
+        // row. See src/lib/auth-client.ts#signUp.social.
+        await signUp.social({
+          provider: 'google',
+          callbackURL: window.location.origin,
+          metadata: {
+            name: regData.name,
+            phone: regData.phone,
+            country: regData.country,
+            age: regData.age,
+            refCode: trimmedRefCode,
+          },
+        });
+        return;
       }
 
-      // Use Better Auth Google OAuth
+      // Returning user: standard Clerk OAuth sign-in. The post-redirect
+      // `completeOauthTransferIfNeeded` hook in checkSession will
+      // transparently convert this into a sign-up if Clerk has no
+      // matching user (and vice versa) so neither button can deadlock.
       await signIn.social({
         provider: 'google',
         callbackURL: window.location.origin,

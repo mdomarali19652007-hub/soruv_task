@@ -36,17 +36,32 @@ interface ClerkSignUpResource {
 // Clerk global access
 // ------------------------------------------------------------
 
+interface ClerkVerification {
+  status?: string | null;
+  strategy?: string | null;
+  error?: { code?: string; message?: string; longMessage?: string } | null;
+}
+
+interface ClerkSignInResource {
+  firstFactorVerification?: ClerkVerification | null;
+  create(params: Record<string, unknown>): Promise<{ status?: string | null; createdSessionId?: string | null; supportedFirstFactors?: Array<Record<string, unknown>> | null }>;
+  attemptFirstFactor(params: Record<string, unknown>): Promise<{ status?: string | null; createdSessionId?: string | null }>;
+  authenticateWithRedirect(params: Record<string, unknown>): Promise<void>;
+}
+
+interface ClerkSignUpResourceFull extends ClerkSignUpResource {
+  verifications?: { externalAccount?: ClerkVerification | null } | null;
+  authenticateWithRedirect?(params: Record<string, unknown>): Promise<void>;
+  create(params: Record<string, unknown>): Promise<{ status?: string | null; createdSessionId?: string | null }>;
+}
+
 interface ClerkGlobal {
   loaded: boolean;
   user: { id: string; emailAddresses?: Array<{ emailAddress: string }>; firstName?: string | null; lastName?: string | null; fullName?: string | null; unsafeMetadata?: Record<string, unknown>; publicMetadata?: Record<string, unknown> } | null;
   session: { id: string; getToken(): Promise<string | null> } | null;
   client: {
-    signIn: {
-      create(params: Record<string, unknown>): Promise<{ status?: string | null; createdSessionId?: string | null; supportedFirstFactors?: Array<Record<string, unknown>> | null }>;
-      attemptFirstFactor(params: Record<string, unknown>): Promise<{ status?: string | null; createdSessionId?: string | null }>;
-      authenticateWithRedirect(params: Record<string, unknown>): Promise<void>;
-    };
-    signUp: ClerkSignUpResource;
+    signIn: ClerkSignInResource;
+    signUp: ClerkSignUpResourceFull;
   } | null;
   signOut(): Promise<void>;
   setActive(params: { session?: string | null }): Promise<void>;
@@ -180,8 +195,11 @@ export const signIn = {
   },
 
   /**
-   * OAuth sign-in (Google). Redirects the browser to the provider and
-   * comes back to `callbackURL`.
+   * OAuth sign-in (Google) for an EXISTING account. Redirects the
+   * browser to the provider and comes back to `callbackURL`. For new
+   * users, use `signUp.social` instead -- otherwise Clerk responds
+   * with `external_account_not_found` (transferable) and the flow
+   * stalls without ever creating a user.
    */
   async social({ provider, callbackURL }: { provider: 'google'; callbackURL?: string }): Promise<void> {
     const clerk = await waitForClerk();
@@ -194,6 +212,153 @@ export const signIn = {
     });
   },
 };
+
+// ------------------------------------------------------------
+// signUp helpers (OAuth registration + transferable recovery)
+// ------------------------------------------------------------
+
+/** Profile fields stashed in Clerk `unsafeMetadata` so the
+ *  `clerk-webhook` Edge Function can write them into the `users` row
+ *  when `user.created` fires. */
+export interface PendingSignUpMetadata {
+  name?: string;
+  phone?: string;
+  country?: string;
+  age?: string;
+  refCode?: string;
+}
+
+const PENDING_SIGNUP_KEY = 'pendingSignUpMetadata';
+
+function readPendingSignUpMetadata(): PendingSignUpMetadata {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(PENDING_SIGNUP_KEY);
+    if (!raw) return {};
+    return JSON.parse(raw) as PendingSignUpMetadata;
+  } catch {
+    return {};
+  }
+}
+
+function clearPendingSignUpMetadata(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(PENDING_SIGNUP_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export const signUp = {
+  /**
+   * OAuth sign-UP (Google) for new users.
+   *
+   * Crucially this calls `Clerk.client.signUp.authenticateWithRedirect`
+   * (NOT `signIn.authenticateWithRedirect`). Using the sign-in
+   * resource for a brand-new email returns Clerk's `transferable`
+   * state with `external_account_not_found` -- which is the bug that
+   * was leaving the OAuth flow without ever creating a Clerk user
+   * and silently bouncing the browser back to /login.
+   *
+   * The custom profile fields (name/phone/country/age/refCode) are
+   * forwarded as `unsafeMetadata` so the Clerk webhook
+   * (`supabase/functions/clerk-webhook/index.ts`) can read them in
+   * `user.created` and atomically create the matching `users` row.
+   */
+  async social({
+    provider,
+    callbackURL,
+    metadata,
+  }: {
+    provider: 'google';
+    callbackURL?: string;
+    metadata?: PendingSignUpMetadata;
+  }): Promise<void> {
+    const clerk = await waitForClerk();
+    if (!clerk.client) throw new Error('Clerk client not ready');
+    const redirectUrl = callbackURL || (typeof window !== 'undefined' ? window.location.origin : '/');
+
+    // Stash so the post-redirect transferable-recovery path (see
+    // `completeOauthTransferIfNeeded`) can recover the same metadata
+    // when Clerk transfers a sign-in into a sign-up after OAuth.
+    if (typeof window !== 'undefined' && metadata) {
+      try {
+        localStorage.setItem(PENDING_SIGNUP_KEY, JSON.stringify(metadata));
+      } catch {
+        /* ignore quota errors */
+      }
+    }
+
+    const signUpRes = clerk.client.signUp;
+    if (typeof signUpRes.authenticateWithRedirect !== 'function') {
+      throw new Error('Clerk signUp.authenticateWithRedirect is unavailable');
+    }
+    await signUpRes.authenticateWithRedirect({
+      strategy: `oauth_${provider}`,
+      redirectUrl,
+      redirectUrlComplete: redirectUrl,
+      unsafeMetadata: metadata as Record<string, unknown> | undefined,
+    });
+  },
+};
+
+/**
+ * After an OAuth round-trip Clerk leaves either the in-flight
+ * `signIn` or `signUp` resource on the client object with
+ * `verification.status === 'transferable'` when the chosen flow
+ * could not complete on its own. Two real-world cases:
+ *
+ *   - User clicked "Sign In with Google" but the email is brand new
+ *     -> `signIn.firstFactorVerification.status === 'transferable'`
+ *        with `external_account_not_found`. We convert by calling
+ *        `signUp.create({ transfer: true, unsafeMetadata })`.
+ *
+ *   - User clicked "Sign Up with Google" but already has an account
+ *     -> `signUp.verifications.externalAccount.status === 'transferable'`.
+ *        We convert by calling `signIn.create({ transfer: true })`.
+ *
+ * In both cases Clerk completes the new resource synchronously
+ * (OAuth has already happened) and we activate the resulting session.
+ *
+ * Returns true if a transfer was performed so the caller can refresh
+ * its local session state.
+ */
+export async function completeOauthTransferIfNeeded(): Promise<boolean> {
+  try {
+    const clerk = await waitForClerk();
+    if (!clerk.client) return false;
+
+    const signInRes = clerk.client.signIn;
+    const signUpRes = clerk.client.signUp;
+
+    // Case 1: signIn -> signUp transfer (new email).
+    const siVerification = signInRes?.firstFactorVerification;
+    if (siVerification && siVerification.status === 'transferable') {
+      const metadata = readPendingSignUpMetadata();
+      const result = await signUpRes.create({ transfer: true, unsafeMetadata: metadata });
+      if (result?.status === 'complete' && result.createdSessionId) {
+        await clerk.setActive({ session: result.createdSessionId });
+      }
+      clearPendingSignUpMetadata();
+      return true;
+    }
+
+    // Case 2: signUp -> signIn transfer (returning email).
+    const suExtVerification = signUpRes?.verifications?.externalAccount;
+    if (suExtVerification && suExtVerification.status === 'transferable') {
+      const result = await signInRes.create({ transfer: true });
+      if (result?.status === 'complete' && result.createdSessionId) {
+        await clerk.setActive({ session: result.createdSessionId });
+      }
+      clearPendingSignUpMetadata();
+      return true;
+    }
+  } catch (err) {
+    console.warn('[auth] completeOauthTransferIfNeeded failed:', err);
+  }
+  return false;
+}
 
 export async function signOut(): Promise<void> {
   try {
