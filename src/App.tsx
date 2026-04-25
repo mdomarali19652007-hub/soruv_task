@@ -2071,8 +2071,19 @@ export default function App() {
       }
     };
     const tabContentRef = useRef<HTMLDivElement>(null);
+    // Skip the scrollIntoView on the initial mount: the parent App's
+    // own `useEffect(() => window.scrollTo(0, 0), [view])` already puts
+    // us at the top of the admin page when we navigate in. Without this
+    // guard the first render would smooth-scroll down to the tab content
+    // (well below the page header), which felt like the page was loading
+    // already scrolled to the bottom.
+    const didMountAdminTabRef = useRef(false);
 
     useEffect(() => {
+      if (!didMountAdminTabRef.current) {
+        didMountAdminTabRef.current = true;
+        return;
+      }
       if (tabContentRef.current && activeAdminTab) {
         tabContentRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
