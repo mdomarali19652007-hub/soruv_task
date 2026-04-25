@@ -38,6 +38,7 @@ import type {
   GlobalUpload, NewsPost, DollarBuyRequest, SocialSubmission, View,
 } from '../../types';
 import { INCOME_CARDS, SMM_SERVICES } from '../../constants';
+import { useReasonPrompt } from '../../components/ReasonPromptModal';
 
 /**
  * Single source of truth for the active admin tab. Adding a tab here
@@ -149,6 +150,31 @@ export function AdminView(props: AdminViewProps) {
     allUploads, dynamicTasks,
     isSubmitting, setIsSubmitting, setSubmissionProgress,
   } = props;
+
+  const { requestReason, modalUI: reasonPromptUI } = useReasonPrompt();
+
+  /**
+   * Helper that prompts the admin for a rejection / cancellation reason.
+   * Returns the trimmed reason on confirm (falls back to the supplied
+   * default if the admin left the input blank), or `null` if the admin
+   * cancelled the dialog. Callers should treat `null` as an abort and
+   * skip any side-effects.
+   */
+  const askRejectionReason = async (
+    title: string,
+    fallback: string,
+    confirmLabel = 'Reject',
+  ): Promise<string | null> => {
+    const r = await requestReason({
+      title,
+      inputLabel: 'Reason',
+      inputPlaceholder: fallback,
+      confirmLabel,
+      destructive: true,
+    });
+    if (r === null) return null;
+    return r.trim() || fallback;
+  };
   const [adminUser] = useState(user);
   const [notice, setNotice] = useState(globalNotice);
   const [adminMinWithdrawal, setAdminMinWithdrawal] = useState(minWithdrawal);
@@ -185,6 +211,10 @@ export function AdminView(props: AdminViewProps) {
   const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
   const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('gmail');
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
+  // Per-tournament local draft of the room code, so admins type without
+  // silently committing on blur. Save button persists to the DB.
+  const [roomCodeDrafts, setRoomCodeDrafts] = useState<Record<string, string>>({});
+  const [savingRoomCode, setSavingRoomCode] = useState<Set<string>>(new Set());
   const [isUploading, setIsUploading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
   const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
@@ -230,10 +260,40 @@ export function AdminView(props: AdminViewProps) {
   }, [activeAdminTab]);
 
   const handleUserStatus = async (userId: string, status: 'active' | 'banned' | 'suspended') => {
-    const reason = status !== 'active' ? prompt(`Enter reason for ${status}:`) || 'Policy violation' : '';
+    let reason = '';
     let suspensionUntil = '';
+    if (status !== 'active') {
+      const r = await requestReason({
+        title: status === 'banned' ? 'Ban User' : 'Suspend User',
+        description:
+          status === 'banned'
+            ? 'This will revoke the user\'s active sessions and block sign-in.'
+            : 'The user will be temporarily blocked from the platform.',
+        inputLabel: 'Reason',
+        inputPlaceholder: 'Policy violation',
+        confirmLabel: status === 'banned' ? 'Ban User' : 'Continue',
+        destructive: true,
+      });
+      if (r === null) return;
+      reason = r.trim() || 'Policy violation';
+    }
     if (status === 'suspended') {
-      const days = parseInt(prompt('Enter suspension duration in days:', '3') || '3');
+      const d = await requestReason({
+        title: 'Suspension Duration',
+        description: 'How many days should the user be suspended?',
+        inputLabel: 'Days',
+        inputType: 'number',
+        defaultValue: '3',
+        confirmLabel: 'Suspend',
+        destructive: true,
+        requireValue: true,
+      });
+      if (d === null) return;
+      const days = parseInt(d, 10);
+      if (!Number.isFinite(days) || days <= 0) {
+        alert('Suspension duration must be a positive number of days.');
+        return;
+      }
       const date = new Date();
       date.setDate(date.getDate() + days);
       suspensionUntil = date.toISOString();
@@ -435,7 +495,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleGmailAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid account' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Gmail Submission', 'Invalid account');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('gmailSubmissions', id, { status: action, reason });
 
@@ -458,7 +523,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleMicrojobAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Incomplete work' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Microjob Submission', 'Incomplete work');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('microjobSubmissions', id, { status: action, reason });
 
@@ -485,7 +555,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleBulkTaskAction = async (action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason for all selected:') || 'Incomplete work' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Selected Tasks', 'Incomplete work');
+      if (r === null) return;
+      reason = r;
+    }
     setIsSubmitting(true);
     try {
       for (const id of selectedTasks) {
@@ -501,7 +576,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleBulkMicrojobAction = async (action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason for all selected:') || 'Incomplete work' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Selected Microjobs', 'Incomplete work');
+      if (r === null) return;
+      reason = r;
+    }
     setIsSubmitting(true);
     try {
       for (const id of selectedMicrojobs) {
@@ -517,7 +597,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleTaskAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Proof not valid' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Task Submission', 'Proof not valid');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('taskSubmissions', id, { status: action, reason });
 
@@ -540,11 +625,19 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleWithdrawAction = async (id: string, action: 'approved' | 'rejected') => {
+    // Prompt for the rejection reason BEFORE taking the in-flight lock
+    // so a cancel from the modal does not leave the row stuck in
+    // "processing" UI state.
+    let reason = '';
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Withdrawal', 'Policy violation');
+      if (r === null) return;
+      reason = r;
+    }
+
     // Prevent double-clicks
     if (processingIds.has(id)) return;
     setProcessingIds(prev => new Set(prev).add(id));
-
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Policy violation' : '';
 
     try {
       // Use server-side RPC for atomic withdrawal processing with proper locking
@@ -562,11 +655,19 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleRechargeAction = async (id: string, action: 'approved' | 'rejected') => {
+    // Prompt before taking the in-flight lock so cancelling the modal
+    // does not leave the row stuck in "processing" UI state.
+    let reason = '';
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Deposit', 'Invalid request');
+      if (r === null) return;
+      reason = r;
+    }
+
     // Prevent double-clicks
     if (processingIds.has(id)) return;
     setProcessingIds(prev => new Set(prev).add(id));
 
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : '';
     try {
       // Use server-side RPC for atomic deposit processing with proper locking
       await processDeposit(id, action, reason);
@@ -583,7 +684,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleDriveOfferRequestAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Drive Offer Request', 'Invalid request');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('driveOfferRequests', id, { status: action, reason });
 
@@ -600,7 +706,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleSmmAction = async (id: string, action: 'processing' | 'completed' | 'cancelled') => {
-    const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Invalid link' : undefined;
+    let reason: string | undefined;
+    if (action === 'cancelled') {
+      const r = await askRejectionReason('Cancel SMM Order', 'Invalid link', 'Cancel Order');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('smmOrders', id, { status: action });
 
@@ -617,7 +728,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleDollarBuyAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid request' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Dollar Buy Request', 'Invalid request');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('dollarBuyRequests', id, { status: action, reason });
 
@@ -661,7 +777,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleProductOrderAction = async (id: string, action: 'processing' | 'shipped' | 'delivered' | 'cancelled') => {
-    const reason = action === 'cancelled' ? prompt('Enter cancellation reason:') || 'Out of stock' : undefined;
+    let reason: string | undefined;
+    if (action === 'cancelled') {
+      const r = await askRejectionReason('Cancel Order', 'Out of stock', 'Cancel Order');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('productOrders', id, { status: action, reason });
 
@@ -749,7 +870,12 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleSocialAction = async (id: string, action: 'approved' | 'rejected') => {
-    const reason = action === 'rejected' ? prompt('Enter rejection reason:') || 'Invalid proof' : undefined;
+    let reason: string | undefined;
+    if (action === 'rejected') {
+      const r = await askRejectionReason('Reject Social Submission', 'Invalid proof');
+      if (r === null) return;
+      reason = r;
+    }
     try {
       await adminUpdate('socialSubmissions', id, { status: action, reason });
 
@@ -780,7 +906,19 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleDeleteUpload = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this upload record?')) return;
+    // Note: this only removes the metadata row from the `uploads` table.
+    // The underlying image is hosted on ImgBB (see lib/upload-media.ts)
+    // and cannot be deleted from the client, so the binary stays on the
+    // host until ImgBB's own retention policy removes it. Wording in the
+    // confirm dialog reflects that.
+    const ok = await requestReason({
+      title: 'Remove Upload Record',
+      description:
+        'This removes the database row only. The image file itself remains on the external host (ImgBB).',
+      confirmLabel: 'Remove Record',
+      destructive: true,
+    });
+    if (ok === null) return;
     try {
       await adminDelete('uploads', id);
     } catch (e) {
@@ -1942,20 +2080,63 @@ export function AdminView(props: AdminViewProps) {
                           <div className="space-y-2">
                             <label className="text-[7px] font-black text-slate-400 uppercase tracking-widest ml-2">Match Room Code</label>
                             <div className="flex gap-2">
-                              <input
-                                type="text"
-                                placeholder="Enter Room Code"
-                                defaultValue={t.roomCode || ''}
-                                onBlur={async (e) => {
-                                  await adminUpdate('ludoTournaments', t.id, { roomCode: e.target.value });
-                                }}
-                                className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] font-bold outline-none focus:border-indigo-500"
-                              />
+                              {(() => {
+                                const draft = roomCodeDrafts[t.id] ?? t.roomCode ?? '';
+                                const persisted = t.roomCode ?? '';
+                                const dirty = draft !== persisted;
+                                const saving = savingRoomCode.has(t.id);
+                                return (
+                                  <>
+                                    <input
+                                      type="text"
+                                      placeholder="Enter Room Code"
+                                      value={draft}
+                                      onChange={(e) =>
+                                        setRoomCodeDrafts((prev) => ({ ...prev, [t.id]: e.target.value }))
+                                      }
+                                      className="flex-1 bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] font-bold outline-none focus:border-indigo-500"
+                                    />
+                                    <button
+                                      type="button"
+                                      disabled={!dirty || saving}
+                                      onClick={async () => {
+                                        setSavingRoomCode((prev) => new Set(prev).add(t.id));
+                                        try {
+                                          await adminUpdate('ludoTournaments', t.id, { roomCode: draft });
+                                          // Clear the draft so the field re-syncs with the
+                                          // realtime update from the subscription.
+                                          setRoomCodeDrafts((prev) => {
+                                            const next = { ...prev };
+                                            delete next[t.id];
+                                            return next;
+                                          });
+                                        } catch (e) {
+                                          handleFirestoreError(e, OperationType.UPDATE, `ludoTournaments/${t.id}`);
+                                        } finally {
+                                          setSavingRoomCode((prev) => {
+                                            const next = new Set(prev);
+                                            next.delete(t.id);
+                                            return next;
+                                          });
+                                        }
+                                      }}
+                                      className="px-3 py-3 bg-indigo-600 text-white rounded-xl text-[8px] font-black uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed hover:bg-indigo-700 transition-all"
+                                    >
+                                      {saving ? 'Saving' : 'Save'}
+                                    </button>
+                                  </>
+                                );
+                              })()}
                               <button
                                 onClick={async () => {
-                                  if (confirm('Delete this tournament?')) {
-                                    await adminDelete('ludoTournaments', t.id);
-                                  }
+                                  const ok = await requestReason({
+                                    title: 'Delete Tournament',
+                                    description: 'This permanently removes the tournament and any pending submissions for it.',
+                                    confirmLabel: 'Delete',
+                                    destructive: true,
+                                  });
+                                  if (ok === null) return;
+                                  await adminDelete('ludoTournaments', t.id);
                                 }}
                                 className="p-3 bg-rose-50 text-rose-600 rounded-xl border border-rose-100 hover:bg-rose-600 hover:text-white transition-all"
                               >
@@ -2534,10 +2715,13 @@ export function AdminView(props: AdminViewProps) {
             {/* Global Uploads Tracking */}
             {activeAdminTab === 'uploads' && (
               <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
-                <h4 className="text-xs font-black text-slate-800 uppercase mb-4 flex items-center gap-2">
+                <h4 className="text-xs font-black text-slate-800 uppercase mb-2 flex items-center gap-2">
                   <Upload className="w-4 h-4 text-indigo-500" />
                   Global Image Uploads
                 </h4>
+                <p className="text-[9px] text-slate-400 font-bold mb-4">
+                  Removing an entry deletes the database row only. The image binary itself stays on the external host (ImgBB).
+                </p>
                 <div className="space-y-4">
                   {allUploads.length === 0 ? (
                     <p className="text-[10px] text-slate-400 text-center py-8 uppercase font-bold">No uploads found</p>
@@ -2549,7 +2733,11 @@ export function AdminView(props: AdminViewProps) {
                             <p className="text-xs font-black text-slate-900">{u.userName || 'Unknown'}</p>
                             <p className="text-[8px] text-slate-400 font-bold uppercase tracking-widest">{u.context}</p>
                           </div>
-                          <button onClick={() => handleDeleteUpload(u.id)} className="p-2 text-rose-500 hover:bg-rose-50/50 rounded-lg transition-colors">
+                          <button
+                            onClick={() => handleDeleteUpload(u.id)}
+                            title="Remove upload record (does not delete the image from the host)"
+                            className="p-2 text-rose-500 hover:bg-rose-50/50 rounded-lg transition-colors"
+                          >
                             <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
@@ -2582,6 +2770,7 @@ export function AdminView(props: AdminViewProps) {
           </section>
         </div>
       </div>
+      {reasonPromptUI}
     </div>
   );
 }
