@@ -261,7 +261,7 @@ export default function App() {
   const [spinCost, setSpinCost] = useState(2.00);
   const [dailyReward, setDailyReward] = useState(1.00);
   const [activeFolders, setActiveFolders] = useState<string[]>(['folder-a', 'folder-b', 'folder-c', 'folder-d']);
-  const [enabledFeatures, setEnabledFeatures] = useState<string[]>(['spin', 'daily-claim', 'leaderboard', 'support', 'ads-earn']);
+  const [enabledFeatures, setEnabledFeatures] = useState<string[]>(['spin', 'daily-claim', 'leaderboard', 'ads-earn']);
   const [enabledSmmServices, setEnabledSmmServices] = useState<string[]>(['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
   const [enabledCards, setEnabledCards] = useState<string[]>(INCOME_CARDS.map(c => c.title));
   const [adminGen1Rate, setAdminGen1Rate] = useState(20.00);
@@ -598,7 +598,7 @@ export default function App() {
       setSpinCost(data.spinCost ?? 2);
       setDailyReward(data.dailyReward ?? 1);
       setActiveFolders(data.activeFolders?.length ? data.activeFolders : ['folder-a', 'folder-b', 'folder-c', 'folder-d']);
-      setEnabledFeatures(data.enabledFeatures?.length ? data.enabledFeatures : ['spin', 'daily-claim', 'leaderboard', 'support', 'ads-earn']);
+      setEnabledFeatures(data.enabledFeatures?.length ? data.enabledFeatures : ['spin', 'daily-claim', 'leaderboard', 'ads-earn']);
       setEnabledSmmServices(data.enabledSmmServices?.length ? data.enabledSmmServices : ['fb-like', 'fb-star', 'fb-follow', 'tg-member', 'tg-view', 'tg-star', 'youtube-premium', 'meta-verified']);
       setEnabledCards(data.enabledCards?.length ? data.enabledCards : INCOME_CARDS.map(c => c.title));
       setTotalPaid(data.totalPaid || 550000);
@@ -2003,10 +2003,8 @@ export default function App() {
   );
 
   const AdminView = () => {
-    const [adminUser, setAdminUser] = useState(user);
-    const [selectedUserEmail, setSelectedUserEmail] = useState(user.email);
+    const [adminUser] = useState(user);
     const [notice, setNotice] = useState(globalNotice);
-    const [adminReply, setAdminReply] = useState('');
     const [adminMinWithdrawal, setAdminMinWithdrawal] = useState(minWithdrawal);
     const [adminWithdrawalFee, setAdminWithdrawalFee] = useState(withdrawalFee);
     const [adminDollarBuyRate, setAdminDollarBuyRate] = useState(dollarBuyRate);
@@ -2039,14 +2037,10 @@ export default function App() {
     const [adminEnabledCards, setAdminEnabledCards] = useState(enabledCards);
     const [adminTotalPaid, setAdminTotalPaid] = useState(totalPaid);
     const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
-    const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'recharge' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads' | 'subscriptions'>('gmail');
+    const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads' | 'subscriptions'>('gmail');
     const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
     const [isUploading, setIsUploading] = useState(false);
     const [userSearch, setUserSearch] = useState('');
-    const [referralSearch, setReferralSearch] = useState('');
-    const [balanceAmount, setBalanceAmount] = useState(0);
-    const [newUserName, setNewUserName] = useState('');
-    const [newUserPassword, setNewUserPassword] = useState('');
     const [selectedTasks, setSelectedTasks] = useState<string[]>([]);
     const [selectedMicrojobs, setSelectedMicrojobs] = useState<string[]>([]);
     const [newNews, setNewNews] = useState({ content: '', imageUrl: '' });
@@ -2458,23 +2452,6 @@ export default function App() {
       }
     };
 
-    const seedSampleProduct = async () => {
-      const samples = [
-        { name: 'Premium Smart Watch Z10', price: 1850, resellPrice: 2450, profitPerUnit: 600, description: 'Waterproof smart watch, heart rate + sleep tracking, 10-day battery', category: 'Electronics', variants: 'Black, Silver, Rose Gold', quantityOptions: '1x, 2x, 5x' },
-        { name: 'Wireless Earbuds Pro X3', price: 650, resellPrice: 950, profitPerUnit: 300, description: 'Bluetooth 5.3 earbuds, ANC, 30hr battery with case', category: 'Electronics', variants: 'White, Black', quantityOptions: '1x, 3x, 10x' },
-        { name: 'LED Ring Light 10"', price: 380, resellPrice: 550, profitPerUnit: 170, description: '10-inch ring light with tripod, 3 color modes, USB powered', category: 'Accessories', variants: '10 inch, 12 inch', quantityOptions: '1x, 2x' },
-        { name: 'Phone Holder Car Mount', price: 180, resellPrice: 320, profitPerUnit: 140, description: '360 rotation, dashboard + air vent mount, universal fit', category: 'Accessories', variants: 'Standard, Premium (Suction)', quantityOptions: '1x, 5x, 10x' },
-        { name: 'Portable Mini Fan USB', price: 150, resellPrice: 280, profitPerUnit: 130, description: 'Rechargeable mini desk fan, 3 speeds, quiet motor', category: 'Gadgets', variants: 'White, Pink, Blue', quantityOptions: '1x, 3x, 10x' },
-      ];
-      const sample = samples[Math.floor(Math.random() * samples.length)];
-      try {
-        await adminInsert('products', { ...sample, image: '' });
-        confetti({ particleCount: 100, spread: 70 });
-      } catch (e) {
-        handleFirestoreError(e, OperationType.CREATE, 'products');
-      }
-    };
-
     const addProduct = async () => {
       if (!newProduct.name || newProduct.price <= 0) {
         alert('Please fill all required fields');
@@ -2657,170 +2634,6 @@ export default function App() {
           </div>
 
           <div className="space-y-8">
-            {/* Quick System Actions */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm border border-indigo-500/20 shadow-sm">⚡</div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Live Control Hub</h3>
-              </div>
-              <div className="grid grid-cols-3 gap-3">
-                <button
-                  onClick={() => setAdminMaintenance(!adminMaintenance)}
-                  className={`p-4 rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all ${adminMaintenance ? 'bg-rose-500 border-rose-400 text-white shadow-lg scale-105' : 'bg-white border-slate-100 text-slate-600 hover:border-rose-500'}`}
-                >
-                  <ShieldAlert className="w-5 h-5" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Maintenance</span>
-                </button>
-                <button
-                  onClick={() => setView('home')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Globe className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Live Site</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('tasks')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
-                >
-                  <PlusCircle className="w-5 h-5 text-emerald-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Add Task</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('withdrawals')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-amber-500 hover:bg-amber-50/30"
-                >
-                  <CreditCard className="w-5 h-5 text-amber-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Payouts</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('recharge')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Smartphone className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Recharge</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('drive-requests')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-amber-500 hover:bg-amber-50/30"
-                >
-                  <Zap className="w-5 h-5 text-amber-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Drive Req</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('drive-offers')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
-                >
-                  <PlusCircle className="w-5 h-5 text-emerald-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">D-Offers</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('products')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-pink-500 hover:bg-pink-50/30"
-                >
-                  <ShoppingBag className="w-5 h-5 text-pink-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Products</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('product-orders')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Package className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Orders</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('tasks')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Briefcase className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Tasks</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('microjobs')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-emerald-500 hover:bg-emerald-50/30"
-                >
-                  <Zap className="w-5 h-5 text-emerald-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Microjobs</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('users')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Users className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Users</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('ludo')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-orange-500 hover:bg-orange-50/30"
-                >
-                  <Trophy className="w-5 h-5 text-orange-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Ludo</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('smm')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Zap className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">SMM Panel</span>
-                </button>
-                <button
-                  onClick={() => setActiveAdminTab('news')}
-                  className="p-4 rounded-2xl border bg-white border-slate-100 text-slate-600 flex flex-col items-center justify-center gap-2 transition-all hover:border-indigo-500 hover:bg-indigo-50/30"
-                >
-                  <Newspaper className="w-5 h-5 text-indigo-500" />
-                  <span className="text-[7px] font-black uppercase tracking-widest text-center">Top News</span>
-                </button>
-              </div>
-            </section>
-
-            {/* System Health Monitor */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 font-black text-sm border border-emerald-500/20 shadow-sm">📊</div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">System Health</h3>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="glass-card border-white/40 shadow-sm p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Activity className="w-4 h-4 text-emerald-500" />
-                    <span className="text-[8px] font-black text-emerald-500 uppercase">Live</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Server Latency</p>
-                  <p className="text-xl font-black text-slate-900 font-mono">24ms</p>
-                </div>
-                <div className="glass-card border-white/40 shadow-sm p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <Wifi className="w-4 h-4 text-indigo-500" />
-                    <span className="text-[8px] font-black text-indigo-500 uppercase">Stable</span>
-                  </div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Active Links</p>
-                  <p className="text-xl font-black text-slate-900 font-mono">{dynamicTasks.length}</p>
-                </div>
-              </div>
-            </section>
-
-            {/* Live Activity Feed */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 font-black text-sm border border-emerald-500/20 shadow-sm">📡</div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Live Activity Feed</h3>
-              </div>
-              <div className="glass-card border-white/40 shadow-lg p-0 overflow-hidden">
-                <div className="h-32 overflow-y-auto p-4 space-y-2 font-mono text-[9px]">
-                  {[...gmailSubmissions, ...taskSubmissions, ...microjobSubmissions, ...withdrawals]
-                    .sort((a, b) => b.timestamp - a.timestamp)
-                    .slice(0, 10)
-                    .map((item, i) => (
-                      <div key={i} className="flex items-center gap-2 text-slate-500 border-b border-slate-50 pb-1 last:border-0">
-                        <span className="text-indigo-500 font-bold">[{new Date(item.timestamp).toLocaleTimeString()}]</span>
-                        <span className="text-slate-800 font-black">USER_{item.userId.slice(0, 4)}</span>
-                        <span>performed</span>
-                        <span className="px-1 bg-slate-100 rounded text-slate-600 uppercase">{'amount' in item ? 'WITHDRAWAL' : 'SUBMISSION'}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </section>
-
             {/* System Configuration */}
             <section className="space-y-4">
               <div className="flex items-center gap-3 mb-2">
@@ -3047,6 +2860,27 @@ export default function App() {
                       className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                     />
                   </div>
+                  <div className="space-y-1">
+                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Delivery Fee (৳)</label>
+                    <input
+                      type="number"
+                      value={adminDeliveryFee}
+                      onChange={e => setAdminDeliveryFee(parseFloat(e.target.value) || 0)}
+                      className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-rose-500/5 rounded-2xl border border-rose-500/20">
+                  <div>
+                    <p className="text-xs font-black text-rose-600 uppercase tracking-widest">Maintenance Mode</p>
+                    <p className="text-[10px] text-slate-500 mt-1">Lock all application features for non-admins</p>
+                  </div>
+                  <button
+                    onClick={() => setAdminMaintenance(!adminMaintenance)}
+                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${adminMaintenance ? 'bg-rose-500 shadow-md' : 'bg-slate-200'}`}
+                  >
+                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${adminMaintenance ? 'right-1' : 'left-1'}`} />
+                  </button>
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Rules Text</label>
@@ -3075,304 +2909,6 @@ export default function App() {
               </div>
             </section>
 
-            {/* User Management */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm border border-indigo-500/20 shadow-sm">01</div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">User Management</h3>
-              </div>
-              <div className="glass-card space-y-5 border-white/40 shadow-lg">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Search by Email/Name</label>
-                    <input
-                      type="text"
-                      placeholder="Search..."
-                      value={userSearch}
-                      onChange={e => setUserSearch(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Search by Referral ID</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        placeholder="ID..."
-                        value={referralSearch}
-                        onChange={e => setReferralSearch(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                      />
-                      <button
-                        onClick={() => {
-                          const u = allUsers.find(u => u.numericId === referralSearch);
-                          if (u) {
-                            setAdminUser(u);
-                            setSelectedUserEmail(u.email);
-                            setNewUserName(u.name);
-                            setNewUserPassword(u.password || '');
-                          } else {
-                            alert('User not found!');
-                          }
-                        }}
-                        className="bg-indigo-600 text-white px-4 rounded-2xl font-bold text-xs"
-                      >
-                        Find
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Select User</label>
-                  <select
-                    value={selectedUserEmail}
-                    onChange={(e) => {
-                      const u = allUsers.find(u => u.email === e.target.value);
-                      if (u) {
-                        setAdminUser(u);
-                        setSelectedUserEmail(u.email);
-                        setNewUserName(u.name);
-                        setNewUserPassword(u.password || '');
-                      }
-                    }}
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                  >
-                    {allUsers.filter(u =>
-                      u.email.toLowerCase().includes(userSearch.toLowerCase()) ||
-                      u.name.toLowerCase().includes(userSearch.toLowerCase())
-                    ).map(u => (
-                      <option key={u.id} value={u.email}>{u.name} ({u.email})</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-black text-slate-800 uppercase">Balance Control</h4>
-                    <p className="text-[10px] font-bold text-indigo-600">Current: ৳{adminUser.mainBalance.toFixed(2)}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <input
-                      type="number"
-                      value={balanceAmount}
-                      onChange={e => setBalanceAmount(parseFloat(e.target.value) || 0)}
-                      className="flex-1 bg-white border border-slate-200 rounded-xl px-4 py-2 text-sm font-bold outline-none focus:border-indigo-500"
-                      placeholder="Amount"
-                    />
-                    <button
-                      onClick={() => setAdminUser({ ...adminUser, mainBalance: adminUser.mainBalance + balanceAmount })}
-                      className="bg-emerald-500 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase"
-                    >
-                      Add
-                    </button>
-                    <button
-                      onClick={() => setAdminUser({ ...adminUser, mainBalance: Math.max(0, adminUser.mainBalance - balanceAmount) })}
-                      className="bg-rose-500 text-white px-4 py-2 rounded-xl font-bold text-[10px] uppercase"
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Change Name</label>
-                    <input
-                      type="text"
-                      value={newUserName}
-                      onChange={e => {
-                        setNewUserName(e.target.value);
-                        setAdminUser({ ...adminUser, name: e.target.value });
-                      }}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Change Password</label>
-                    <input
-                      type="text"
-                      value={newUserPassword}
-                      onChange={e => {
-                        setNewUserPassword(e.target.value);
-                        setAdminUser({ ...adminUser, password: e.target.value });
-                      }}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Email Address</label>
-                    <input
-                      type="text"
-                      value={adminUser.email}
-                      onChange={e => setAdminUser({ ...adminUser, email: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Age</label>
-                    <input
-                      type="number"
-                      value={adminUser.age}
-                      onChange={e => setAdminUser({ ...adminUser, age: parseInt(e.target.value) || 0 })}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-black font-bold outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Main Balance (৳)</label>
-                    <input
-                      type="number"
-                      value={adminUser.mainBalance}
-                      onChange={e => setAdminUser({ ...adminUser, mainBalance: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-emerald-50 border border-emerald-100 rounded-2xl px-4 py-4 text-sm text-emerald-700 font-black outline-none focus:border-emerald-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Total Earned (৳)</label>
-                    <input
-                      type="number"
-                      value={adminUser.totalEarned}
-                      onChange={e => setAdminUser({ ...adminUser, totalEarned: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-indigo-50 border border-indigo-100 rounded-2xl px-4 py-4 text-sm text-indigo-700 font-black outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Pending Payout (৳)</label>
-                    <input
-                      type="number"
-                      value={adminUser.pendingPayout}
-                      onChange={e => setAdminUser({ ...adminUser, pendingPayout: parseFloat(e.target.value) || 0 })}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Rank</label>
-                    <input
-                      type="text"
-                      value={adminUser.rank}
-                      onChange={e => setAdminUser({ ...adminUser, rank: e.target.value })}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="flex items-center justify-between p-5 bg-indigo-500/5 rounded-2xl border border-indigo-500/20">
-                  <div>
-                    <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Account Activation</p>
-                    <p className="text-[10px] text-slate-500 mt-1">{adminUser.isActive ? 'Active' : 'Inactive'}</p>
-                  </div>
-                  <button
-                    onClick={() => setAdminUser({ ...adminUser, isActive: !adminUser.isActive })}
-                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${adminUser.isActive ? 'bg-indigo-500 shadow-md' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${adminUser.isActive ? 'right-1' : 'left-1'}`} />
-                  </button>
-                </div>
-                <button
-                  onClick={async () => {
-                    if (confirm(`Are you sure you want to DELETE user ${adminUser.email}? This cannot be undone.`)) {
-                      try {
-                        await adminDelete('users', adminUser.id);
-                        alert('User deleted successfully!');
-                        // Refresh users list or select another user
-                      } catch (e) {
-                        handleFirestoreError(e, OperationType.DELETE, `users/${adminUser.id}`);
-                      }
-                    }
-                  }}
-                  className="w-full py-4 bg-rose-50 text-rose-600 border border-rose-100 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-sm active:scale-95 transition-all"
-                >
-                  Delete User Account
-                </button>
-              </div>
-            </section>
-
-            {/* Global Settings */}
-            <section className="space-y-4">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center text-purple-600 font-black text-sm border border-purple-500/20 shadow-sm">02</div>
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Global Configuration</h3>
-              </div>
-              <div className="glass-card space-y-5 border-white/40 shadow-lg">
-                <div className="flex items-center justify-between p-5 bg-rose-500/5 rounded-2xl border border-rose-500/20">
-                  <div>
-                    <p className="text-xs font-black text-rose-600 uppercase tracking-widest">Maintenance Mode</p>
-                    <p className="text-[10px] text-slate-500 mt-1">Lock all application features</p>
-                  </div>
-                  <button
-                    onClick={() => setAdminMaintenance(!adminMaintenance)}
-                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${adminMaintenance ? 'bg-rose-500 shadow-md' : 'bg-slate-200'}`}
-                  >
-                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${adminMaintenance ? 'right-1' : 'left-1'}`} />
-                  </button>
-                </div>
-                <div>
-                  <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Global Notice Broadcast</label>
-                  <textarea
-                    value={notice}
-                    onChange={e => setNotice(e.target.value)}
-                    rows={3}
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 resize-none shadow-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Min Withdrawal (৳)</label>
-                    <input
-                      type="number"
-                      value={adminMinWithdrawal}
-                      onChange={e => setAdminMinWithdrawal(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Spin Cost (৳)</label>
-                    <input
-                      type="number"
-                      value={adminSpinCost}
-                      onChange={e => setAdminSpinCost(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Daily Reward (৳)</label>
-                    <input
-                      type="number"
-                      value={adminDailyReward}
-                      onChange={e => setAdminDailyReward(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Ad Reward (৳)</label>
-                    <input
-                      type="number"
-                      value={adminAdReward}
-                      onChange={e => setAdminAdReward(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-500 uppercase mb-2 block">Delivery Fee (৳)</label>
-                    <input
-                      type="number"
-                      value={adminDeliveryFee}
-                      onChange={e => setAdminDeliveryFee(parseFloat(e.target.value) || 0)}
-                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-4 text-sm text-slate-900 outline-none focus:border-indigo-500 shadow-sm"
-                    />
-                  </div>
-                </div>
-              </div>
-            </section>
-
             {/* Feature Toggles */}
             <section className="space-y-4">
               <div className="flex items-center gap-3 mb-2">
@@ -3387,7 +2923,6 @@ export default function App() {
                       { id: 'spin', label: 'Spin & Win' },
                       { id: 'daily-claim', label: 'Daily Claim' },
                       { id: 'leaderboard', label: 'Leaderboard' },
-                      { id: 'support', label: 'Support Chat' },
                       { id: 'ads-earn', label: 'Ads Earn' },
                       { id: 'mobile-recharge', label: 'Mobile Recharge' },
                       { id: 'drive-offer', label: 'Drive Offer' }
@@ -4418,34 +3953,6 @@ export default function App() {
                 </div>
               )}
 
-              {/* Recharge Requests */}
-              {activeAdminTab === 'recharge' && (
-                <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  <h4 className="text-xs font-black text-slate-800 uppercase mb-4 flex items-center gap-2">
-                    <Smartphone className="w-4 h-4 text-indigo-500" />
-                    Recharge Requests
-                  </h4>
-                  <div className="space-y-3">
-                    {rechargeRequests.filter(r => r.status === 'pending').length === 0 ? (
-                      <p className="text-[10px] text-slate-400 text-center py-4 uppercase font-bold">No pending recharges</p>
-                    ) : (
-                      rechargeRequests.filter(r => r.status === 'pending').map(r => (
-                        <div key={r.id} className="p-4 bg-white rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
-                          <div>
-                            <p className="text-xs font-black text-slate-900">৳ {r.amount}</p>
-                            <p className="text-[10px] text-slate-400">{r.operator} • {r.phone} • {r.type}</p>
-                          </div>
-                          <div className="flex gap-2">
-                            <button onClick={() => handleRechargeAction(r.id, 'approved')} disabled={processingIds.has(r.id)} className={`p-2 bg-emerald-500/20 text-emerald-600 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(r.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
-                            <button onClick={() => handleRechargeAction(r.id, 'rejected')} disabled={processingIds.has(r.id)} className={`p-2 bg-rose-500/20 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all ${processingIds.has(r.id) ? 'opacity-50 cursor-not-allowed' : ''}`}><X className="w-4 h-4" /></button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              )}
-
               {/* Drive Offer Requests */}
               {activeAdminTab === 'drive-requests' && (
                 <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -4657,22 +4164,12 @@ export default function App() {
                         </label>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <button
-                        onClick={addProduct}
-                        className="flex-1 py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all bg-pink-500 hover:bg-pink-600"
-                      >
-                        Add Product
-                      </button>
-                      <button
-                        onClick={seedSampleProduct}
-                        className="px-4 py-3 bg-indigo-600 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center gap-2"
-                        title="Post AI Sample Product"
-                      >
-                        <Zap className="w-4 h-4" />
-                        AI POST
-                      </button>
-                    </div>
+                    <button
+                      onClick={addProduct}
+                      className="w-full py-3 text-white rounded-xl font-black text-[10px] uppercase tracking-widest shadow-lg active:scale-95 transition-all bg-pink-500 hover:bg-pink-600"
+                    >
+                      Add Product
+                    </button>
                   </div>
 
                   <div className="mt-8 pt-8 border-t border-slate-100">
@@ -4873,13 +4370,6 @@ export default function App() {
                 </div>
               )}
             </section>
-
-            <button
-              onClick={saveChanges}
-              className="w-full py-5 bg-gradient-to-r from-indigo-500 to-violet-600 text-white rounded-2xl font-black text-sm uppercase tracking-[0.2em] shadow-xl active:scale-95 transition-all"
-            >
-              Commit System Changes
-            </button>
           </div>
         </div>
       </div>
