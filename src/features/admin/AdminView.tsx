@@ -39,6 +39,31 @@ import type {
 } from '../../types';
 import { INCOME_CARDS, SMM_SERVICES } from '../../constants';
 
+/**
+ * Single source of truth for the active admin tab. Adding a tab here
+ * automatically widens the `useState` and the `setActiveAdminTab` cast
+ * below so the two can't drift apart.
+ */
+export type AdminTab =
+  | 'gmail'
+  | 'facebook'
+  | 'withdrawals'
+  | 'microjobs'
+  | 'tasks'
+  | 'drive-requests'
+  | 'drive-offers'
+  | 'products'
+  | 'product-orders'
+  | 'dollar-buy'
+  | 'deposits'
+  | 'users'
+  | 'ludo'
+  | 'smm'
+  | 'news'
+  | 'social'
+  | 'uploads'
+  | 'subscriptions';
+
 export interface AdminViewProps {
   // Navigation
   view: View;
@@ -158,7 +183,7 @@ export function AdminView(props: AdminViewProps) {
   const [adminEnabledCards, setAdminEnabledCards] = useState(enabledCards);
   const [adminTotalPaid, setAdminTotalPaid] = useState(totalPaid);
   const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
-  const [activeAdminTab, setActiveAdminTab] = useState<'gmail' | 'facebook' | 'withdrawals' | 'microjobs' | 'tasks' | 'drive-requests' | 'drive-offers' | 'products' | 'product-orders' | 'dollar-buy' | 'deposits' | 'users' | 'ludo' | 'smm' | 'news' | 'social' | 'uploads' | 'subscriptions'>('gmail');
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('gmail');
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   const [isUploading, setIsUploading] = useState(false);
   const [userSearch, setUserSearch] = useState('');
@@ -322,6 +347,41 @@ export function AdminView(props: AdminViewProps) {
   const [newProduct, setNewProduct] = useState({ name: '', price: 0, resellPrice: 0, profitPerUnit: 0, description: '', category: '', image: '', variants: '', quantityOptions: '' });
 
   const saveChanges = async () => {
+    // Reject NaN and negative values before writing to the database. The
+    // settings schema treats these as configuration that the rest of the
+    // app reads back, so silently saving NaN here would cascade into
+    // every income calculation downstream.
+    const numericFields: { label: string; value: number }[] = [
+      { label: 'Min Withdrawal', value: adminMinWithdrawal },
+      { label: 'Withdrawal Fee (%)', value: adminWithdrawalFee },
+      { label: 'Spin Cost', value: adminSpinCost },
+      { label: 'Daily Reward', value: adminDailyReward },
+      { label: 'Total Paid', value: adminTotalPaid },
+      { label: 'Active Workers', value: adminActiveWorkerCount },
+      { label: 'Gmail Reward', value: adminGmailReward },
+      { label: 'Ad Reward', value: adminAdReward },
+      { label: 'Daily Ad Limit', value: adminDailyAdLimit },
+      { label: 'Delivery Fee', value: adminDeliveryFee },
+      { label: 'Gen 1 Rate', value: localGen1Rate },
+      { label: 'Gen 2 Rate', value: localGen2Rate },
+      { label: 'Gen 3 Rate', value: localGen3Rate },
+      { label: 'Dollar Buy Rate', value: adminDollarBuyRate },
+      { label: 'Dollar Sell Rate', value: adminDollarSellRate },
+      { label: 'Activation Fee', value: adminActivationFee },
+      { label: 'Recharge Commission', value: adminRechargeCommissionRate },
+      { label: 'Activation Duration', value: adminActivationDuration },
+      { label: 'Referral Commission (%)', value: adminReferralCommissionRate },
+      { label: 'Referral Activation Bonus', value: adminReferralActivationBonus },
+    ];
+    const invalid = numericFields.find(
+      f => !Number.isFinite(f.value) || f.value < 0,
+    );
+    if (invalid) {
+      alert(
+        `Invalid value for "${invalid.label}". Numeric settings must be a finite number >= 0.`,
+      );
+      return;
+    }
     try {
       const settingsRef_id = 'global';
       await adminUpsert('settings', {
@@ -1142,7 +1202,7 @@ export function AdminView(props: AdminViewProps) {
               ].map(tab => (
                 <button
                   key={tab.id}
-                  onClick={() => setActiveAdminTab(tab.id as typeof activeAdminTab)}
+                  onClick={() => setActiveAdminTab(tab.id as AdminTab)}
                   className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${activeAdminTab === tab.id
                       ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
                       : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
@@ -2390,6 +2450,35 @@ export function AdminView(props: AdminViewProps) {
                                   <p className="text-[10px] text-slate-400">৳ {o.amount} • {o.phone}</p>
                                 </div>
                                 <span className="text-[8px] font-black bg-indigo-100 text-indigo-600 px-2 py-1 rounded-full uppercase">Processing</span>
+                              </div>
+                              <div className="flex gap-2">
+                                <button onClick={() => handleProductOrderAction(o.id, 'shipped')} className="flex-1 py-2 bg-amber-500 text-white rounded-xl font-black text-[8px] uppercase tracking-widest">Mark Shipped</button>
+                                <button onClick={() => handleProductOrderAction(o.id, 'cancelled')} className="p-2 bg-rose-500/20 text-rose-500 rounded-xl"><X className="w-4 h-4" /></button>
+                              </div>
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Shipped Orders */}
+                  <div>
+                    <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Shipped Orders</h5>
+                    <div className="space-y-3">
+                      {productOrders.filter(o => o.status === 'shipped').length === 0 ? (
+                        <p className="text-[10px] text-slate-400 text-center py-4 uppercase font-bold">No orders in transit</p>
+                      ) : (
+                        productOrders.filter(o => o.status === 'shipped').map(o => {
+                          const product = products.find(p => p.id === o.productId);
+                          return (
+                            <div key={o.id} className="p-4 bg-white rounded-2xl border border-slate-100 space-y-3 shadow-sm">
+                              <div className="flex justify-between items-start">
+                                <div>
+                                  <p className="text-xs font-black text-slate-900">{product?.name || 'Product'}</p>
+                                  <p className="text-[10px] text-slate-400">৳ {o.amount} • {o.phone}</p>
+                                </div>
+                                <span className="text-[8px] font-black bg-amber-100 text-amber-600 px-2 py-1 rounded-full uppercase">Shipped</span>
                               </div>
                               <div className="flex gap-2">
                                 <button onClick={() => handleProductOrderAction(o.id, 'delivered')} className="flex-1 py-2 bg-emerald-500 text-white rounded-xl font-black text-[8px] uppercase tracking-widest">Mark Delivered</button>
