@@ -208,10 +208,12 @@ export type {
 export default function App() {
   const [view, setView] = useState<View>(() => {
     // Password reset link lands on /reset-password?token=...
-    // We detect the path at startup so the SPA can render the reset view
-    // without pulling in a router dependency.
-    if (typeof window !== 'undefined' && window.location.pathname === '/reset-password') {
-      return 'reset-password';
+    // Admin panel has its own dedicated route at /admin.
+    // We detect the path at startup so the SPA can render the right
+    // view without pulling in a router dependency.
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname === '/reset-password') return 'reset-password';
+      if (window.location.pathname === '/admin') return 'admin';
     }
     return 'login';
   });
@@ -368,6 +370,55 @@ export default function App() {
     }
   }, [isAuthReady, isLoggedIn, view, needsEmailVerification]);
 
+  // --- /admin route guard ---
+  // If the user lands on /admin but is not actually an admin (or auth has
+  // resolved as logged-out), bounce them off the admin view and clear the
+  // URL. This complements the in-component permission checks inside
+  // AdminView itself.
+  useEffect(() => {
+    if (!isAuthReady) return;
+    if (view !== 'admin') return;
+    if (!isLoggedIn || !isAdmin) {
+      if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
+        window.history.replaceState({}, '', '/');
+      }
+      setView(isLoggedIn ? 'home' : 'login');
+    }
+  }, [isAuthReady, isLoggedIn, isAdmin, view]);
+
+  // --- Sync URL <-> view for the dedicated /admin route ---
+  // The SPA does not use a router, so we manually mirror the admin view
+  // to the /admin pathname (and clear it when navigating elsewhere) so
+  // the page is bookmarkable and the browser back button behaves.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const path = window.location.pathname;
+    if (view === 'admin' && path !== '/admin') {
+      window.history.pushState({}, '', '/admin');
+    } else if (view !== 'admin' && view !== 'reset-password' && path === '/admin') {
+      window.history.pushState({}, '', '/');
+    }
+  }, [view]);
+
+  // --- Browser back/forward support for /admin ---
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPopState = () => {
+      const path = window.location.pathname;
+      if (path === '/admin') {
+        setView('admin');
+      } else if (path === '/reset-password') {
+        setView('reset-password');
+      } else if (isLoggedIn) {
+        setView('home');
+      } else {
+        setView('login');
+      }
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, [isLoggedIn]);
+
   // --- Login Animation ---
   useEffect(() => {
     if (isLoggedIn && view === 'home') {
@@ -375,7 +426,7 @@ export default function App() {
         particleCount: 150,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#D4AF37', '#6366f1', '#a855f7']
+        colors: ['#6366f1', '#6366f1', '#a855f7']
       });
     }
   }, [isLoggedIn, view]);
@@ -995,10 +1046,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col items-center justify-center p-8 relative overflow-hidden bg-[#fcfaf7]">
       {/* Animated Background Elements */}
       <div className="absolute top-0 left-0 w-full h-full">
-        <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-[#D4AF37]/10 blur-[120px] rounded-full animate-pulse" />
-        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#C5A028]/5 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
+        <div className="absolute top-[-20%] right-[-10%] w-[500px] h-[500px] bg-[#6366f1]/10 blur-[120px] rounded-full animate-pulse" />
+        <div className="absolute bottom-[-20%] left-[-10%] w-[500px] h-[500px] bg-[#7c3aed]/5 blur-[120px] rounded-full animate-pulse" style={{ animationDelay: '2s' }} />
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full opacity-[0.05] pointer-events-none"
-          style={{ backgroundImage: 'radial-gradient(#D4AF37 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+          style={{ backgroundImage: 'radial-gradient(#6366f1 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
       </div>
 
       {/* Hamburger Menu -- top-left, matching the post-login nav position */}
@@ -1009,7 +1060,7 @@ export default function App() {
           aria-haspopup="menu"
           aria-expanded={showAuthMenu}
           onClick={() => setShowAuthMenu((v) => !v)}
-          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#D4AF37] to-[#C5A028] border border-white/40 shadow-[0_8px_24px_-6px_rgba(212,175,55,0.45)] flex items-center justify-center text-white hover:shadow-[0_12px_28px_-4px_rgba(212,175,55,0.6)] hover:scale-105 active:scale-95 transition-all"
+          className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#6366f1] to-[#7c3aed] border border-white/40 shadow-[0_8px_24px_-6px_rgba(99,102,241,0.45)] flex items-center justify-center text-white hover:shadow-[0_12px_28px_-4px_rgba(99,102,241,0.6)] hover:scale-105 active:scale-95 transition-all"
         >
           <Menu className="w-5 h-5" strokeWidth={2.5} />
         </button>
@@ -1021,7 +1072,7 @@ export default function App() {
               exit={{ opacity: 0, scale: 0.95, y: -4 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
               role="menu"
-              className="absolute left-0 mt-2 w-56 bg-white border border-[#D4AF37]/20 rounded-2xl shadow-xl overflow-hidden"
+              className="absolute left-0 mt-2 w-56 bg-white border border-[#6366f1]/20 rounded-2xl shadow-xl overflow-hidden"
             >
               <button
                 type="button"
@@ -1030,7 +1081,7 @@ export default function App() {
                   setShowInfoModal('info');
                   setShowAuthMenu(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors"
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#7c3aed] hover:bg-[#6366f1]/10 transition-colors"
               >
                 <Info className="w-3.5 h-3.5" />
                 <span>Website Info</span>
@@ -1042,7 +1093,7 @@ export default function App() {
                   alert('Upcoming Feature!');
                   setShowAuthMenu(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors border-t border-[#D4AF37]/10"
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#7c3aed] hover:bg-[#6366f1]/10 transition-colors border-t border-[#6366f1]/10"
               >
                 <HelpCircle className="w-3.5 h-3.5" />
                 <span>Help Center</span>
@@ -1054,7 +1105,7 @@ export default function App() {
                   setShowInfoModal('freelance');
                   setShowAuthMenu(false);
                 }}
-                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#C5A028] hover:bg-[#D4AF37]/10 transition-colors border-t border-[#D4AF37]/10"
+                className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#7c3aed] hover:bg-[#6366f1]/10 transition-colors border-t border-[#6366f1]/10"
               >
                 <Briefcase className="w-3.5 h-3.5" />
                 <span>Freelancing</span>
@@ -1070,21 +1121,21 @@ export default function App() {
         transition={{ duration: 0.8, ease: "easeOut" }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="bg-white border border-[#D4AF37]/20 rounded-[40px] p-10 shadow-[0_32px_64px_-16px_rgba(212,175,55,0.15)]">
+        <div className="bg-white border border-[#6366f1]/20 rounded-[40px] p-10 shadow-[0_32px_64px_-16px_rgba(99,102,241,0.15)]">
           <div className="flex flex-col items-center mb-10">
-            <div className="w-20 h-20 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6 relative group">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#6366f1] to-[#7c3aed] rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)] mb-6 relative group">
               <div className="absolute inset-0 bg-white/20 rounded-3xl blur-xl group-hover:blur-2xl transition-all opacity-0 group-hover:opacity-100" />
               <Wallet className="w-10 h-10 text-white relative z-10" />
             </div>
-            <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-2">Top Earning <span className="text-[#D4AF37]">Elite</span></h1>
+            <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-2">Top Earning <span className="text-[#6366f1]">Elite</span></h1>
 
             {isRegistering ? (
               <div className="text-center">
-                <p className="text-[#D4AF37] font-black text-[10px] uppercase tracking-[0.4em] mb-2">The Future of Digital Work</p>
+                <p className="text-[#6366f1] font-black text-[10px] uppercase tracking-[0.4em] mb-2">The Future of Digital Work</p>
                 <h2 className="text-lg font-bold text-slate-600">Join the Global Network</h2>
                 <p className="text-[9px] font-bold text-slate-400 mt-2 uppercase tracking-widest">Start your journey to financial freedom today.</p>
-                <div className="mt-4 p-3 bg-[#D4AF37]/5 rounded-2xl border border-[#D4AF37]/10">
-                  <p className="text-[9px] font-black text-[#C5A028] uppercase tracking-widest leading-relaxed">
+                <div className="mt-4 p-3 bg-[#6366f1]/5 rounded-2xl border border-[#6366f1]/10">
+                  <p className="text-[9px] font-black text-[#7c3aed] uppercase tracking-widest leading-relaxed">
                     স্মার্ট ইনকাম করুন, স্মার্টলি জীবন গড়ুন। আমাদের সাথে যুক্ত হয়ে প্রতিদিন আয় করুন এবং আপনার স্বপ্ন পূরণ করুন।
                   </p>
                 </div>
@@ -1099,77 +1150,77 @@ export default function App() {
               <>
                 <div className="space-y-4">
                   <div className="relative group">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type="text"
                       placeholder="Your Name"
                       value={regData.name}
                       onChange={e => setRegData({ ...regData, name: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type="text"
                       placeholder="Mobile Number"
                       value={regData.phone}
                       onChange={e => setRegData({ ...regData, phone: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type="email"
                       placeholder="Email Address"
                       value={regData.email}
                       onChange={e => setRegData({ ...regData, email: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="Password (min 6 digit)"
                       value={regData.password}
                       onChange={e => setRegData({ ...regData, password: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                     <button
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#D4AF37] uppercase"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#6366f1] uppercase"
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
                   </div>
                   <div className="relative group">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="Again Password"
                       value={regData.confirmPassword}
                       onChange={e => setRegData({ ...regData, confirmPassword: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Users className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type="text"
                       placeholder="Referral Code (required for new users)"
                       value={regData.refCode}
                       onChange={e => setRegData({ ...regData, refCode: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <select
                       value={regData.country}
                       onChange={e => setRegData({ ...regData, country: e.target.value })}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all appearance-none"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all appearance-none"
                     >
                       <option value="Bangladesh">Bangladesh</option>
                       <option value="India">India</option>
@@ -1183,7 +1234,7 @@ export default function App() {
                       id="reg-terms"
                       checked={regAccepted}
                       onChange={e => setRegAccepted(e.target.checked)}
-                      className="w-4 h-4 accent-[#D4AF37]"
+                      className="w-4 h-4 accent-[#6366f1]"
                     />
                     <label htmlFor="reg-terms" className="text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer">
                       I accept all rules and conditions
@@ -1193,7 +1244,7 @@ export default function App() {
 
                 <button
                   onClick={handleEmailRegister}
-                  className="w-full bg-gradient-to-r from-[#D4AF37] to-[#C5A028] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(212,175,55,0.3)] active:scale-95 transition-all mt-4"
+                  className="w-full bg-gradient-to-r from-[#6366f1] to-[#7c3aed] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(99,102,241,0.3)] active:scale-95 transition-all mt-4"
                 >
                   Register
                 </button>
@@ -1206,41 +1257,41 @@ export default function App() {
 
                 <button
                   onClick={handleGoogleLogin}
-                  className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#D4AF37]/30 hover:text-[#C5A028] transition-all shadow-sm active:scale-95"
+                  className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#6366f1]/30 hover:text-[#7c3aed] transition-all shadow-sm active:scale-95"
                 >
                   <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" referrerPolicy="no-referrer" />
                   <span>Sign Up with Google</span>
                 </button>
 
-                <button onClick={() => setIsRegistering(false)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-4 hover:text-[#D4AF37] transition-colors">
-                  Existing Member? <span className="text-[#D4AF37] underline">Sign In</span>
+                <button onClick={() => setIsRegistering(false)} className="w-full text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mt-4 hover:text-[#6366f1] transition-colors">
+                  Existing Member? <span className="text-[#6366f1] underline">Sign In</span>
                 </button>
               </>
             ) : (
               <>
                 <div className="space-y-4">
                   <div className="relative group">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type="text"
                       placeholder="Number or Email"
                       value={loginEmail}
                       onChange={e => setLoginEmail(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                   </div>
                   <div className="relative group">
-                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#D4AF37] transition-colors" />
+                    <Key className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 group-focus-within:text-[#6366f1] transition-colors" />
                     <input
                       type={showPassword ? "text" : "password"}
                       placeholder="Password"
                       value={loginPassword}
                       onChange={e => setLoginPassword(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#D4AF37]/50 focus:bg-white transition-all"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 pl-12 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-[#6366f1]/50 focus:bg-white transition-all"
                     />
                     <button
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#D4AF37] uppercase"
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-black text-[#6366f1] uppercase"
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -1253,7 +1304,7 @@ export default function App() {
                         id="login-terms"
                         checked={loginAccepted}
                         onChange={e => setLoginAccepted(e.target.checked)}
-                        className="w-4 h-4 accent-[#D4AF37]"
+                        className="w-4 h-4 accent-[#6366f1]"
                       />
                       <label htmlFor="login-terms" className="text-[10px] font-bold text-slate-500 uppercase tracking-widest cursor-pointer">
                         I accept all rules
@@ -1262,7 +1313,7 @@ export default function App() {
                     <button
                       onClick={handlePasswordReset}
                       type="button"
-                      className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest hover:underline transition-all"
+                      className="text-[10px] font-black text-[#6366f1] uppercase tracking-widest hover:underline transition-all"
                     >
                       Forgot Password?
                     </button>
@@ -1271,7 +1322,7 @@ export default function App() {
 
                 <button
                   onClick={handleEmailLogin}
-                  className="w-full bg-gradient-to-r from-[#D4AF37] via-[#C5A028] to-[#D4AF37] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(212,175,55,0.4)] hover:shadow-[0_25px_50px_-12px_rgba(212,175,55,0.5)] active:scale-[0.98] transition-all mt-4 relative overflow-hidden group"
+                  className="w-full bg-gradient-to-r from-[#6366f1] via-[#7c3aed] to-[#6366f1] text-white py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-[0_20px_40px_-10px_rgba(99,102,241,0.4)] hover:shadow-[0_25px_50px_-12px_rgba(99,102,241,0.5)] active:scale-[0.98] transition-all mt-4 relative overflow-hidden group"
                 >
                   <div className="absolute inset-0 bg-white/20 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 skew-x-[-20deg]" />
                   <span className="relative z-10">Login Now</span>
@@ -1286,7 +1337,7 @@ export default function App() {
                 <div className="grid grid-cols-1 gap-3">
                   <button
                     onClick={handleGoogleLogin}
-                    className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#D4AF37]/30 hover:text-[#C5A028] transition-all shadow-sm active:scale-95"
+                    className="w-full bg-white border border-slate-200 text-slate-600 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-slate-50 hover:border-[#6366f1]/30 hover:text-[#7c3aed] transition-all shadow-sm active:scale-95"
                   >
                     <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" className="w-4 h-4" alt="Google" referrerPolicy="no-referrer" />
                     <span>Continue with Google</span>
@@ -1294,7 +1345,7 @@ export default function App() {
 
                   <button
                     onClick={() => setIsRegistering(true)}
-                    className="w-full bg-slate-50 border border-slate-100 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:border-[#D4AF37]/30 hover:text-[#D4AF37] transition-all active:scale-95"
+                    className="w-full bg-slate-50 border border-slate-100 text-slate-400 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-white hover:border-[#6366f1]/30 hover:text-[#6366f1] transition-all active:scale-95"
                   >
                     New Partner? <span className="underline">Apply Now</span>
                   </button>
@@ -1306,11 +1357,11 @@ export default function App() {
 
         <div className="mt-8 flex justify-center items-center gap-6 opacity-60">
           <div className="flex items-center gap-2">
-            <ShieldCheck className="w-4 h-4 text-[#D4AF37]" />
+            <ShieldCheck className="w-4 h-4 text-[#6366f1]" />
             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">AES-256</span>
           </div>
           <div className="flex items-center gap-2">
-            <Activity className="w-4 h-4 text-[#D4AF37]" />
+            <Activity className="w-4 h-4 text-[#6366f1]" />
             <span className="text-[8px] font-black text-slate-500 uppercase tracking-widest">99.9% Uptime</span>
           </div>
         </div>
@@ -1331,9 +1382,9 @@ export default function App() {
               initial={{ scale: 0.9, opacity: 0, y: 20 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              className="relative w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl border border-[#D4AF37]/20"
+              className="relative w-full max-w-sm bg-white rounded-[40px] p-8 shadow-2xl border border-[#6366f1]/20"
             >
-              <div className="w-16 h-16 bg-[#D4AF37]/10 rounded-3xl flex items-center justify-center text-[#D4AF37] mb-6 mx-auto">
+              <div className="w-16 h-16 bg-[#6366f1]/10 rounded-3xl flex items-center justify-center text-[#6366f1] mb-6 mx-auto">
                 {showInfoModal === 'info' ? <Globe className="w-8 h-8" /> : <Briefcase className="w-8 h-8" />}
               </div>
               <h3 className="text-xl font-black text-slate-900 text-center uppercase tracking-widest mb-4">
@@ -1342,7 +1393,7 @@ export default function App() {
               <div className="text-sm font-medium text-slate-600 leading-relaxed text-center space-y-4">
                 {showInfoModal === 'info' ? (
                   <div className="space-y-4 text-right dir-rtl">
-                    <p className="text-[#D4AF37] font-black border-b border-[#D4AF37]/10 pb-2">আমাদের সাইটের বৈশিষ্ট্যসমূহ:</p>
+                    <p className="text-[#6366f1] font-black border-b border-[#6366f1]/10 pb-2">আমাদের সাইটের বৈশিষ্ট্যসমূহ:</p>
                     <div className="space-y-2">
                       <p className="font-bold text-slate-700">✨ প্রতিদিনের কাজ করে নিশ্চিত আয়।</p>
                       <p className="font-bold text-slate-700">✨ ফেসবুক এবং জিমেইল সেল করে বড় অংকের আয়।</p>
@@ -1354,7 +1405,7 @@ export default function App() {
                   </div>
                 ) : (
                   <div className="space-y-4 text-right dir-rtl">
-                    <p className="text-[#D4AF37] font-black border-b border-[#D4AF37]/10 pb-2">ফ্রিল্যান্সিং ক্যারিয়ার:</p>
+                    <p className="text-[#6366f1] font-black border-b border-[#6366f1]/10 pb-2">ফ্রিল্যান্সিং ক্যারিয়ার:</p>
                     <p className="font-bold text-slate-700 leading-relaxed">
                       ফ্রিল্যান্সিং হলো বর্তমান সময়ের সবচেয়ে জনপ্রিয় মুক্ত পেশা। আমাদের প্ল্যাটফর্মে আপনি ছোট ছোট কাজ (Micro Tasks) করে আপনার ফ্রিল্যান্সিং ক্যারিয়ার শুরু করতে পারেন।
                     </p>
@@ -1510,12 +1561,13 @@ export default function App() {
             <span className="text-[10px] font-black uppercase text-slate-600">VIP</span>
           </button>
         )}
-        {isAdmin && (
-          <button onClick={() => setView('support')} className="glass-card p-4 flex flex-col items-center gap-2 border-white/40">
-            <MessageSquare className="w-6 h-6 text-emerald-600" />
-            <span className="text-[10px] font-black uppercase text-slate-600">Support</span>
-          </button>
-        )}
+        {/*
+         * Admin "Support" entry was removed: live support is now provided
+         * by the Tawk.to widget injected from index.html, so an in-app
+         * support route is no longer needed. The SupportView module is
+         * left in src/features/support for now in case we want to bring
+         * back an admin reply console later.
+         */}
       </div>
 
       {/* Hero Banner */}
@@ -5060,8 +5112,8 @@ export default function App() {
           captures. Blocks until submitted or signed out. */}
       {needsReferralCodePrompt && (
         <div className="fixed inset-0 z-[400] bg-white/95 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="w-full max-w-md bg-white border border-[#D4AF37]/20 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(212,175,55,0.2)]">
-            <div className="w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] rounded-2xl flex items-center justify-center shadow-lg mb-6 mx-auto">
+          <div className="w-full max-w-md bg-white border border-[#6366f1]/20 rounded-[32px] p-8 shadow-[0_32px_64px_-16px_rgba(99,102,241,0.2)]">
+            <div className="w-16 h-16 bg-gradient-to-br from-[#6366f1] to-[#7c3aed] rounded-2xl flex items-center justify-center shadow-lg mb-6 mx-auto">
               <Users className="w-8 h-8 text-white" />
             </div>
             <h2 className="text-xl font-black text-slate-900 text-center mb-2 uppercase tracking-widest">
@@ -5140,7 +5192,7 @@ export default function App() {
                 value={profilePromptName}
                 onChange={(e) => setProfilePromptName(e.target.value.slice(0, 100))}
                 disabled={refCodePromptSubmitting}
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#6366f1] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
               />
               <input
                 type="tel"
@@ -5149,13 +5201,13 @@ export default function App() {
                 value={profilePromptPhone}
                 onChange={(e) => setProfilePromptPhone(e.target.value.slice(0, 32))}
                 disabled={refCodePromptSubmitting}
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#6366f1] rounded-2xl text-sm font-bold text-slate-900 placeholder:text-slate-400 outline-none transition-colors disabled:opacity-60"
               />
               <select
                 value={profilePromptCountry}
                 onChange={(e) => setProfilePromptCountry(e.target.value)}
                 disabled={refCodePromptSubmitting}
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-sm font-bold text-slate-900 outline-none transition-colors disabled:opacity-60 appearance-none"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#6366f1] rounded-2xl text-sm font-bold text-slate-900 outline-none transition-colors disabled:opacity-60 appearance-none"
               >
                 <option value="Bangladesh">Bangladesh</option>
                 <option value="India">India</option>
@@ -5168,7 +5220,7 @@ export default function App() {
                 value={refCodePromptValue}
                 onChange={(e) => setRefCodePromptValue(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 disabled={refCodePromptSubmitting}
-                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#D4AF37] rounded-2xl text-center text-lg font-black tracking-[0.2em] text-slate-900 placeholder:text-slate-300 outline-none transition-colors disabled:opacity-60"
+                className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-200 focus:border-[#6366f1] rounded-2xl text-center text-lg font-black tracking-[0.2em] text-slate-900 placeholder:text-slate-300 outline-none transition-colors disabled:opacity-60"
               />
               {refCodePromptError && (
                 <p className="text-[11px] font-bold text-rose-600 text-center">{refCodePromptError}</p>
@@ -5176,7 +5228,7 @@ export default function App() {
               <button
                 type="submit"
                 disabled={refCodePromptSubmitting}
-                className="w-full py-4 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-60"
+                className="w-full py-4 bg-gradient-to-br from-[#6366f1] to-[#7c3aed] text-white rounded-2xl font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-60"
               >
                 {refCodePromptSubmitting ? 'Verifying…' : 'Continue'}
               </button>
@@ -5306,7 +5358,7 @@ export default function App() {
       {/* Loading state while auth initializes */}
       {!isAuthReady && (
         <div className="fixed inset-0 z-[500] bg-[#fcfaf7] flex flex-col items-center justify-center">
-          <div className="w-16 h-16 bg-gradient-to-br from-[#D4AF37] to-[#C5A028] rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(212,175,55,0.3)] mb-6 animate-pulse">
+          <div className="w-16 h-16 bg-gradient-to-br from-[#6366f1] to-[#7c3aed] rounded-3xl flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.3)] mb-6 animate-pulse">
             <Wallet className="w-8 h-8 text-white" />
           </div>
           <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">Loading...</p>
@@ -5341,7 +5393,7 @@ export default function App() {
         {view === 'spin' && <SpinView key="spin" />}
         {view === 'profile' && profileView}
         {view === 'salary-sheet' && salarySheetView}
-        {view === 'admin' && <AdminView key="admin" />}
+        {view === 'admin' && isLoggedIn && isAdmin && <AdminView key="admin" />}
         {view === 'settings' && settingsView}
         {view === 'mobile-banking' && mobileBankingView}
         {view === 'otp-buy-sell' && otpBuySellView}

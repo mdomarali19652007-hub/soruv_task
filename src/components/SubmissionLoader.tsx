@@ -38,7 +38,7 @@ export function SubmissionLoader({ isSubmitting, submissionProgress }: Props) {
                 strokeDasharray="251.2"
                 initial={{ strokeDashoffset: 251.2 }}
                 animate={{ strokeDashoffset: 251.2 - (251.2 * submissionProgress) / 100 }}
-                className="text-[#D4AF37]"
+                className="text-[#6366f1]"
               />
             </svg>
             <div className="absolute inset-0 flex items-center justify-center text-white font-black text-xl">
