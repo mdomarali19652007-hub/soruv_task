@@ -5128,55 +5128,15 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Feature 6: Live Support Chat Widget */}
-      <div className="fixed bottom-24 right-6 z-[90]">
-        <button
-          onClick={() => setShowChat(!showChat)}
-          className="w-14 h-14 bg-gradient-to-br from-indigo-500 to-violet-600 rounded-full flex items-center justify-center shadow-2xl text-white active:scale-90 transition-all"
-        >
-          {showChat ? <X className="w-6 h-6" /> : <MessageCircle className="w-6 h-6" />}
-        </button>
-      </div>
-
-      <AnimatePresence>
-        {showChat && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.8 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 20, scale: 0.8 }}
-            className="fixed bottom-40 right-6 w-80 z-[90] glass-card p-0 overflow-hidden flex flex-col h-[400px] shadow-2xl border-white/40"
-          >
-            <div className="bg-gradient-to-r from-indigo-500 to-violet-600 p-4 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
-                <span className="text-xs font-black text-white uppercase tracking-widest">Live Support</span>
-              </div>
-            </div>
-            <div className="flex-1 p-4 overflow-y-auto space-y-4 bg-white">
-              {userMessages.filter(m => m.userId === user.id).map((msg, i) => (
-                <div key={i} className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] p-3 rounded-2xl text-xs font-medium shadow-sm ${msg.sender === 'user' ? 'bg-indigo-500 text-white rounded-tr-none' : 'bg-slate-100 text-slate-700 rounded-tl-none'
-                    }`}>
-                    {msg.text}
-                  </div>
-                </div>
-              ))}
-            </div>
-            <div className="p-4 border-t border-slate-100 flex gap-2 bg-white">
-              <input
-                value={chatMessage}
-                onChange={(e) => setChatMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && sendGlobalMessage()}
-                placeholder="Type a message..."
-                className="bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs text-slate-900 flex-1 outline-none focus:border-indigo-500 shadow-inner"
-              />
-              <button onClick={sendGlobalMessage} className="p-2 bg-indigo-500 rounded-xl text-white shadow-md">
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/*
+       * Live support is handled by the Tawk.to widget injected from
+       * index.html. The previous in-app chat button + panel were removed
+       * to avoid a duplicate floating chat bubble next to Tawk's launcher.
+       * Related state (showChat / chatMessage / sendGlobalMessage) is
+       * intentionally left in place; it is harmless and kept so the
+       * surrounding admin/messages flows that share `userMessages`
+       * remain untouched.
+       */}
 
       {/* Loading state while auth initializes */}
       {!isAuthReady && (
