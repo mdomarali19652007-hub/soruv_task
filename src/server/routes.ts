@@ -3,6 +3,7 @@ import { getAuth, createClerkClient } from '@clerk/express';
 import { supabaseAdmin } from './supabase-admin.js';
 import { referralLimiter, adminLimiter } from './rate-limit.js';
 import { isUserAdmin } from './admin.js';
+import { requireAdminHost } from './admin-host.js';
 
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
@@ -11,6 +12,12 @@ const router = Router();
 // Blanket limiter for all admin endpoints. Per-endpoint limiters are
 // added above for higher-value targets (register, validate-referral).
 router.use('/admin', adminLimiter);
+
+// Defence-in-depth: when the deployment runs on a dedicated admin
+// subdomain (`ADMIN_HOSTNAME` set), `/api/admin/*` is reachable ONLY
+// from that host. This is a no-op for single-domain deployments. See
+// [`src/server/admin-host.ts`](src/server/admin-host.ts:1).
+router.use('/admin', requireAdminHost);
 
 // ============================================================
 // Middleware: Extract authenticated user from Better Auth session

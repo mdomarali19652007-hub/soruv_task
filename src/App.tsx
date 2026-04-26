@@ -90,6 +90,7 @@ import {
   processSpin
 } from './lib/database';
 import { adminInsert, adminUpdate, adminDelete, adminUpsert, adminIncrement, adminIncrementFields, adminGetRow } from './lib/admin-api';
+import { isOnAdminHost, getConfiguredAdminHostname } from './lib/admin-host';
 import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
 import {
   authClient,
@@ -209,10 +210,14 @@ export type {
 export default function App() {
   const [view, setView] = useState<View>(() => {
     // Password reset link lands on /reset-password?token=...
-    // Admin panel has its own dedicated route at /admin.
-    // We detect the path at startup so the SPA can render the right
-    // view without pulling in a router dependency.
+    // Admin panel has its own dedicated route at /admin AND a dedicated
+    // admin subdomain (configured via VITE_ADMIN_HOSTNAME). When the
+    // page is served from the admin subdomain we force the admin view
+    // regardless of pathname so deep-links like
+    // `admin.example.com/users` still land on the admin shell. See
+    // [`src/lib/admin-host.ts`](src/lib/admin-host.ts:1).
     if (typeof window !== 'undefined') {
+      if (isOnAdminHost()) return 'admin';
       if (window.location.pathname === '/reset-password') return 'reset-password';
       if (window.location.pathname === '/admin') return 'admin';
     }
@@ -376,12 +381,19 @@ export default function App() {
   // resolved as logged-out), bounce them off the admin view and clear the
   // URL. This complements the in-component permission checks inside
   // AdminView itself.
+  //
+  // On a dedicated admin subdomain (`isOnAdminHost()`), failing this
+  // guard also means the browser is on the wrong host entirely; we bounce
+  // to the configured public site URL when one is available, otherwise
+  // we just fall back to clearing the path.
   useEffect(() => {
     if (!isAuthReady) return;
     if (view !== 'admin') return;
     if (!isLoggedIn || !isAdmin) {
-      if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
-        window.history.replaceState({}, '', '/');
+      if (typeof window !== 'undefined') {
+        if (window.location.pathname === '/admin') {
+          window.history.replaceState({}, '', '/');
+        }
       }
       setView(isLoggedIn ? 'home' : 'login');
     }
@@ -391,8 +403,14 @@ export default function App() {
   // The SPA does not use a router, so we manually mirror the admin view
   // to the /admin pathname (and clear it when navigating elsewhere) so
   // the page is bookmarkable and the browser back button behaves.
+  //
+  // On the admin subdomain we DO NOT push `/admin` -- the subdomain
+  // itself implies the admin view, so the path stays at `/`. Clearing
+  // the URL when leaving the admin view is also a no-op there because
+  // every path on the admin host renders the admin shell anyway.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (isOnAdminHost()) return;
     const path = window.location.pathname;
     if (view === 'admin' && path !== '/admin') {
       window.history.pushState({}, '', '/admin');
@@ -401,10 +419,32 @@ export default function App() {
     }
   }, [view]);
 
+  // --- Apex `/admin` -> admin subdomain redirect ---
+  // When a dedicated admin host is configured (`VITE_ADMIN_HOSTNAME`),
+  // visiting `/admin` on the apex domain bounces to that subdomain so
+  // every admin session uses the same host (and therefore the same
+  // CORS / cookie scope). Apex `/admin` keeps working as a fallback
+  // when no admin host is configured.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isOnAdminHost()) return;
+    if (window.location.pathname !== '/admin') return;
+    const adminHost = getConfiguredAdminHostname();
+    if (!adminHost) return;
+    const target = `${window.location.protocol}//${adminHost}/`;
+    window.location.replace(target);
+  }, []);
+
   // --- Browser back/forward support for /admin ---
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPopState = () => {
+      // On the admin subdomain every path serves the admin shell, so
+      // popstate never changes which view we render.
+      if (isOnAdminHost()) {
+        setView('admin');
+        return;
+      }
       const path = window.location.pathname;
       if (path === '/admin') {
         setView('admin');

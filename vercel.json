@@ -19,6 +19,16 @@
     {
       "source": "/reset-password",
       "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "host",
+          "value": "admin\\..+"
+        }
+      ],
+      "destination": "/index.html"
     }
   ]
 }
