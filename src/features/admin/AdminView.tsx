@@ -1313,14 +1313,30 @@ export function AdminView(props: AdminViewProps) {
           </section>
 
           {/* Submissions Management */}
-          <section className="space-y-4" ref={tabContentRef}>
+          <section className="space-y-4">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 font-black text-sm border border-amber-500/20 shadow-sm">04</div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Submission Control</h3>
             </div>
 
-            {/* Tab Navigation */}
-            <div className="flex flex-nowrap gap-2 overflow-x-scroll pb-2 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
+            {/*
+              Tab Navigation.
+
+              The strip used to be `flex-nowrap overflow-x-scroll`, which on
+              mobile hid roughly two-thirds of the 16 tabs behind a horizontal
+              swipe. Non-technical operators reported "the rest of the buttons
+              are gone". `flex-wrap` keeps every tab visible at the cost of
+              one or two extra rows on narrow screens.
+
+              `tabContentRef` is anchored on the strip itself so the tap-to-
+              scroll effect below lands at the top of the strip + content.
+              Previously the ref was on the parent `<section>`, which meant a
+              tap scrolled to the section header ("Submission Control") and
+              the content appeared a screen-height down -- the bug your friend
+              hit when clicking "Drive Offers" and seeing the details "at the
+              bottom".
+            */}
+            <div ref={tabContentRef} className="flex flex-wrap gap-2 pb-2">
               {[
                 { id: 'gmail', label: 'Gmail', icon: <Mail className="w-3 h-3" />, count: gmailSubmissions.filter(s => s.status === 'pending').length },
                 { id: 'facebook', label: 'Social', icon: <Facebook className="w-3 h-3" />, count: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
@@ -1341,15 +1357,15 @@ export function AdminView(props: AdminViewProps) {
                 <button
                   key={tab.id}
                   onClick={() => setActiveAdminTab(tab.id as AdminTab)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${activeAdminTab === tab.id
+                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wide transition-all relative ${activeAdminTab === tab.id
                       ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
-                      : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
+                      : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
                     }`}
                 >
                   {tab.icon}
-                  {tab.label}
+                  <span>{tab.label}</span>
                   {tab.count > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white animate-bounce">
+                    <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[9px] flex items-center justify-center rounded-full border-2 border-white animate-bounce">
                       {tab.count}
                     </span>
                   )}
