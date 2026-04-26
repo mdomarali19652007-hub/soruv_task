@@ -1473,13 +1473,10 @@ export function AdminView(props: AdminViewProps) {
             };
 
             return tabGroups.map((group, idx) => {
-              const isFirst = idx === 0;
-              const sectionRef = isFirst ? tabContentRef : undefined;
               return (
                 <section
                   key={group.id}
                   id={group.id}
-                  ref={sectionRef}
                   className="space-y-3 scroll-mt-24"
                 >
                   <div className="flex items-center gap-3 mb-1">
@@ -1492,20 +1489,34 @@ export function AdminView(props: AdminViewProps) {
                       {group.label}
                     </h3>
                   </div>
+                  {/*
+                    Chip strip.
+
+                    Previously each chip used `text-[10px]`, which read as
+                    "small" against the large `Apply System Changes` save
+                    button and the section headings -- non-technical
+                    operators flagged the chips as harder to tap than the
+                    legacy 16-tab strip they replaced. Bumping to `text-xs`
+                    (12px) brings chip text in line with the `text-xs` body
+                    used elsewhere in the panel; `tracking-wide` keeps the
+                    uppercase label from looking too tight at the larger
+                    size. Padding stays at `px-4 py-3` so the tap target
+                    is unchanged.
+                  */}
                   <div className="flex flex-wrap gap-2">
                     {group.tabs.map(tab => (
                       <button
                         key={tab.id}
                         onClick={() => setActiveAdminTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${activeAdminTab === tab.id
+                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wide transition-all relative ${activeAdminTab === tab.id
                             ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
                             : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
                           }`}
                       >
                         {tab.icon}
-                        {tab.label}
+                        <span>{tab.label}</span>
                         {tab.count > 0 && (
-                          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white">
+                          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[9px] flex items-center justify-center rounded-full border-2 border-white">
                             {tab.count}
                           </span>
                         )}
@@ -1521,12 +1532,21 @@ export function AdminView(props: AdminViewProps) {
            * The active per-tab panel renders below in its own wrapping
            * <section> so it sits visually OUTSIDE the chip strips. We
            * keep the existing JSX (which keys off `activeAdminTab`) so
-           * this refactor is non-invasive. Anchor id matches the active
-           * group's id is intentionally NOT set -- the chip groups own
-           * the anchors; this block is just the body for whichever tab
-           * the operator picked.
+           * this refactor is non-invasive.
+           *
+           * `tabContentRef` is anchored HERE rather than on the first
+           * group section. The auto-scroll effect (line ~252) used to
+           * jump the page back up to the Money Operations group on
+           * every chip click; with seven groups stacked above the
+           * panel, that meant clicking e.g. "Drive Offers" sent the
+           * operator to the top of section 3 and the actual order
+           * details appeared a screen-height below "Drive & Boosting"
+           * -- the bug your friend hit. Pinning the ref to the panel
+           * instead means a chip click scrolls directly to whatever
+           * panel just became active, regardless of which group it
+           * lives in.
            */}
-          <section className="space-y-4">
+          <section ref={tabContentRef} className="space-y-4 scroll-mt-24">
 
             {/* Gmail Submissions */}
             {activeAdminTab === 'users' && (
