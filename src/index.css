@@ -3,7 +3,13 @@
 @theme {
   --color-neon-blue: #00f2fe;
   --color-deep-sky: #4facfe;
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /*
+   * Inter handles Latin text. "Hind Siliguri" sits next in the stack
+   * so any Bangla glyph (which Inter does not cover) automatically
+   * falls back to the proper Bangla face. Loaded from Google Fonts in
+   * `index.html`.
+   */
+  --font-sans: "Inter", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -12,6 +18,17 @@
     background: radial-gradient(circle at top right, #f8fafc, #e2e8f0);
     background-attachment: fixed;
     min-height: 100vh;
+  }
+
+  /*
+   * Force Hind Siliguri for any element explicitly tagged as Bangla
+   * (use `lang="bn"` or the `.bangla` utility class). This avoids
+   * relying on glyph fallback, which can produce mixed-weight
+   * baselines when both Inter and Hind Siliguri are loaded.
+   */
+  :lang(bn),
+  .bangla {
+    font-family: "Hind Siliguri", "Inter", ui-sans-serif, system-ui, sans-serif;
   }
 }
 

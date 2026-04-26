@@ -14,7 +14,7 @@
  * closure are now passed in as props.
  */
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type ReactNode } from 'react';
 import {
   ArrowLeft, Briefcase, Check, CheckCircle2, CreditCard, DollarSign,
   ExternalLink, Facebook, History, Image as ImageIcon, Loader2, Mail,
@@ -952,9 +952,54 @@ export function AdminView(props: AdminViewProps) {
           </div>
         </div>
 
+        {/*
+         * Sticky "Jump to" bar — gives non-technical operators a single
+         * row of buttons that scroll the page down to whichever group of
+         * actions they need, instead of forcing them to find a tab in a
+         * horizontal-scroll strip. Anchor ids match each top-level
+         * `<section id="admin-section-…">` below.
+         */}
+        <div
+          className="sticky top-2 z-30 mb-6 -mx-2 px-2 py-2 bg-white/85 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm"
+        >
+          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
+            Jump to section
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {[
+              { id: 'admin-section-config',      label: 'Config' },
+              { id: 'admin-section-features',    label: 'Features' },
+              { id: 'admin-section-money',       label: 'Money' },
+              { id: 'admin-section-submissions', label: 'Submissions' },
+              { id: 'admin-section-shop',        label: 'Shop' },
+              { id: 'admin-section-services',    label: 'Drive & Boosting' },
+              { id: 'admin-section-library',     label: 'Library' },
+              { id: 'admin-section-users',       label: 'Users' },
+              { id: 'admin-section-tools',       label: 'Tools' },
+            ].map(j => (
+              <a
+                key={j.id}
+                href={`#${j.id}`}
+                onClick={(e) => {
+                  // Smooth-scroll without leaving a `#anchor` in the URL bar
+                  // (which the browser back button would then have to undo).
+                  e.preventDefault();
+                  document.getElementById(j.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                }}
+                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
+              >
+                {j.label}
+              </a>
+            ))}
+          </div>
+        </div>
+
         <div className="space-y-8">
           {/* System Configuration */}
-          <section className="space-y-4">
+          <section
+            id="admin-section-config"
+            className="space-y-4 scroll-mt-24"
+          >
             <div className="flex items-center gap-3 mb-2">
               <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-black text-sm border border-indigo-500/20 shadow-sm">⚙️</div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">System Configuration</h3>
@@ -1229,9 +1274,12 @@ export function AdminView(props: AdminViewProps) {
           </section>
 
           {/* Feature Toggles */}
-          <section className="space-y-4">
+          <section
+            id="admin-section-features"
+            className="space-y-4 scroll-mt-24"
+          >
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 font-black text-sm border border-emerald-500/20 shadow-sm">03</div>
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 font-black text-sm border border-emerald-500/20 shadow-sm">02</div>
               <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Feature Matrix</h3>
             </div>
             <div className="glass-card space-y-6 border-white/40 shadow-lg">
@@ -1312,50 +1360,173 @@ export function AdminView(props: AdminViewProps) {
             </div>
           </section>
 
-          {/* Submissions Management */}
-          <section className="space-y-4" ref={tabContentRef}>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 font-black text-sm border border-amber-500/20 shadow-sm">04</div>
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Submission Control</h3>
-            </div>
+          {/*
+           * Operations Center.
+           *
+           * Replaces the old "Submission Control" mega-section that used
+           * a single 15-tab horizontal-scroll strip. The same per-tab
+           * panels still render below (one is active at a time, picked
+           * by `activeAdminTab`); only the navigation has been split
+           * into categorised chip-tab strips that wrap on narrow
+           * screens, plus a labelled <section id="..."> for each group
+           * so the "Jump to" bar at the top of the page can deep-link
+           * to a specific category. See plan §3.1 / §3.2.
+           */}
+          {(() => {
+            // Single source of truth for the categorisation. Adding a
+            // new admin tab here automatically:
+            //   - widens the [`AdminTab`](src/features/admin/AdminView.tsx:48) union,
+            //   - shows it in the corresponding chip strip,
+            //   - and (because the per-tab JSX below keys off
+            //     `activeAdminTab`) keeps rendering the same panel.
+            const tabGroups: ReadonlyArray<{
+              id: string;
+              label: string;
+              accent: 'amber' | 'indigo' | 'rose' | 'violet' | 'sky' | 'emerald' | 'slate'; // tailwind colour token used for the section badge
+              tabs: ReadonlyArray<{
+                id: AdminTab;
+                label: string;
+                icon: ReactNode;
+                count: number;
+              }>;
+            }> = [
+              {
+                id: 'admin-section-money',
+                label: 'Money Operations',
+                accent: 'amber',
+                tabs: [
+                  { id: 'withdrawals', label: 'Payouts', icon: <CreditCard className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending').length },
+                  { id: 'deposits',    label: 'Deposits', icon: <PlusCircle className="w-3 h-3" />, count: rechargeRequests.filter(r => r.status === 'pending').length },
+                  { id: 'dollar-buy',  label: 'Dollar Buy', icon: <DollarSign className="w-3 h-3" />, count: dollarBuyRequests.filter(r => r.status === 'pending').length },
+                ],
+              },
+              {
+                id: 'admin-section-submissions',
+                label: 'Submissions Review',
+                accent: 'indigo',
+                tabs: [
+                  { id: 'gmail',     label: 'Gmail',      icon: <Mail className="w-3 h-3" />,      count: gmailSubmissions.filter(s => s.status === 'pending').length },
+                  { id: 'facebook',  label: 'Facebook',   icon: <Facebook className="w-3 h-3" />,  count: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
+                  { id: 'microjobs', label: 'Microjobs',  icon: <Briefcase className="w-3 h-3" />, count: microjobSubmissions.filter(s => s.status === 'pending').length },
+                  { id: 'social',    label: 'Social Job', icon: <Users className="w-3 h-3" />,     count: allSocialSubmissions.filter(s => s.status === 'pending').length },
+                  { id: 'ludo',      label: 'Ludo',       icon: <Trophy className="w-3 h-3" />,    count: ludoSubmissions.filter(s => s.status === 'pending').length },
+                ],
+              },
+              {
+                id: 'admin-section-shop',
+                label: 'Shop & Orders',
+                accent: 'rose',
+                tabs: [
+                  { id: 'products',       label: 'Products', icon: <ShoppingBag className="w-3 h-3" />, count: 0 },
+                  { id: 'product-orders', label: 'Orders',   icon: <Package className="w-3 h-3" />,     count: productOrders.filter(o => o.status === 'pending').length },
+                ],
+              },
+              {
+                id: 'admin-section-services',
+                label: 'Drive & Boosting',
+                accent: 'violet',
+                tabs: [
+                  { id: 'drive-offers',   label: 'Drive Offers',   icon: <Wifi className="w-3 h-3" />,       count: 0 },
+                  { id: 'drive-requests', label: 'Drive Requests', icon: <Smartphone className="w-3 h-3" />, count: driveOfferRequests.filter(r => r.status === 'pending').length },
+                  { id: 'subscriptions',  label: 'Boosting',       icon: <Zap className="w-3 h-3" />,        count: subscriptionRequests.filter(r => r.status === 'pending').length },
+                ],
+              },
+              {
+                id: 'admin-section-library',
+                label: 'Content Library',
+                accent: 'sky',
+                tabs: [
+                  { id: 'news',    label: 'News',    icon: <Newspaper className="w-3 h-3" />, count: 0 },
+                  { id: 'uploads', label: 'Uploads', icon: <Upload className="w-3 h-3" />,    count: allUploads.length },
+                ],
+              },
+              {
+                id: 'admin-section-users',
+                label: 'User Management',
+                accent: 'emerald',
+                tabs: [
+                  { id: 'users', label: 'Users', icon: <Users className="w-3 h-3" />, count: allUsers.filter(u => u.status !== 'active').length },
+                ],
+              },
+              {
+                id: 'admin-section-tools',
+                label: 'Task Manager',
+                accent: 'slate',
+                tabs: [
+                  { id: 'tasks', label: 'Manage Tasks', icon: <PlusCircle className="w-3 h-3" />, count: 0 },
+                ],
+              },
+            ];
 
-            {/* Tab Navigation */}
-            <div className="flex flex-nowrap gap-2 overflow-x-scroll pb-2 no-scrollbar" style={{ WebkitOverflowScrolling: 'touch' }}>
-              {[
-                { id: 'gmail', label: 'Gmail', icon: <Mail className="w-3 h-3" />, count: gmailSubmissions.filter(s => s.status === 'pending').length },
-                { id: 'facebook', label: 'Social', icon: <Facebook className="w-3 h-3" />, count: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
-                { id: 'microjobs', label: 'Micro', icon: <Briefcase className="w-3 h-3" />, count: microjobSubmissions.filter(s => s.status === 'pending').length },
-                { id: 'products', label: 'Products', icon: <ShoppingBag className="w-3 h-3" />, count: 0 },
-                { id: 'product-orders', label: 'Orders', icon: <Package className="w-3 h-3" />, count: productOrders.filter(o => o.status === 'pending').length },
-                { id: 'drive-offers', label: 'D-Offers', icon: <Wifi className="w-3 h-3" />, count: 0 },
-                { id: 'drive-requests', label: 'D-Requests', icon: <Smartphone className="w-3 h-3" />, count: driveOfferRequests.filter(r => r.status === 'pending').length },
-                { id: 'dollar-buy', label: 'D-Buy', icon: <DollarSign className="w-3 h-3" />, count: dollarBuyRequests.filter(r => r.status === 'pending').length },
-                { id: 'deposits', label: 'Deposits', icon: <PlusCircle className="w-3 h-3" />, count: rechargeRequests.filter(r => r.status === 'pending').length },
-                { id: 'withdrawals', label: 'Payouts', icon: <CreditCard className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending').length },
-                { id: 'subscriptions', label: 'Boosting', icon: <Zap className="w-3 h-3" />, count: subscriptionRequests.filter(r => r.status === 'pending').length },
-                { id: 'ludo', label: 'Ludo', icon: <Trophy className="w-3 h-3" />, count: ludoSubmissions.filter(s => s.status === 'pending').length },
-                { id: 'social', label: 'Social Job', icon: <Users className="w-3 h-3" />, count: allSocialSubmissions.filter(s => s.status === 'pending').length },
-                { id: 'uploads', label: 'Uploads', icon: <Upload className="w-3 h-3" />, count: allUploads.length },
-                { id: 'tasks', label: 'Manage', icon: <PlusCircle className="w-3 h-3" />, count: 0 }
-              ].map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveAdminTab(tab.id as AdminTab)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all shrink-0 relative ${activeAdminTab === tab.id
-                      ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
-                      : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'
-                    }`}
+            // Tailwind cannot tree-shake runtime-built class names like
+            // `bg-${color}-500/10`, so we look up the full class string
+            // from a static map. Adding a new accent here also requires
+            // updating the `accent` union above.
+            const accentClasses: Record<typeof tabGroups[number]['accent'], string> = {
+              amber:   'bg-amber-500/10 text-amber-600 border-amber-500/20',
+              indigo:  'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
+              rose:    'bg-rose-500/10 text-rose-600 border-rose-500/20',
+              violet:  'bg-violet-500/10 text-violet-600 border-violet-500/20',
+              sky:     'bg-sky-500/10 text-sky-600 border-sky-500/20',
+              emerald: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
+              slate:   'bg-slate-500/10 text-slate-600 border-slate-500/20',
+            };
+
+            return tabGroups.map((group, idx) => {
+              const isFirst = idx === 0;
+              const sectionRef = isFirst ? tabContentRef : undefined;
+              return (
+                <section
+                  key={group.id}
+                  id={group.id}
+                  ref={sectionRef}
+                  className="space-y-3 scroll-mt-24"
                 >
-                  {tab.icon}
-                  {tab.label}
-                  {tab.count > 0 && (
-                    <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white animate-bounce">
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
+                  <div className="flex items-center gap-3 mb-1">
+                    <div
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border shadow-sm ${accentClasses[group.accent]}`}
+                    >
+                      {String(idx + 3).padStart(2, '0')}
+                    </div>
+                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
+                      {group.label}
+                    </h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.tabs.map(tab => (
+                      <button
+                        key={tab.id}
+                        onClick={() => setActiveAdminTab(tab.id)}
+                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all relative ${activeAdminTab === tab.id
+                            ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
+                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
+                          }`}
+                      >
+                        {tab.icon}
+                        {tab.label}
+                        {tab.count > 0 && (
+                          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[8px] flex items-center justify-center rounded-full border-2 border-white">
+                            {tab.count}
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              );
+            });
+          })()}
+
+          {/*
+           * The active per-tab panel renders below in its own wrapping
+           * <section> so it sits visually OUTSIDE the chip strips. We
+           * keep the existing JSX (which keys off `activeAdminTab`) so
+           * this refactor is non-invasive. Anchor id matches the active
+           * group's id is intentionally NOT set -- the chip groups own
+           * the anchors; this block is just the body for whichever tab
+           * the operator picked.
+           */}
+          <section className="space-y-4">
 
             {/* Gmail Submissions */}
             {activeAdminTab === 'users' && (
