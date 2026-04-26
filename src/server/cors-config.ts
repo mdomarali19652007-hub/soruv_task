@@ -42,6 +42,10 @@ function buildAllowlist(): string[] {
 
   const authUrl = (process.env.APP_PUBLIC_URL || process.env.BETTER_AUTH_URL)?.trim();
   const siteUrl = process.env.SITE_URL?.trim();
+  // The dedicated admin subdomain (e.g. https://admin.example.com)
+  // when the deployment uses host-based admin routing. Allowed so the
+  // admin SPA can call `/api/admin/*` cross-origin if needed.
+  const adminUrl = process.env.ADMIN_PUBLIC_URL?.trim();
 
   const vercelUrls = [
     process.env.VERCEL_URL,
@@ -57,6 +61,7 @@ function buildAllowlist(): string[] {
       ...DEFAULT_ALLOWED_ORIGINS,
       ...(authUrl ? [authUrl] : []),
       ...(siteUrl ? [siteUrl] : []),
+      ...(adminUrl ? [adminUrl] : []),
       ...vercelUrls,
       ...extras,
     ]),
