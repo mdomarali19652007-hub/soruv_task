@@ -26,11 +26,14 @@ import confetti from 'canvas-confetti';
 import {
   adminInsert, adminUpdate, adminDelete, adminUpsert,
   adminIncrement, adminIncrementFields, adminGetRow,
+  adminDeleteUploadStorage,
 } from '../../lib/admin-api';
 import { processWithdrawal, processDeposit } from '../../lib/database';
 import { uploadMedia } from '../../lib/upload-media';
 import { handleFirestoreError } from '../../utils/db-errors';
 import { OperationType } from '../../types';
+import { NumericInput } from '../../components/NumericInput';
+import { useToast } from '../../components/Toast';
 import type {
   UserProfile, GmailSubmission, MicrojobSubmission, TaskSubmission,
   SubscriptionRequest, RechargeRequest, DriveOffer, DriveOfferRequest,
@@ -56,6 +59,7 @@ export type AdminTab =
   | 'products'
   | 'product-orders'
   | 'dollar-buy'
+  | 'dollar-sell'
   | 'deposits'
   | 'users'
   | 'ludo'
@@ -152,6 +156,7 @@ export function AdminView(props: AdminViewProps) {
   } = props;
 
   const { requestReason, modalUI: reasonPromptUI } = useReasonPrompt();
+  const { showToast, toastUI } = useToast();
 
   /**
    * Helper that prompts the admin for a rejection / cancellation reason.
@@ -221,6 +226,11 @@ export function AdminView(props: AdminViewProps) {
   const [selectedMicrojobs, setSelectedMicrojobs] = useState<string[]>([]);
   const [newNews, setNewNews] = useState({ content: '', imageUrl: '' });
   const [ludoForm, setLudoForm] = useState({ title: '', fee: '', prize: '', type: '1vs1', desc: '' });
+  // Per-user balance adjust drafts. Keyed by user id so each row can hold
+  // its own pending amount independently. Stored as a string so the input
+  // can be transiently empty without snapping to 0 (mirrors NumericInput).
+  const [balanceAdjustDrafts, setBalanceAdjustDrafts] = useState<Record<string, string>>({});
+  const [adjustingBalance, setAdjustingBalance] = useState<Set<string>>(new Set());
 
   const postNews = async () => {
     if (!newNews.content.trim()) return;
@@ -235,7 +245,7 @@ export function AdminView(props: AdminViewProps) {
         timestamp: Date.now()
       });
       setNewNews({ content: '', imageUrl: '' });
-      alert('News posted successfully!');
+      showToast('News posted successfully.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'newsPosts');
     }
@@ -291,7 +301,7 @@ export function AdminView(props: AdminViewProps) {
       if (d === null) return;
       const days = parseInt(d, 10);
       if (!Number.isFinite(days) || days <= 0) {
-        alert('Suspension duration must be a positive number of days.');
+        showToast('Suspension duration must be a positive number of days.', 'error');
         return;
       }
       const date = new Date();
@@ -333,7 +343,7 @@ export function AdminView(props: AdminViewProps) {
         }
       }
 
-      alert(`User ${status} successfully!`);
+      showToast(`User ${status} successfully.`, 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `users/${userId}`);
     }
@@ -342,7 +352,7 @@ export function AdminView(props: AdminViewProps) {
   const reactivateAllUsers = async () => {
     const suspendedUsers = allUsers.filter(u => u.status !== 'active');
     if (suspendedUsers.length === 0) {
-      alert('No suspended or banned accounts found.');
+      showToast('No suspended or banned accounts found.', 'info');
       return;
     }
 
@@ -367,7 +377,7 @@ export function AdminView(props: AdminViewProps) {
         count += chunk.length;
         setSubmissionProgress((count / suspendedUsers.length) * 100);
       }
-      alert(`Successfully reactivated ${count} accounts!`);
+      showToast(`Successfully reactivated ${count} accounts.`, 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, 'bulk-users');
     } finally {
@@ -437,8 +447,9 @@ export function AdminView(props: AdminViewProps) {
       f => !Number.isFinite(f.value) || f.value < 0,
     );
     if (invalid) {
-      alert(
+      showToast(
         `Invalid value for "${invalid.label}". Numeric settings must be a finite number >= 0.`,
+        'error',
       );
       return;
     }
@@ -488,7 +499,7 @@ export function AdminView(props: AdminViewProps) {
       await adminUpsert('users', safeAdminFields);
 
       confetti({ particleCount: 150, spread: 70 });
-      alert('All changes saved and applied successfully!');
+      showToast('All changes saved and applied successfully.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.WRITE, 'admin/save');
     }
@@ -567,7 +578,7 @@ export function AdminView(props: AdminViewProps) {
         await handleTaskAction(id, action);
       }
       setSelectedTasks([]);
-      alert(`Successfully ${action} selected tasks!`);
+      showToast(`Successfully ${action} selected tasks.`, 'success');
     } catch (e) {
       console.error('Bulk Task Error:', e);
     } finally {
@@ -588,7 +599,7 @@ export function AdminView(props: AdminViewProps) {
         await handleMicrojobAction(id, action);
       }
       setSelectedMicrojobs([]);
-      alert(`Successfully ${action} selected microjobs!`);
+      showToast(`Successfully ${action} selected microjobs.`, 'success');
     } catch (e) {
       console.error('Bulk Microjob Error:', e);
     } finally {
@@ -751,7 +762,7 @@ export function AdminView(props: AdminViewProps) {
 
   const addProduct = async () => {
     if (!newProduct.name || newProduct.price <= 0) {
-      alert('Please fill all required fields');
+      showToast('Please fill all required fields.', 'error');
       return;
     }
     try {
@@ -803,7 +814,7 @@ export function AdminView(props: AdminViewProps) {
     try {
       await adminInsert('driveOffers', newDriveOffer);
       setNewDriveOffer({ title: '', operator: 'GP', price: 0, description: '' });
-      alert('Drive offer added successfully!');
+      showToast('Drive offer added successfully.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'driveOffers');
     }
@@ -840,7 +851,7 @@ export function AdminView(props: AdminViewProps) {
     try {
       await adminInsert('tasks', newTask);
       setNewTask({ title: '', reward: 0, desc: '', link: '', category: 'micro' });
-      alert('Task added successfully!');
+      showToast('Task added successfully.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'tasks');
     }
@@ -863,7 +874,7 @@ export function AdminView(props: AdminViewProps) {
         await adminIncrement('users', sub.userId, 'mainBalance', sub.price);
       }
 
-      alert(`Subscription ${status}`);
+      showToast(`Subscription ${status}.`, 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, 'subscriptionRequests');
     }
@@ -906,23 +917,121 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const handleDeleteUpload = async (id: string) => {
-    // Note: this only removes the metadata row from the `uploads` table.
-    // The underlying image is hosted on ImgBB (see lib/upload-media.ts)
-    // and cannot be deleted from the client, so the binary stays on the
-    // host until ImgBB's own retention policy removes it. Wording in the
-    // confirm dialog reflects that.
+    // Two upload paths feed this table:
+    //   1. `lib/database.ts:uploadFile()` writes to Supabase Storage and
+    //      we can delete the underlying object via the admin API.
+    //   2. `lib/upload-media.ts:uploadMedia()` writes to ImgBB; we have
+    //      no programmable delete and the binary lingers per ImgBB's
+    //      own retention rules.
+    // The server endpoint inspects the URL and either deletes from
+    // Supabase Storage or returns `{ skipped: true }` so we still drop
+    // the metadata row in either case.
+    const target = allUploads.find(u => u.id === id);
     const ok = await requestReason({
-      title: 'Remove Upload Record',
+      title: 'Remove Upload',
       description:
-        'This removes the database row only. The image file itself remains on the external host (ImgBB).',
-      confirmLabel: 'Remove Record',
+        'We will try to delete the underlying image from Supabase Storage as well. Externally hosted images (e.g. ImgBB) can only be removed via the host’s own UI.',
+      confirmLabel: 'Remove',
       destructive: true,
     });
     if (ok === null) return;
     try {
+      let storageStatus: 'deleted' | 'skipped' | 'failed' = 'skipped';
+      if (target?.url) {
+        try {
+          const res = await adminDeleteUploadStorage(target.url);
+          if (res.success) storageStatus = 'deleted';
+          else if (res.skipped) storageStatus = 'skipped';
+        } catch {
+          storageStatus = 'failed';
+        }
+      }
       await adminDelete('uploads', id);
+      switch (storageStatus) {
+        case 'deleted':
+          showToast('Upload removed (storage object deleted).', 'success');
+          break;
+        case 'skipped':
+          showToast(
+            'Upload record removed. The image is hosted externally; delete it from the host’s UI.',
+            'info',
+          );
+          break;
+        case 'failed':
+          showToast(
+            'Upload record removed, but the storage object could not be deleted. Check Supabase logs.',
+            'error',
+          );
+          break;
+      }
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `uploads/${id}`);
+    }
+  };
+
+  /**
+   * Adjust a user's `mainBalance` by `delta` taka (negative to remove)
+   * via the audit-friendly `adminIncrement` flow. Asks the admin for a
+   * reason via the reason-prompt modal and shows a toast on success.
+   *
+   * The `users.mainBalance` column has a `>= 0` CHECK constraint
+   * (supabase/schema.sql:396), so removals beyond the current balance
+   * surface as a database error rather than silently going negative.
+   */
+  const adjustUserBalance = async (userId: string, delta: number) => {
+    if (!Number.isFinite(delta) || delta === 0) {
+      showToast('Enter a non-zero amount before adjusting.', 'error');
+      return;
+    }
+    const target = allUsers.find(u => u.id === userId);
+    const display = target ? `${target.name} (ID ${target.numericId})` : userId;
+    const reason = await requestReason({
+      title: delta > 0 ? 'Add to Balance' : 'Remove from Balance',
+      description: `${delta > 0 ? 'Crediting' : 'Debiting'} \u09f3 ${Math.abs(delta).toFixed(2)} for ${display}. This is recorded as an admin balance adjustment; please log the reason.`,
+      inputLabel: 'Reason',
+      inputPlaceholder: delta > 0 ? 'Manual top-up' : 'Manual deduction',
+      confirmLabel: delta > 0 ? 'Add Balance' : 'Remove Balance',
+      destructive: delta < 0,
+      requireValue: true,
+    });
+    if (reason === null) return;
+
+    setAdjustingBalance(prev => {
+      const next = new Set(prev);
+      next.add(userId);
+      return next;
+    });
+    try {
+      await adminIncrement('users', userId, 'mainBalance', delta);
+      adminUpdate('users', userId, {
+        notifications: [
+          ...(target?.notifications ?? []),
+          {
+            id: `bal-${Date.now()}`,
+            text: `Admin balance adjustment: ${delta > 0 ? '+' : ''}\u09f3 ${delta.toFixed(2)}. Reason: ${reason}`,
+            date: new Date().toISOString(),
+          },
+        ],
+      }).catch(() => {
+        // Best-effort audit append; balance change already persisted.
+      });
+      setBalanceAdjustDrafts(prev => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      showToast(
+        `${delta > 0 ? 'Credited' : 'Debited'} \u09f3 ${Math.abs(delta).toFixed(2)} ${delta > 0 ? 'to' : 'from'} ${display}.`,
+        'success',
+      );
+    } catch (e) {
+      handleFirestoreError(e, OperationType.UPDATE, `users/${userId}/mainBalance`);
+    } finally {
+      setAdjustingBalance(prev => {
+        const next = new Set(prev);
+        next.delete(userId);
+        return next;
+      });
     }
   };
 
@@ -1017,127 +1126,114 @@ export function AdminView(props: AdminViewProps) {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Min Withdrawal</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminMinWithdrawal}
-                    onChange={e => setAdminMinWithdrawal(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminMinWithdrawal(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Withdrawal Fee (%)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminWithdrawalFee}
-                    onChange={e => setAdminWithdrawalFee(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminWithdrawalFee(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Dollar Buy Rate</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminDollarBuyRate}
-                    onChange={e => setAdminDollarBuyRate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminDollarBuyRate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Dollar Sell Rate</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminDollarSellRate}
-                    onChange={e => setAdminDollarSellRate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminDollarSellRate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Spin Cost</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminSpinCost}
-                    onChange={e => setAdminSpinCost(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminSpinCost(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Daily Reward</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminDailyReward}
-                    onChange={e => setAdminDailyReward(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminDailyReward(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 1 Rate</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={localGen1Rate}
-                    onChange={e => setLocalGen1Rate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setLocalGen1Rate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 2 Rate</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={localGen2Rate}
-                    onChange={e => setLocalGen2Rate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setLocalGen2Rate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gen 3 Rate</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={localGen3Rate}
-                    onChange={e => setLocalGen3Rate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setLocalGen3Rate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Total Paid (৳)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminTotalPaid}
-                    onChange={e => setAdminTotalPaid(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminTotalPaid(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Active Workers</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminActiveWorkerCount}
-                    onChange={e => setAdminActiveWorkerCount(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminActiveWorkerCount(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Gmail Reward</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminGmailReward}
-                    onChange={e => setAdminGmailReward(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminGmailReward(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Ad Reward</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminAdReward}
-                    onChange={e => setAdminAdReward(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminAdReward(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Daily Ad Limit</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminDailyAdLimit}
-                    onChange={e => setAdminDailyAdLimit(parseInt(e.target.value) || 0)}
+                    onValueChange={v => setAdminDailyAdLimit(v ?? 0)}
+                    integer
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -1181,55 +1277,50 @@ export function AdminView(props: AdminViewProps) {
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Activation Fee</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminActivationFee}
-                    onChange={e => setAdminActivationFee(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminActivationFee(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Recharge Commission (Per 1000)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminRechargeCommissionRate}
-                    onChange={e => setAdminRechargeCommissionRate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminRechargeCommissionRate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Activation Duration (Days)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminActivationDuration}
-                    onChange={e => setAdminActivationDuration(parseInt(e.target.value) || 0)}
+                    onValueChange={v => setAdminActivationDuration(v ?? 0)}
+                    integer
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Referral Commission (%)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminReferralCommissionRate}
-                    onChange={e => setAdminReferralCommissionRate(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminReferralCommissionRate(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Referral Activation Bonus</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminReferralActivationBonus}
-                    onChange={e => setAdminReferralActivationBonus(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminReferralActivationBonus(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
                 <div className="space-y-1">
                   <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest ml-1">Delivery Fee (৳)</label>
-                  <input
-                    type="number"
+                  <NumericInput
                     value={adminDeliveryFee}
-                    onChange={e => setAdminDeliveryFee(parseFloat(e.target.value) || 0)}
+                    onValueChange={v => setAdminDeliveryFee(v ?? 0)}
                     className="w-full bg-slate-50 border border-slate-100 rounded-xl p-3 text-[10px] text-slate-900 font-bold outline-none focus:border-indigo-500"
                   />
                 </div>
@@ -1398,6 +1489,7 @@ export function AdminView(props: AdminViewProps) {
                   { id: 'withdrawals', label: 'Payouts', icon: <CreditCard className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending').length },
                   { id: 'deposits',    label: 'Deposits', icon: <PlusCircle className="w-3 h-3" />, count: rechargeRequests.filter(r => r.status === 'pending').length },
                   { id: 'dollar-buy',  label: 'Dollar Buy', icon: <DollarSign className="w-3 h-3" />, count: dollarBuyRequests.filter(r => r.status === 'pending').length },
+                  { id: 'dollar-sell', label: 'Dollar Sell', icon: <DollarSign className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending' && typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell')).length },
                 ],
               },
               {
@@ -1622,7 +1714,7 @@ export function AdminView(props: AdminViewProps) {
                                   try {
                                     const userRef_id = u.id;
                                     await adminUpdate('users', userRef_id, { isActive: !u.isActive });
-                                    alert(`User ${u.isActive ? 'deactivated' : 'activated'} successfully!`);
+                                    showToast(`User ${u.isActive ? 'deactivated' : 'activated'} successfully.`, 'success');
                                   } catch (e) {
                                     handleFirestoreError(e, OperationType.UPDATE, `users/${u.id}`);
                                   }
@@ -1657,6 +1749,68 @@ export function AdminView(props: AdminViewProps) {
                               )}
                             </div>
                           </div>
+                        </div>
+                        {/*
+                          Balance adjustment row.
+
+                          Routes through `adminIncrement('users', id,
+                          'mainBalance', delta)` so the financial column
+                          changes atomically and respects the
+                          `users_main_balance_non_negative` CHECK
+                          constraint. The reason prompt is mandatory; the
+                          balance change itself succeeds even if the
+                          notification append (best-effort audit trail)
+                          fails.
+                        */}
+                        <div className="mt-3 pt-3 border-t border-slate-100 flex flex-wrap items-center gap-2">
+                          <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Adjust Balance:</span>
+                          <NumericInput
+                            value={(() => {
+                              const draft = balanceAdjustDrafts[u.id];
+                              const parsed = draft !== undefined ? Number(draft) : NaN;
+                              return Number.isFinite(parsed) ? parsed : 0;
+                            })()}
+                            onValueChange={next => {
+                              setBalanceAdjustDrafts(prev => ({
+                                ...prev,
+                                [u.id]: next === null ? '' : String(next),
+                              }));
+                            }}
+                            placeholder="Amount"
+                            className="w-28 bg-white border border-slate-200 rounded-lg px-2 py-1 text-[10px] font-bold outline-none focus:border-indigo-500"
+                          />
+                          <button
+                            type="button"
+                            disabled={adjustingBalance.has(u.id)}
+                            onClick={() => {
+                              const raw = balanceAdjustDrafts[u.id];
+                              const amount = raw !== undefined && raw !== '' ? Number(raw) : NaN;
+                              if (!Number.isFinite(amount) || amount <= 0) {
+                                showToast('Enter a positive amount before adding balance.', 'error');
+                                return;
+                              }
+                              void adjustUserBalance(u.id, amount);
+                            }}
+                            className={`text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white shadow-sm active:scale-95 transition-all ${adjustingBalance.has(u.id) ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-500'}`}
+                          >
+                            {adjustingBalance.has(u.id) ? '...' : 'Add'}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={adjustingBalance.has(u.id)}
+                            onClick={() => {
+                              const raw = balanceAdjustDrafts[u.id];
+                              const amount = raw !== undefined && raw !== '' ? Number(raw) : NaN;
+                              if (!Number.isFinite(amount) || amount <= 0) {
+                                showToast('Enter a positive amount before removing balance.', 'error');
+                                return;
+                              }
+                              void adjustUserBalance(u.id, -amount);
+                            }}
+                            className={`text-[8px] font-black px-3 py-1 rounded-lg uppercase tracking-widest text-white shadow-sm active:scale-95 transition-all ${adjustingBalance.has(u.id) ? 'bg-rose-300 cursor-not-allowed' : 'bg-rose-500'}`}
+                          >
+                            {adjustingBalance.has(u.id) ? '...' : 'Remove'}
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1694,7 +1848,7 @@ export function AdminView(props: AdminViewProps) {
                                 const url = await uploadMedia(file);
                                 setNewNews(prev => ({ ...prev, imageUrl: url }));
                               } catch (err) {
-                                alert(err instanceof Error ? err.message : 'Upload failed');
+                                showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
                               }
                             }}
                           />
@@ -2102,7 +2256,15 @@ export function AdminView(props: AdminViewProps) {
               </div>
             )}
 
-            {/* Withdrawals */}
+            {/*
+              Withdrawals tab.
+
+              Dollar Sell submissions are also written to the `withdrawals`
+              table (see src/features/dollar/DollarSellView.tsx) but with
+              a `Dollar Sell (...)` method prefix so they can be reviewed
+              in their own tab below. We exclude them here to avoid
+              duplicate presentation.
+            */}
             {activeAdminTab === 'withdrawals' && (
               <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <h4 className="text-xs font-black text-slate-800 uppercase mb-4 flex items-center gap-2">
@@ -2110,10 +2272,10 @@ export function AdminView(props: AdminViewProps) {
                   Withdrawal Requests
                 </h4>
                 <div className="space-y-3">
-                  {withdrawals.filter(w => w.status === 'pending').length === 0 ? (
+                  {withdrawals.filter(w => w.status === 'pending' && !(typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell'))).length === 0 ? (
                     <p className="text-[10px] text-slate-400 text-center py-4 uppercase font-bold">No pending withdrawals</p>
                   ) : (
-                    withdrawals.filter(w => w.status === 'pending').map(w => (
+                    withdrawals.filter(w => w.status === 'pending' && !(typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell'))).map(w => (
                       <div key={w.id} className="p-4 bg-white rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
                         <div>
                           <div className="flex flex-col">
@@ -2125,6 +2287,43 @@ export function AdminView(props: AdminViewProps) {
                             )}
                             <p className="text-[10px] text-slate-400">{w.method}</p>
                           </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleWithdrawAction(w.id, 'approved')} disabled={processingIds.has(w.id)} className={`p-2 bg-emerald-500/20 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(w.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(w.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
+                          <button onClick={() => handleWithdrawAction(w.id, 'rejected')} disabled={processingIds.has(w.id)} className={`p-2 bg-rose-500/20 text-rose-500 rounded-lg hover:bg-rose-500 hover:text-white transition-all ${processingIds.has(w.id) ? 'opacity-50 cursor-not-allowed' : ''}`}><X className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/*
+              Dollar Sell tab.
+
+              Reuses the `withdrawals` table (DollarSellView writes here
+              with a `Dollar Sell (Binance|USDT)` method prefix and debits
+              `mainBalance` / credits `pendingPayout` atomically). Approve
+              / reject reuse `handleWithdrawAction` so the refund logic on
+              rejection is shared with regular payouts.
+            */}
+            {activeAdminTab === 'dollar-sell' && (
+              <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
+                <h4 className="text-xs font-black text-slate-800 uppercase mb-4 flex items-center gap-2">
+                  <DollarSign className="w-4 h-4 text-indigo-500" />
+                  Dollar Sell Requests
+                </h4>
+                <div className="space-y-3">
+                  {withdrawals.filter(w => w.status === 'pending' && typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell')).length === 0 ? (
+                    <p className="text-[10px] text-slate-400 text-center py-4 uppercase font-bold">No pending dollar sell requests</p>
+                  ) : (
+                    withdrawals.filter(w => w.status === 'pending' && typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell')).map(w => (
+                      <div key={w.id} className="p-4 bg-white rounded-2xl border border-slate-100 flex justify-between items-center shadow-sm">
+                        <div>
+                          <p className="text-xs font-black text-slate-900">৳ {w.amount}</p>
+                          <p className="text-[10px] text-indigo-600 font-bold">{w.method}</p>
+                          <p className="text-[10px] text-slate-400">User: {w.userId}</p>
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => handleWithdrawAction(w.id, 'approved')} disabled={processingIds.has(w.id)} className={`p-2 bg-emerald-500/20 text-emerald-500 rounded-lg hover:bg-emerald-500 hover:text-white transition-all ${processingIds.has(w.id) ? 'opacity-50 cursor-not-allowed' : ''}`}>{processingIds.has(w.id) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}</button>
@@ -2212,14 +2411,17 @@ export function AdminView(props: AdminViewProps) {
                       const fee = parseFloat(ludoForm.fee);
                       const prize = parseFloat(ludoForm.prize);
 
-                      if (!ludoForm.title || !fee || !prize) return alert('Fill all fields');
+                      if (!ludoForm.title || !fee || !prize) {
+                        showToast('Fill all tournament fields before creating.', 'error');
+                        return;
+                      }
 
                       await adminInsert('ludoTournaments', {
                         title: ludoForm.title, entryFee: fee, prizePool: prize, type: ludoForm.type, description: ludoForm.desc, rules: 'ম্যাচ শুরু হওয়ার ১০ মিনিট আগে রুম কোড দেওয়া হবে। গেম শেষ হওয়ার পর স্ক্রিনশট জমা দিতে হবে। কোনো প্রকার চিটিং করলে আইডি ব্যান করা হবে। সঠিক লুডু ইউজারনেম ব্যবহার করতে হবে।',
                         status: 'open', maxPlayers: ludoForm.type === '1vs1' ? 2 : 4, currentPlayers: 0, startTime: new Date().toISOString(),
                         playerIds: []
                       });
-                      alert('Tournament Created!');
+                      showToast('Tournament created.', 'success');
                       setLudoForm({ title: '', fee: '', prize: '', type: '1vs1', desc: '' });
                     }}
                     className="w-full mt-8 bg-indigo-600 text-white py-5 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] shadow-xl shadow-indigo-500/20 active:scale-95 transition-all"
@@ -2406,7 +2608,7 @@ export function AdminView(props: AdminViewProps) {
                                   totalEarned: tournament.prizePool
                                 });
                                 await adminUpdate('ludoSubmissions', s.id, { status: 'approved' });
-                                alert('Submission Approved & Prize Paid!');
+                                showToast('Submission approved & prize paid.', 'success');
                               }}
                               className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest shadow-lg shadow-emerald-500/20 active:scale-95 transition-all flex items-center justify-center gap-2"
                             >
@@ -2416,7 +2618,7 @@ export function AdminView(props: AdminViewProps) {
                             <button
                               onClick={async () => {
                                 await adminUpdate('ludoSubmissions', s.id, { status: 'rejected' });
-                                alert('Submission Rejected');
+                                showToast('Submission rejected.', 'info');
                               }}
                               className="flex-1 bg-white text-rose-600 border border-rose-100 py-4 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-50 active:scale-95 transition-all flex items-center justify-center gap-2"
                             >
@@ -2695,7 +2897,7 @@ export function AdminView(props: AdminViewProps) {
                             const url = await uploadMedia(file);
                             setNewProduct(prev => ({ ...prev, image: url }));
                           } catch (err) {
-                            alert(err instanceof Error ? err.message : 'Upload failed');
+                            showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
                           }
                         }}
                       />
@@ -2962,6 +3164,7 @@ export function AdminView(props: AdminViewProps) {
         </div>
       </div>
       {reasonPromptUI}
+      {toastUI}
     </div>
   );
 }

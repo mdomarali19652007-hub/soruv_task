@@ -60,6 +60,27 @@ export async function adminIncrementFields(table: string, id: string, increments
   return adminFetch('/increment-fields', { table, id, increments });
 }
 
+/**
+ * Best-effort deletion of an upload's binary from Supabase Storage.
+ *
+ * Called before `adminDelete('uploads', id)` so admins clicking "Remove"
+ * also clean up the underlying object when the URL points at our own
+ * Supabase bucket. URLs hosted on third-party providers (ImgBB) cannot
+ * be deleted from the client and resolve to `{ skipped: true }` -- the
+ * admin sees this in the toast and can fall back to the host's UI.
+ *
+ * Errors are swallowed by the caller so a failed storage delete never
+ * blocks the metadata row delete.
+ */
+export async function adminDeleteUploadStorage(url: string): Promise<{
+  success?: boolean;
+  skipped?: boolean;
+  reason?: string;
+  error?: string;
+}> {
+  return adminFetch('/storage/delete', { url });
+}
+
 /** Get a single row by ID via the admin API (bypasses RLS) */
 export async function adminGetRow(table: string, id: string) {
   const res = await fetch(`/api/admin/row?table=${encodeURIComponent(table)}&id=${encodeURIComponent(id)}`, {
