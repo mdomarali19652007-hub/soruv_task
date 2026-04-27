@@ -626,6 +626,65 @@ router.post('/admin/increment-fields', requireAuth as any, requireAdmin as any, 
   }
 });
 
+// ============================================================
+// POST /api/admin/storage/delete
+//
+// Best-effort deletion of an upload's binary from Supabase Storage.
+// The client only knows the public URL of the upload (the `uploads`
+// row stores `url`), so we try to parse the path out of it. If the
+// URL belongs to an external host (e.g. ImgBB) we cannot delete it
+// from the client and respond with `{ skipped: true }` so the caller
+// can still drop the metadata row.
+//
+// We deliberately accept failure here: an admin clicking "Remove"
+// should not be blocked by a stale or missing storage object.
+// ============================================================
+
+const SUPABASE_PUBLIC_URL_RE =
+  /\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+?)(?:\?.*)?$/;
+
+router.post(
+  '/admin/storage/delete',
+  requireAuth as any,
+  requireAdmin as any,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const url = typeof req.body?.url === 'string' ? req.body.url.trim() : '';
+      if (!url) {
+        res.status(400).json({ error: 'url is required' });
+        return;
+      }
+
+      const match = url.match(SUPABASE_PUBLIC_URL_RE);
+      if (!match) {
+        // External host (ImgBB etc.) -- nothing we can delete from here.
+        res.json({ skipped: true, reason: 'external-host' });
+        return;
+      }
+
+      const bucket = decodeURIComponent(match[1]);
+      const path = decodeURIComponent(match[2]);
+
+      const { error } = await supabaseAdmin.storage.from(bucket).remove([path]);
+      if (error) {
+        // Treat "not found" as a soft success so the metadata row can
+        // still be cleaned up.
+        const lower = error.message.toLowerCase();
+        if (lower.includes('not found') || lower.includes('does not exist')) {
+          res.json({ skipped: true, reason: 'object-missing' });
+          return;
+        }
+        res.status(500).json({ error: error.message });
+        return;
+      }
+
+      res.json({ success: true, bucket, path });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  },
+);
+
 // GET /api/admin/row -- Get a single row by ID from a whitelisted table
 router.get('/admin/row', requireAuth as any, requireAdmin as any, async (req: AuthenticatedRequest, res: Response) => {
   try {
