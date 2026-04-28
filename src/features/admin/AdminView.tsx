@@ -14,14 +14,17 @@
  * closure are now passed in as props.
  */
 
-import { useState, useEffect, useRef, type ReactNode } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
-  ArrowLeft, Briefcase, Check, CheckCircle2, CreditCard, DollarSign,
-  ExternalLink, Facebook, History, Image as ImageIcon, Loader2, Mail,
-  Newspaper, Package, PlusCircle, RefreshCw, Search, ShoppingBag,
-  Smartphone, Trash2, Trophy, Upload, User, Users, UserX,
+  Briefcase, Check, CheckCircle2, CreditCard, DollarSign,
+  ExternalLink, Facebook, History, Image as ImageIcon,
+  LayoutDashboard, ListChecks, Loader2, Mail,
+  Newspaper, Package, PlusCircle, RefreshCw, Search, Settings as SettingsIcon, ShoppingBag,
+  Smartphone, SlidersHorizontal, Trash2, Trophy, Upload, User, Users, UserX,
   Wifi, X, Zap,
 } from 'lucide-react';
+import { AdminLayout, type AdminNavGroup } from './AdminLayout';
+import { AdminDashboard } from './AdminDashboard';
 import confetti from 'canvas-confetti';
 import {
   adminInsert, adminUpdate, adminDelete, adminUpsert,
@@ -49,6 +52,9 @@ import { useReasonPrompt } from '../../components/ReasonPromptModal';
  * below so the two can't drift apart.
  */
 export type AdminTab =
+  | 'dashboard'
+  | 'settings'
+  | 'features'
   | 'gmail'
   | 'facebook'
   | 'withdrawals'
@@ -214,7 +220,7 @@ export function AdminView(props: AdminViewProps) {
   const [adminEnabledCards, setAdminEnabledCards] = useState(enabledCards);
   const [adminTotalPaid, setAdminTotalPaid] = useState(totalPaid);
   const [adminActiveWorkerCount, setAdminActiveWorkerCount] = useState(activeWorkerCount);
-  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('gmail');
+  const [activeAdminTab, setActiveAdminTab] = useState<AdminTab>('dashboard');
   const [processingIds, setProcessingIds] = useState<Set<string>>(new Set());
   // Per-tournament local draft of the room code, so admins type without
   // silently committing on blur. Save button persists to the DB.
@@ -1035,76 +1041,124 @@ export function AdminView(props: AdminViewProps) {
     }
   };
 
+  // ----------------------------------------------------------------
+  // Sidebar nav source-of-truth.
+  //
+  // Adding a new admin tab here automatically:
+  //   - widens the [`AdminTab`](src/features/admin/AdminView.tsx:51) union when you add the id to it,
+  //   - makes the tab appear in the sidebar with badge counts derived
+  //     from the live data props,
+  //   - and (because the per-tab JSX below keys off `activeAdminTab`)
+  //     keeps rendering the matching panel.
+  // ----------------------------------------------------------------
+  const sidebarGroups: ReadonlyArray<AdminNavGroup> = [
+    {
+      label: 'Main Menu',
+      items: [
+        { id: 'dashboard', label: 'Dashboard',          icon: <LayoutDashboard className="w-5 h-5" /> },
+        { id: 'users',     label: 'User Section',       icon: <Users className="w-5 h-5" />,           badge: allUsers.filter(u => u.status !== 'active').length },
+      ],
+    },
+    {
+      label: 'Money Operations',
+      items: [
+        { id: 'withdrawals', label: 'Payouts',     icon: <CreditCard className="w-5 h-5" />, badge: withdrawals.filter(w => w.status === 'pending').length },
+        { id: 'deposits',    label: 'Deposits',    icon: <PlusCircle className="w-5 h-5" />, badge: rechargeRequests.filter(r => r.status === 'pending').length },
+        { id: 'dollar-buy',  label: 'Dollar Buy',  icon: <DollarSign className="w-5 h-5" />, badge: dollarBuyRequests.filter(r => r.status === 'pending').length },
+        { id: 'dollar-sell', label: 'Dollar Sell', icon: <DollarSign className="w-5 h-5" />, badge: withdrawals.filter(w => w.status === 'pending' && typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell')).length },
+      ],
+    },
+    {
+      label: 'Submissions Review',
+      items: [
+        { id: 'gmail',     label: 'Gmail',      icon: <Mail className="w-5 h-5" />,      badge: gmailSubmissions.filter(s => s.status === 'pending').length },
+        { id: 'facebook',  label: 'Facebook',   icon: <Facebook className="w-5 h-5" />,  badge: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
+        { id: 'microjobs', label: 'Microjobs',  icon: <Briefcase className="w-5 h-5" />, badge: microjobSubmissions.filter(s => s.status === 'pending').length },
+        { id: 'social',    label: 'Social Job', icon: <Users className="w-5 h-5" />,     badge: allSocialSubmissions.filter(s => s.status === 'pending').length },
+        { id: 'ludo',      label: 'Ludo',       icon: <Trophy className="w-5 h-5" />,    badge: ludoSubmissions.filter(s => s.status === 'pending').length },
+      ],
+    },
+    {
+      label: 'Shop & Orders',
+      items: [
+        { id: 'products',       label: 'Products', icon: <ShoppingBag className="w-5 h-5" /> },
+        { id: 'product-orders', label: 'Orders',   icon: <Package className="w-5 h-5" />,    badge: productOrders.filter(o => o.status === 'pending').length },
+      ],
+    },
+    {
+      label: 'Drive & Boosting',
+      items: [
+        { id: 'drive-offers',   label: 'Drive Offers',   icon: <Wifi className="w-5 h-5" /> },
+        { id: 'drive-requests', label: 'Drive Requests', icon: <Smartphone className="w-5 h-5" />, badge: driveOfferRequests.filter(r => r.status === 'pending').length },
+        { id: 'subscriptions',  label: 'Boosting',       icon: <Zap className="w-5 h-5" />,        badge: subscriptionRequests.filter(r => r.status === 'pending').length },
+      ],
+    },
+    {
+      label: 'Content Library',
+      items: [
+        { id: 'news',    label: 'News',    icon: <Newspaper className="w-5 h-5" /> },
+        { id: 'uploads', label: 'Uploads', icon: <Upload className="w-5 h-5" /> },
+      ],
+    },
+    {
+      label: 'Management',
+      items: [
+        { id: 'tasks',    label: 'Task Management', icon: <ListChecks className="w-5 h-5" /> },
+        { id: 'smm',      label: 'SMM Panel',       icon: <SlidersHorizontal className="w-5 h-5" /> },
+        { id: 'features', label: 'Feature Toggles', icon: <Zap className="w-5 h-5" /> },
+        { id: 'settings', label: 'Settings',        icon: <SettingsIcon className="w-5 h-5" /> },
+      ],
+    },
+  ];
+
+  const TAB_TITLES: Record<AdminTab, string> = {
+    dashboard:        'Overview Dashboard',
+    settings:         'System Settings',
+    features:         'Feature Toggles',
+    users:            'User Management',
+    withdrawals:      'Payouts',
+    deposits:         'Deposits',
+    'dollar-buy':     'Dollar Buy Requests',
+    'dollar-sell':    'Dollar Sell Requests',
+    gmail:            'Gmail Submissions',
+    facebook:         'Facebook Submissions',
+    microjobs:        'Microjob Submissions',
+    social:           'Social Job Submissions',
+    ludo:             'Ludo Tournaments',
+    products:         'Products',
+    'product-orders': 'Product Orders',
+    'drive-offers':   'Drive Offers',
+    'drive-requests': 'Drive Offer Requests',
+    subscriptions:    'Boosting Requests',
+    news:             'News Posts',
+    uploads:          'Uploads Library',
+    tasks:            'Task Management',
+    smm:              'SMM Panel',
+  };
+
   return (
-    <div className="min-h-screen pb-32">
-      <div className="p-6 pt-12">
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700 hover:scale-110 transition-all">
-            <ArrowLeft className="w-6 h-6" />
-          </button>
-          <div>
-            <h2 className="text-2xl font-black text-slate-900 neon-text glitch-text" data-text="Admin Terminal">Admin Terminal</h2>
-            <p className="text-[10px] font-bold text-indigo-600 uppercase tracking-widest mt-1 flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-              System Override Active
-            </p>
+    <AdminLayout
+      groups={sidebarGroups}
+      activeId={activeAdminTab}
+      onSelect={(id) => setActiveAdminTab(id as AdminTab)}
+      title={TAB_TITLES[activeAdminTab]}
+      onBack={() => setView('home')}
+      headerExtras={
+        <div className="hidden md:flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Users</p>
+            <p className="text-sm font-black text-white tabular-nums">{allUsers.length}</p>
+          </div>
+          <div className="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Paid</p>
+            <p className="text-sm font-black text-emerald-400 tabular-nums">৳{totalPaid}</p>
           </div>
         </div>
-        <div className="flex justify-end gap-2 mb-8">
-          <div className="glass px-4 py-2 rounded-xl border-white/40 shadow-sm text-center">
-            <p className="text-[8px] font-black text-slate-400 uppercase">Users</p>
-            <p className="text-xs font-black text-slate-900 font-mono">{allUsers.length}</p>
-          </div>
-          <div className="glass px-4 py-2 rounded-xl border-white/40 shadow-sm text-center">
-            <p className="text-[8px] font-black text-slate-400 uppercase">Paid</p>
-            <p className="text-xs font-black text-emerald-600 font-mono">৳{totalPaid}</p>
-          </div>
-        </div>
-
-        {/*
-         * Sticky "Jump to" bar — gives non-technical operators a single
-         * row of buttons that scroll the page down to whichever group of
-         * actions they need, instead of forcing them to find a tab in a
-         * horizontal-scroll strip. Anchor ids match each top-level
-         * `<section id="admin-section-…">` below.
-         */}
-        <div
-          className="sticky top-2 z-30 mb-6 -mx-2 px-2 py-2 bg-white/85 backdrop-blur-xl border border-white/40 rounded-2xl shadow-sm"
-        >
-          <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">
-            Jump to section
-          </p>
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: 'admin-section-config',      label: 'Config' },
-              { id: 'admin-section-features',    label: 'Features' },
-              { id: 'admin-section-money',       label: 'Money' },
-              { id: 'admin-section-submissions', label: 'Submissions' },
-              { id: 'admin-section-shop',        label: 'Shop' },
-              { id: 'admin-section-services',    label: 'Drive & Boosting' },
-              { id: 'admin-section-library',     label: 'Library' },
-              { id: 'admin-section-users',       label: 'Users' },
-              { id: 'admin-section-tools',       label: 'Tools' },
-            ].map(j => (
-              <a
-                key={j.id}
-                href={`#${j.id}`}
-                onClick={(e) => {
-                  // Smooth-scroll without leaving a `#anchor` in the URL bar
-                  // (which the browser back button would then have to undo).
-                  e.preventDefault();
-                  document.getElementById(j.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                }}
-                className="px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest bg-slate-100 text-slate-600 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors"
-              >
-                {j.label}
-              </a>
-            ))}
-          </div>
-        </div>
-
-        <div className="space-y-8">
+      }
+    >
+      <div className="space-y-8">
           {/* System Configuration */}
+          {activeAdminTab === 'settings' && (
           <section
             id="admin-section-config"
             className="space-y-4 scroll-mt-24"
@@ -1364,7 +1418,10 @@ export function AdminView(props: AdminViewProps) {
             </div>
           </section>
 
+          )}
+
           {/* Feature Toggles */}
+          {activeAdminTab === 'features' && (
           <section
             id="admin-section-features"
             className="space-y-4 scroll-mt-24"
@@ -1450,175 +1507,56 @@ export function AdminView(props: AdminViewProps) {
               </div>
             </div>
           </section>
+          )}
 
           {/*
-           * Operations Center.
-           *
-           * Replaces the old "Submission Control" mega-section that used
-           * a single 15-tab horizontal-scroll strip. The same per-tab
-           * panels still render below (one is active at a time, picked
-           * by `activeAdminTab`); only the navigation has been split
-           * into categorised chip-tab strips that wrap on narrow
-           * screens, plus a labelled <section id="..."> for each group
-           * so the "Jump to" bar at the top of the page can deep-link
-           * to a specific category. See plan §3.1 / §3.2.
+           * Tab navigation lives in the AdminLayout sidebar; sections
+           * below render conditionally based on `activeAdminTab`.
+           * Dashboard is the default landing screen.
            */}
-          {(() => {
-            // Single source of truth for the categorisation. Adding a
-            // new admin tab here automatically:
-            //   - widens the [`AdminTab`](src/features/admin/AdminView.tsx:48) union,
-            //   - shows it in the corresponding chip strip,
-            //   - and (because the per-tab JSX below keys off
-            //     `activeAdminTab`) keeps rendering the same panel.
-            const tabGroups: ReadonlyArray<{
-              id: string;
-              label: string;
-              accent: 'amber' | 'indigo' | 'rose' | 'violet' | 'sky' | 'emerald' | 'slate'; // tailwind colour token used for the section badge
-              tabs: ReadonlyArray<{
-                id: AdminTab;
-                label: string;
-                icon: ReactNode;
-                count: number;
-              }>;
-            }> = [
-              {
-                id: 'admin-section-money',
-                label: 'Money Operations',
-                accent: 'amber',
-                tabs: [
-                  { id: 'withdrawals', label: 'Payouts', icon: <CreditCard className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending').length },
-                  { id: 'deposits',    label: 'Deposits', icon: <PlusCircle className="w-3 h-3" />, count: rechargeRequests.filter(r => r.status === 'pending').length },
-                  { id: 'dollar-buy',  label: 'Dollar Buy', icon: <DollarSign className="w-3 h-3" />, count: dollarBuyRequests.filter(r => r.status === 'pending').length },
-                  { id: 'dollar-sell', label: 'Dollar Sell', icon: <DollarSign className="w-3 h-3" />, count: withdrawals.filter(w => w.status === 'pending' && typeof w.method === 'string' && w.method.toLowerCase().startsWith('dollar sell')).length },
-                ],
-              },
-              {
-                id: 'admin-section-submissions',
-                label: 'Submissions Review',
-                accent: 'indigo',
-                tabs: [
-                  { id: 'gmail',     label: 'Gmail',      icon: <Mail className="w-3 h-3" />,      count: gmailSubmissions.filter(s => s.status === 'pending').length },
-                  { id: 'facebook',  label: 'Facebook',   icon: <Facebook className="w-3 h-3" />,  count: taskSubmissions.filter(s => s.status === 'pending' && (s.taskType.toLowerCase().includes('fb') || s.taskType.toLowerCase().includes('facebook'))).length },
-                  { id: 'microjobs', label: 'Microjobs',  icon: <Briefcase className="w-3 h-3" />, count: microjobSubmissions.filter(s => s.status === 'pending').length },
-                  { id: 'social',    label: 'Social Job', icon: <Users className="w-3 h-3" />,     count: allSocialSubmissions.filter(s => s.status === 'pending').length },
-                  { id: 'ludo',      label: 'Ludo',       icon: <Trophy className="w-3 h-3" />,    count: ludoSubmissions.filter(s => s.status === 'pending').length },
-                ],
-              },
-              {
-                id: 'admin-section-shop',
-                label: 'Shop & Orders',
-                accent: 'rose',
-                tabs: [
-                  { id: 'products',       label: 'Products', icon: <ShoppingBag className="w-3 h-3" />, count: 0 },
-                  { id: 'product-orders', label: 'Orders',   icon: <Package className="w-3 h-3" />,     count: productOrders.filter(o => o.status === 'pending').length },
-                ],
-              },
-              {
-                id: 'admin-section-services',
-                label: 'Drive & Boosting',
-                accent: 'violet',
-                tabs: [
-                  { id: 'drive-offers',   label: 'Drive Offers',   icon: <Wifi className="w-3 h-3" />,       count: 0 },
-                  { id: 'drive-requests', label: 'Drive Requests', icon: <Smartphone className="w-3 h-3" />, count: driveOfferRequests.filter(r => r.status === 'pending').length },
-                  { id: 'subscriptions',  label: 'Boosting',       icon: <Zap className="w-3 h-3" />,        count: subscriptionRequests.filter(r => r.status === 'pending').length },
-                ],
-              },
-              {
-                id: 'admin-section-library',
-                label: 'Content Library',
-                accent: 'sky',
-                tabs: [
-                  { id: 'news',    label: 'News',    icon: <Newspaper className="w-3 h-3" />, count: 0 },
-                  { id: 'uploads', label: 'Uploads', icon: <Upload className="w-3 h-3" />,    count: allUploads.length },
-                ],
-              },
-              {
-                id: 'admin-section-users',
-                label: 'User Management',
-                accent: 'emerald',
-                tabs: [
-                  { id: 'users', label: 'Users', icon: <Users className="w-3 h-3" />, count: allUsers.filter(u => u.status !== 'active').length },
-                ],
-              },
-              {
-                id: 'admin-section-tools',
-                label: 'Task Manager',
-                accent: 'slate',
-                tabs: [
-                  { id: 'tasks', label: 'Manage Tasks', icon: <PlusCircle className="w-3 h-3" />, count: 0 },
-                ],
-              },
-            ];
-
-            // Tailwind cannot tree-shake runtime-built class names like
-            // `bg-${color}-500/10`, so we look up the full class string
-            // from a static map. Adding a new accent here also requires
-            // updating the `accent` union above.
-            const accentClasses: Record<typeof tabGroups[number]['accent'], string> = {
-              amber:   'bg-amber-500/10 text-amber-600 border-amber-500/20',
-              indigo:  'bg-indigo-500/10 text-indigo-600 border-indigo-500/20',
-              rose:    'bg-rose-500/10 text-rose-600 border-rose-500/20',
-              violet:  'bg-violet-500/10 text-violet-600 border-violet-500/20',
-              sky:     'bg-sky-500/10 text-sky-600 border-sky-500/20',
-              emerald: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20',
-              slate:   'bg-slate-500/10 text-slate-600 border-slate-500/20',
-            };
-
-            return tabGroups.map((group, idx) => {
-              return (
-                <section
-                  key={group.id}
-                  id={group.id}
-                  className="space-y-3 scroll-mt-24"
-                >
-                  <div className="flex items-center gap-3 mb-1">
-                    <div
-                      className={`w-9 h-9 rounded-xl flex items-center justify-center text-[10px] font-black border shadow-sm ${accentClasses[group.accent]}`}
-                    >
-                      {String(idx + 3).padStart(2, '0')}
-                    </div>
-                    <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                      {group.label}
-                    </h3>
-                  </div>
-                  {/*
-                    Chip strip.
-
-                    Previously each chip used `text-[10px]`, which read as
-                    "small" against the large `Apply System Changes` save
-                    button and the section headings -- non-technical
-                    operators flagged the chips as harder to tap than the
-                    legacy 16-tab strip they replaced. Bumping to `text-xs`
-                    (12px) brings chip text in line with the `text-xs` body
-                    used elsewhere in the panel; `tracking-wide` keeps the
-                    uppercase label from looking too tight at the larger
-                    size. Padding stays at `px-4 py-3` so the tap target
-                    is unchanged.
-                  */}
-                  <div className="flex flex-wrap gap-2">
-                    {group.tabs.map(tab => (
-                      <button
-                        key={tab.id}
-                        onClick={() => setActiveAdminTab(tab.id)}
-                        className={`flex items-center gap-2 px-4 py-3 rounded-xl text-xs font-black uppercase tracking-wide transition-all relative ${activeAdminTab === tab.id
-                            ? 'bg-indigo-600 text-white shadow-lg scale-105 z-10'
-                            : 'bg-white text-slate-500 border border-slate-100 hover:bg-slate-50'
-                          }`}
-                      >
-                        {tab.icon}
-                        <span>{tab.label}</span>
-                        {tab.count > 0 && (
-                          <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 bg-rose-500 text-white text-[9px] flex items-center justify-center rounded-full border-2 border-white">
-                            {tab.count}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </section>
-              );
-            });
-          })()}
+          {activeAdminTab === 'dashboard' && (
+            <AdminDashboard
+              totalUsers={allUsers.length}
+              newUsersToday={(() => {
+                const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+                const ts = dayStart.getTime();
+                return allUsers.filter(u => {
+                  const t = (u as { createdAt?: number; timestamp?: number }).createdAt ?? (u as { timestamp?: number }).timestamp ?? 0;
+                  return typeof t === 'number' && t >= ts;
+                }).length;
+              })()}
+              totalWithdrawals={withdrawals.filter(w => w.status === 'approved').length}
+              withdrawalsToday={(() => {
+                const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+                return withdrawals.filter(w => w.status === 'approved' && w.timestamp >= dayStart.getTime()).length;
+              })()}
+              pendingWithdrawals={withdrawals.filter(w => w.status === 'pending').length}
+              totalActiveAccounts={allUsers.filter(u => u.isActive).length}
+              activationsToday={(() => {
+                const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+                return rechargeRequests.filter(r => r.status === 'approved' && ((r as { timestamp?: number }).timestamp ?? 0) >= dayStart.getTime()).length;
+              })()}
+              pendingActivations={rechargeRequests.filter(r => r.status === 'pending').length}
+              totalPlanActivations={subscriptionRequests.filter(r => r.status === 'approved').length}
+              planActivationsToday={(() => {
+                const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+                return subscriptionRequests.filter(r => r.status === 'approved' && ((r as { timestamp?: number }).timestamp ?? 0) >= dayStart.getTime()).length;
+              })()}
+              pendingPlanActivations={subscriptionRequests.filter(r => r.status === 'pending').length}
+              totalTaskSubmissions={taskSubmissions.length + microjobSubmissions.length + gmailSubmissions.length + allSocialSubmissions.length}
+              taskSubmissionsToday={(() => {
+                const dayStart = new Date(); dayStart.setHours(0, 0, 0, 0);
+                const sum = (arr: ReadonlyArray<unknown>) => arr.filter(s => ((s as { timestamp?: number }).timestamp ?? 0) >= dayStart.getTime()).length;
+                return sum(taskSubmissions) + sum(microjobSubmissions) + sum(gmailSubmissions) + sum(allSocialSubmissions);
+              })()}
+              pendingTaskSubmissions={
+                taskSubmissions.filter(s => s.status === 'pending').length
+                + microjobSubmissions.filter(s => s.status === 'pending').length
+                + gmailSubmissions.filter(s => s.status === 'pending').length
+                + allSocialSubmissions.filter(s => s.status === 'pending').length
+              }
+            />
+          )}
 
           {/*
            * The active per-tab panel renders below in its own wrapping
@@ -3162,9 +3100,8 @@ export function AdminView(props: AdminViewProps) {
             )}
           </section>
         </div>
-      </div>
-      {reasonPromptUI}
-      {toastUI}
-    </div>
+        {reasonPromptUI}
+        {toastUI}
+    </AdminLayout>
   );
 }
