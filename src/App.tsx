@@ -299,7 +299,15 @@ export default function App() {
   const [smmOrders, setSmmOrders] = useState<SmmOrder[]>([]);
   const [userMessages, setUserMessages] = useState<UserMessage[]>([]);
   const [allUploads, setAllUploads] = useState<GlobalUpload[]>([]);
-  const [dynamicTasks, setDynamicTasks] = useState<{ id: string; title: string; reward: number; desc: string; link: string; category: 'micro' | 'social' }[]>([]);
+  const [dynamicTasks, setDynamicTasks] = useState<{
+    id: string;
+    title: string;
+    reward: number;
+    desc: string;
+    link: string;
+    category: 'micro' | 'social' | 'gmail' | 'premium';
+    createdAt?: string;
+  }[]>([]);
   const [gmailPassword, setGmailPassword] = useState('');
   const [gmailReward, setGmailReward] = useState(10.00);
   const [adReward, setAdReward] = useState(0.40);
@@ -681,7 +689,7 @@ export default function App() {
     unsubs.push(unsubSettings);
 
     // Sync all collection tables
-    unsubs.push(subscribeToTable<any>('tasks', (rows) => setDynamicTasks(rows)));
+    unsubs.push(subscribeToTable<any>('tasks', (rows) => setDynamicTasks(rows), { orderBy: { column: 'createdAt', ascending: false } }));
     unsubs.push(subscribeToTable<GmailSubmission>('gmailSubmissions', (rows) => setGmailSubmissions(rows)));
     unsubs.push(subscribeToTable<MicrojobSubmission>('microjobSubmissions', (rows) => setMicrojobSubmissions(rows)));
     unsubs.push(subscribeToTable<TaskSubmission>('taskSubmissions', (rows) => setTaskSubmissions(rows)));

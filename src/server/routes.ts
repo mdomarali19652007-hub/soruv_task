@@ -4,6 +4,7 @@ import { supabaseAdmin } from './supabase-admin.js';
 import { referralLimiter, adminLimiter } from './rate-limit.js';
 import { isUserAdmin } from './admin.js';
 import { requireAdminHost } from './admin-host.js';
+import { validateAdminInsert, validateAdminUpdate } from './admin-validators.js';
 
 const clerkClient = createClerkClient({ secretKey: process.env.CLERK_SECRET_KEY });
 
@@ -468,14 +469,21 @@ router.post('/admin/insert', requireAuth as any, requireAdmin as any, async (req
   try {
     const { table, data } = req.body;
     if (!validateTable(table, res)) return;
-    if (!data || typeof data !== 'object') {
-      res.status(400).json({ error: 'data is required' });
+
+    // Per-table input validation. For tables without a dedicated
+    // validator this is a permissive pass-through, so existing admin
+    // flows keep working. The `tasks` validator is what stops typo'd
+    // categories (e.g. "mciro") from silently disappearing on every
+    // public listing.
+    const validation = validateAdminInsert(table, data);
+    if (!validation.ok) {
+      res.status(400).json({ error: validation.error });
       return;
     }
 
     const { data: result, error } = await supabaseAdmin
       .from(table)
-      .insert(data)
+      .insert(validation.data)
       .select()
       .single();
 
@@ -498,14 +506,15 @@ router.post('/admin/update', requireAuth as any, requireAdmin as any, async (req
       res.status(400).json({ error: 'id is required' });
       return;
     }
-    if (!data || typeof data !== 'object') {
-      res.status(400).json({ error: 'data is required' });
+    const validation = validateAdminUpdate(table, data);
+    if (!validation.ok) {
+      res.status(400).json({ error: validation.error });
       return;
     }
 
     const { error } = await supabaseAdmin
       .from(table)
-      .update(data)
+      .update(validation.data)
       .eq('id', id);
 
     if (error) {
@@ -710,6 +719,31 @@ router.get('/admin/row', requireAuth as any, requireAdmin as any, async (req: Au
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
+});
+
+// ============================================================
+// GET /api/health/supabase -- Diagnostic endpoint
+//
+// Returns the Supabase project ref the SERVER side is configured for.
+// Cross-checking this against the project ref baked into the public
+// SPA bundle (`VITE_SUPABASE_URL`) is the fastest way to catch a
+// "split-brain" deployment where admin writes go to project A but the
+// public anon client reads from project B -- which made admin-created
+// microjobs silently invisible on the public Micro Freelancing page.
+//
+// We deliberately return ONLY the project ref (the URL fragment), not
+// the full URL or any keys: the project ref is already implicitly
+// public (it's a CNAME-shaped subdomain) but the explicit narrowing
+// keeps us honest if someone misuses the endpoint later.
+// ============================================================
+router.get('/health/supabase', (_req: Request, res: Response) => {
+  const url = process.env.SUPABASE_URL || '';
+  const match = url.match(/https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)/i);
+  const projectRef = match ? match[1] : null;
+  res.json({
+    projectRef,
+    configured: Boolean(projectRef && process.env.SUPABASE_SERVICE_ROLE_KEY),
+  });
 });
 
 export default router;

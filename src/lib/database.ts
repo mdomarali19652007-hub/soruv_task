@@ -230,7 +230,16 @@ export function subscribeToTable<T extends { id: string }>(
         });
       }
     )
-    .subscribe();
+    .subscribe((status, err) => {
+      // Surface realtime channel failures to the console. Without this,
+      // a missing entry in the `supabase_realtime` publication or a
+      // tightened RLS policy looks like "the page just doesn't update"
+      // with no signal in DevTools. Logging the failure modes makes the
+      // root cause obvious next time.
+      if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        console.warn(`[supabase realtime] channel for "${table}" -> ${status}`, err);
+      }
+    });
 
   // Return unsubscribe function
   return () => {

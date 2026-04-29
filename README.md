@@ -132,6 +132,46 @@ Important serverless caveats:
 
 Minimum Vercel env vars: every variable listed above except `VITE_*` (those are build-time).
 
+## Multi-host deployments (admin / public split)
+
+Some deployments serve the admin UI from a dedicated subdomain (for
+example `admin.example.com`) while the public earning app is served
+from the apex (`example.com`). When that's the case, **both
+deployments MUST point at the same Supabase project**, otherwise
+admin writes (which use the server's `SUPABASE_SERVICE_ROLE_KEY`) and
+public reads (which use the SPA's `VITE_SUPABASE_ANON_KEY`) operate
+on different databases and admin-created rows -- including microjob
+tasks -- never appear on the public side.
+
+Concretely, all four of these env vars must resolve to the same
+Supabase project ref (the `<ref>.supabase.co` subdomain) on every
+deployment:
+
+| Env var | Where it's read |
+| --- | --- |
+| `SUPABASE_URL` | server, [`src/server/supabase-admin.ts`](src/server/supabase-admin.ts:1) |
+| `SUPABASE_SERVICE_ROLE_KEY` | server, [`src/server/supabase-admin.ts`](src/server/supabase-admin.ts:1) |
+| `VITE_SUPABASE_URL` | browser, [`src/lib/supabase.ts`](src/lib/supabase.ts:1) |
+| `VITE_SUPABASE_ANON_KEY` | browser, [`src/lib/supabase.ts`](src/lib/supabase.ts:1) |
+
+The deployed server exposes a diagnostic at `GET /api/health/supabase`
+that returns the configured project ref. Fetch it from each host and
+compare:
+
+```bash
+curl https://admin.example.com/api/health/supabase
+curl https://example.com/api/health/supabase
+# Both should print the same { "projectRef": "...", "configured": true }.
+```
+
+Also confirm the project ref baked into the SPA bundle by viewing
+source on each host -- the anon URL is inlined into the JS, so a
+quick page-source search for `.supabase.co` will surface it.
+
+If the two refs ever drift, align the env on the public deployment
+to match the admin deployment (or vice versa), redeploy, and re-run
+the curl above.
+
 ## Security notes
 
 - All mutating client traffic MUST go through `/api/*` endpoints, which authenticate via Clerk (session cookies / Bearer token) and use the Supabase service role key. Direct writes from the browser are blocked by RLS.
