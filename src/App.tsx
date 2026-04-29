@@ -2276,7 +2276,7 @@ export default function App() {
   // reached by legitimate admins.
   if (isAuthReady && view === 'admin' && isLoggedIn && isAdmin) {
     return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+      <div className="admin-shell min-h-screen bg-slate-950 text-slate-100 font-sans">
         <SubmissionLoader />
         <AdminView
           view={view}
