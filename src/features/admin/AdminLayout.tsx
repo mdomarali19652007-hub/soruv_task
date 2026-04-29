@@ -86,11 +86,24 @@ export function AdminLayout({
         />
       )}
 
-      {/* Sidebar */}
+      {/* Sidebar
+       *
+       * Always `fixed` so it does not consume a row in the parent's
+       * normal flow (the parent here is a plain block container, not a
+       * flex row). The main column reserves space for it via
+       * `lg:pl-64`. At <lg the sidebar acts as an off-canvas drawer
+       * that slides in/out via `translate-x`; at lg+ we lock it open
+       * with `lg:translate-x-0`.
+       *
+       * NOTE: do NOT use `lg:sticky` here without also making the
+       * parent a flex/grid container -- a sticky element still
+       * participates in normal flow, and a non-flex parent will stack
+       * the sidebar above the main content instead of beside it,
+       * leaving an empty viewport-height column at the top. */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900/95 border-r border-slate-800/80 backdrop-blur-xl transform transition-transform duration-200 ease-out
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-slate-900/95 border-r border-slate-800/80 backdrop-blur-xl flex flex-col transform transition-transform duration-200 ease-out
           ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}
-          lg:translate-x-0 lg:sticky lg:top-0 lg:h-screen lg:flex lg:flex-col`}
+          lg:translate-x-0`}
         aria-label="Admin navigation"
       >
         {/* Brand row */}
