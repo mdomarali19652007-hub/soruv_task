@@ -460,6 +460,20 @@ export default function App() {
     return () => window.removeEventListener('popstate', onPopState);
   }, [isLoggedIn]);
 
+  // --- Lock the admin subdomain to the admin view ---
+  // When the browser is on the configured admin host (e.g.
+  // `admin.example.com`), the only legitimate view is `'admin'`. If any
+  // stray `setView(...)` call (e.g. a leaked bottom-nav click, a
+  // deep-linked component, or future code paths) flips the view to a
+  // consumer route, snap it back. This is a belt-and-braces guard --
+  // the bottom nav gate and the early return both already prevent the
+  // common cases, but this catches anything we missed.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isOnAdminHost()) return;
+    if (view !== 'admin') setView('admin');
+  }, [view]);
+
   // --- Login Animation ---
   useEffect(() => {
     if (isLoggedIn && view === 'home') {
@@ -2248,6 +2262,86 @@ export default function App() {
     </div>
   );
 
+  // --- Early return for the admin view ---
+  // The consumer shell below clamps the layout to `max-w-md` (448px),
+  // which is intentional for the mobile-first end-user app but breaks
+  // the admin shell (256px sidebar + content cards). Render the admin
+  // view at full viewport width, outside the consumer wrapper, when:
+  //   - the active view is `'admin'` AND the user is a logged-in admin, or
+  //   - we're sitting on the dedicated admin host but auth hasn't
+  //     finished yet (we still want the admin shell, not the consumer
+  //     skeleton, while resolving).
+  // The existing permission guard at the top of the component already
+  // bounces non-admins off the `'admin'` view, so this branch is only
+  // reached by legitimate admins.
+  if (isAuthReady && view === 'admin' && isLoggedIn && isAdmin) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans">
+        <SubmissionLoader />
+        <AdminView
+          view={view}
+          setView={setView}
+          user={user}
+          globalNotice={globalNotice}
+          isMaintenance={isMaintenance}
+          telegramLink={telegramLink}
+          facebookLink={facebookLink}
+          whatsappLink={whatsappLink}
+          showWelcomeAnimation={showWelcomeAnimation}
+          rulesText={rulesText}
+          smmPrices={smmPrices}
+          minWithdrawal={minWithdrawal}
+          withdrawalFee={withdrawalFee}
+          dollarBuyRate={dollarBuyRate}
+          dollarSellRate={dollarSellRate}
+          spinCost={spinCost}
+          dailyReward={dailyReward}
+          activeFolders={activeFolders}
+          enabledFeatures={enabledFeatures}
+          enabledSmmServices={enabledSmmServices}
+          enabledCards={enabledCards}
+          adminGen1Rate={adminGen1Rate}
+          adminGen2Rate={adminGen2Rate}
+          adminGen3Rate={adminGen3Rate}
+          activationFee={activationFee}
+          rechargeCommissionRate={rechargeCommissionRate}
+          activationDuration={activationDuration}
+          referralCommissionRate={referralCommissionRate}
+          referralActivationBonus={referralActivationBonus}
+          totalPaid={totalPaid}
+          activeWorkerCount={activeWorkerCount}
+          gmailPassword={gmailPassword}
+          gmailReward={gmailReward}
+          adReward={adReward}
+          dailyAdLimit={dailyAdLimit}
+          deliveryFee={deliveryFee}
+          allUsers={allUsers}
+          allSocialSubmissions={allSocialSubmissions}
+          newsPosts={newsPosts}
+          withdrawals={withdrawals}
+          dollarBuyRequests={dollarBuyRequests}
+          gmailSubmissions={gmailSubmissions}
+          microjobSubmissions={microjobSubmissions}
+          taskSubmissions={taskSubmissions}
+          subscriptionRequests={subscriptionRequests}
+          rechargeRequests={rechargeRequests}
+          driveOffers={driveOffers}
+          driveOfferRequests={driveOfferRequests}
+          products={products}
+          productOrders={productOrders}
+          ludoTournaments={ludoTournaments}
+          ludoSubmissions={ludoSubmissions}
+          smmOrders={smmOrders}
+          allUploads={allUploads}
+          dynamicTasks={dynamicTasks}
+          isSubmitting={isSubmitting}
+          setIsSubmitting={setIsSubmitting}
+          setSubmissionProgress={setSubmissionProgress}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-md mx-auto min-h-screen bg-slate-50 text-slate-900 font-sans relative overflow-x-hidden">
 
@@ -2641,8 +2735,11 @@ export default function App() {
         {view === 'social-job' && <SocialJobView key="social-job" />}
       </AnimatePresence>}
 
-      {/* Bottom Navigation - hide on login view and email verification */}
-      {isAuthReady && isLoggedIn && view !== 'login' && !needsEmailVerification && (
+      {/* Bottom Navigation - hide on login, email verification, and the
+          admin shell (both the dedicated admin subdomain and the
+          legacy apex `/admin` route). */}
+      {isAuthReady && isLoggedIn && view !== 'login' && view !== 'admin'
+        && !isOnAdminHost() && !needsEmailVerification && (
         <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-4 z-50">
           <div className="glass rounded-[32px] p-2 flex justify-between items-center border border-white/40 shadow-2xl">
             {[
