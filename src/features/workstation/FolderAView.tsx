@@ -25,7 +25,8 @@ export interface DynamicTask {
   desc: string;
   link?: string;
   reward: number;
-  category: string;
+  category: 'micro' | 'social' | 'gmail' | 'premium';
+  createdAt?: string;
 }
 
 interface Props {

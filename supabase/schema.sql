@@ -176,8 +176,13 @@ CREATE TABLE IF NOT EXISTS tasks (
   reward NUMERIC(12,2) DEFAULT 0,
   "desc" TEXT DEFAULT '',
   link TEXT DEFAULT '',
-  category TEXT DEFAULT 'micro'
+  category TEXT DEFAULT 'micro',
+  -- Used by the SPA to order public listings newest-first; see
+  -- supabase/migrations/20260603_tasks_created_at.sql for the
+  -- additive migration applied to existing deployments.
+  "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE INDEX IF NOT EXISTS tasks_created_at_desc_idx ON tasks ("createdAt" DESC);
 
 CREATE TABLE IF NOT EXISTS "rechargeRequests" (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
