@@ -737,12 +737,24 @@ router.get('/admin/row', requireAuth as any, requireAdmin as any, async (req: Au
 // keeps us honest if someone misuses the endpoint later.
 // ============================================================
 router.get('/health/supabase', (_req: Request, res: Response) => {
-  const url = process.env.SUPABASE_URL || '';
-  const match = url.match(/https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)/i);
-  const projectRef = match ? match[1] : null;
+  // Mirror the fallback chain in src/server/supabase-admin.ts so this
+  // endpoint reflects what `supabaseAdmin` actually connects to. Some
+  // deployments only set `VITE_SUPABASE_URL` (the browser-side var)
+  // and the admin client happily falls back to it server-side.
+  const serverUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || '';
+  const serverMatch = serverUrl.match(/https?:\/\/([a-z0-9-]+)\.supabase\.(?:co|in)/i);
+  const projectRef = serverMatch ? serverMatch[1] : null;
+
+  // Also surface which env var(s) the project ref came from so the
+  // admin/public split-brain check is unambiguous from the response.
+  const sources: string[] = [];
+  if (process.env.SUPABASE_URL) sources.push('SUPABASE_URL');
+  if (process.env.VITE_SUPABASE_URL) sources.push('VITE_SUPABASE_URL');
+
   res.json({
     projectRef,
     configured: Boolean(projectRef && process.env.SUPABASE_SERVICE_ROLE_KEY),
+    sources,
   });
 });
 
