@@ -76,7 +76,7 @@ export function AdminLayout({
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
+    <div className="admin-shell min-h-screen bg-slate-950 text-slate-100">
       {/* Backdrop for mobile drawer */}
       {drawerOpen && (
         <div
