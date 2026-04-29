@@ -15,6 +15,17 @@ describe('hostnameIsAdmin', () => {
       expect(hostnameIsAdmin('apex.example.com', 'admin.example.com')).toBe(false);
       expect(hostnameIsAdmin('admin.evil.com', 'admin.example.com')).toBe(false);
     });
+
+    it('matches the production admin.ironing.top host', () => {
+      // Regression coverage for the production admin subdomain so the
+      // host-based UI branch in `App.tsx` (full-width admin shell, no
+      // bottom nav) cannot silently regress if the env var or helper
+      // is misconfigured.
+      expect(hostnameIsAdmin('admin.ironing.top', 'admin.ironing.top')).toBe(true);
+      expect(hostnameIsAdmin('ironing.top', 'admin.ironing.top')).toBe(false);
+      expect(hostnameIsAdmin('www.ironing.top', 'admin.ironing.top')).toBe(false);
+      expect(hostnameIsAdmin('admin-preview.ironing.top', 'admin.ironing.top')).toBe(false);
+    });
   });
 
   describe('without a configured host', () => {
