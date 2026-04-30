@@ -2738,6 +2738,7 @@ export default function App() {
               onPasswordChange={setLoginPassword}
               onSubmit={handleAdminLogin}
               onForgotPassword={handlePasswordReset}
+              onGoogleSignIn={handleGoogleLogin}
               isSubmitting={adminAuthSubmitting}
             />
           </div>

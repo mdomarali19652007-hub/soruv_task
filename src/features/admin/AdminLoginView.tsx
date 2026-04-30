@@ -38,6 +38,7 @@ export interface AdminLoginViewProps {
   onPasswordChange: (v: string) => void;
   onSubmit: () => void | Promise<void>;
   onForgotPassword: () => void | Promise<void>;
+  onGoogleSignIn?: () => void | Promise<void>;
   isSubmitting?: boolean;
   /** Optional product / build label rendered in the footer. */
   buildTag?: string;
@@ -50,6 +51,7 @@ export function AdminLoginView({
   onPasswordChange,
   onSubmit,
   onForgotPassword,
+  onGoogleSignIn,
   isSubmitting = false,
   buildTag = 'Admin Console',
 }: AdminLoginViewProps) {
@@ -213,6 +215,36 @@ export function AdminLoginView({
                 )}
               </button>
             </form>
+
+            {onGoogleSignIn && (
+              <>
+                <div className="flex items-center gap-3 my-5">
+                  <div className="h-px bg-slate-800 flex-1" />
+                  <span className="text-[9px] font-semibold text-slate-500 uppercase tracking-[0.25em]">
+                    or
+                  </span>
+                  <div className="h-px bg-slate-800 flex-1" />
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => void onGoogleSignIn()}
+                  disabled={isSubmitting}
+                  className="w-full inline-flex items-center justify-center gap-2.5 bg-slate-950/60 hover:bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-200 text-[12px] font-semibold tracking-wide py-2.5 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  <img
+                    src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg"
+                    className="w-4 h-4"
+                    alt=""
+                    referrerPolicy="no-referrer"
+                  />
+                  <span>Continue with Google SSO</span>
+                </button>
+                <p className="text-[10px] text-slate-500 text-center mt-2">
+                  Use the Google account associated with your operator profile.
+                </p>
+              </>
+            )}
           </div>
 
           {/* Card footer */}
