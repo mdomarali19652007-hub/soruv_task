@@ -80,3 +80,31 @@ export function getAdminRedirectUrl(): string | null {
   if (!adminHost) return null;
   return `${window.location.protocol}//${adminHost}/`;
 }
+
+/**
+ * Build the absolute URL of the public site used to "exit" out of the
+ * admin shell. When we are on a dedicated admin subdomain we strip the
+ * leading `admin.` (or use `VITE_PUBLIC_HOSTNAME` when set) so the
+ * operator lands on the consumer app. Returns `null` outside the
+ * browser or when not on an admin host.
+ */
+export function getPublicSiteUrl(): string | null {
+  if (typeof window === 'undefined') return null;
+  const env =
+    typeof import.meta !== 'undefined'
+      ? (import.meta as unknown as { env?: Record<string, string | undefined> }).env
+      : undefined;
+  const explicit = env?.VITE_PUBLIC_HOSTNAME;
+  if (explicit) {
+    return `${window.location.protocol}//${explicit.trim().toLowerCase()}/`;
+  }
+  // Not on an admin host -> nothing to derive.
+  if (!isOnAdminHost()) return null;
+  const host = window.location.hostname;
+  // Strip the leading admin label (`admin.example.com` -> `example.com`).
+  const stripped = host.replace(/^admin\./i, '');
+  // Refuse to send the user to the same host (config edge case where
+  // VITE_ADMIN_HOSTNAME does not start with `admin.`).
+  if (!stripped || stripped === host) return null;
+  return `${window.location.protocol}//${stripped}/`;
+}

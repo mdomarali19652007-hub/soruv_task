@@ -90,7 +90,7 @@ import {
   processSpin
 } from './lib/database';
 import { adminInsert, adminUpdate, adminDelete, adminUpsert, adminIncrement, adminIncrementFields, adminGetRow } from './lib/admin-api';
-import { isOnAdminHost, getConfiguredAdminHostname } from './lib/admin-host';
+import { isOnAdminHost, getConfiguredAdminHostname, getPublicSiteUrl } from './lib/admin-host';
 import { sanitizeAndTrim, isValidMobileWallet, sanitizeAccountNumber, generateTransactionId } from './utils/sanitize';
 import {
   authClient,
@@ -891,6 +891,45 @@ export default function App() {
       console.error('[auth] password reset request failed:', error);
       alert('Could not start password reset right now. Please try again shortly.');
     }
+  };
+
+  // Sign the operator out of the admin shell. Calls Clerk `signOut()`,
+  // resets local auth state, and lets the admin host snap back to the
+  // dedicated AdminLoginView (since `view` stays `'admin'` and
+  // `isLoggedIn` flips to false). On the apex `/admin` route the guard
+  // bounces the user to `'login'` instead, which is the desired flow
+  // there. Note: on a multi-host deployment Clerk session cookies must
+  // be scoped to the parent domain in Clerk's dashboard for this to
+  // also end the public-site session; otherwise the public tab keeps
+  // its own session until next refresh.
+  const handleAdminSignOut = async () => {
+    try {
+      await signOut();
+    } catch (err) {
+      console.error('[admin] signOut failed:', err);
+    } finally {
+      setIsLoggedIn(false);
+      // Skip confetti / "home" routing -- on admin host the host-lock
+      // effect would snap us straight back to 'admin' anyway, and we
+      // want AdminLoginView to render. On apex we still want the user
+      // off the admin path.
+      if (typeof window !== 'undefined' && window.location.pathname === '/admin') {
+        window.history.replaceState({}, '', '/');
+      }
+    }
+  };
+
+  // Exit out of the admin shell without ending the session. On a
+  // dedicated admin subdomain, the in-app `setView('home')` path is a
+  // no-op (the host-lock effect snaps it back), so we redirect to the
+  // public site URL instead.
+  const handleExitAdmin = () => {
+    const publicUrl = getPublicSiteUrl();
+    if (publicUrl) {
+      window.location.assign(publicUrl);
+      return;
+    }
+    setView('home');
   };
 
   // Admin-shell login (no rules checkbox, no phone-number lookup,
@@ -2385,6 +2424,8 @@ export default function App() {
           isSubmitting={isSubmitting}
           setIsSubmitting={setIsSubmitting}
           setSubmissionProgress={setSubmissionProgress}
+          onSignOut={handleAdminSignOut}
+          onExitToPublic={handleExitAdmin}
         />
       </div>
     );
@@ -2777,6 +2818,8 @@ export default function App() {
             isSubmitting={isSubmitting}
             setIsSubmitting={setIsSubmitting}
             setSubmissionProgress={setSubmissionProgress}
+            onSignOut={handleAdminSignOut}
+            onExitToPublic={handleExitAdmin}
           />
         )}
         {view === 'settings' && settingsView}

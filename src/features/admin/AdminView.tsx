@@ -139,6 +139,19 @@ export interface AdminViewProps {
   isSubmitting: boolean;
   setIsSubmitting: (v: boolean) => void;
   setSubmissionProgress: (n: number) => void;
+  /**
+   * Sign the operator out (Clerk signOut + local state cleanup). Owned
+   * by [`src/App.tsx`](../../App.tsx:1) since auth lives there; AdminView
+   * just surfaces the button in the header.
+   */
+  onSignOut: () => void | Promise<void>;
+  /**
+   * Exit the admin shell and return to the public surface. On the
+   * dedicated admin subdomain this redirects to the configured public
+   * site URL; on the apex `/admin` route it just flips the view to
+   * `home`.
+   */
+  onExitToPublic: () => void;
 }
 
 export function AdminView(props: AdminViewProps) {
@@ -159,6 +172,7 @@ export function AdminView(props: AdminViewProps) {
     products, productOrders, ludoTournaments, ludoSubmissions, smmOrders,
     allUploads, dynamicTasks,
     isSubmitting, setIsSubmitting, setSubmissionProgress,
+    onSignOut, onExitToPublic,
   } = props;
 
   const { requestReason, modalUI: reasonPromptUI } = useReasonPrompt();
@@ -1142,7 +1156,9 @@ export function AdminView(props: AdminViewProps) {
       activeId={activeAdminTab}
       onSelect={(id) => setActiveAdminTab(id as AdminTab)}
       title={TAB_TITLES[activeAdminTab]}
-      onBack={() => setView('home')}
+      onBack={onExitToPublic}
+      onSignOut={onSignOut}
+      operatorLabel={user?.email || user?.name || undefined}
       headerExtras={
         <div className="hidden md:flex items-center gap-2">
           <div className="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
