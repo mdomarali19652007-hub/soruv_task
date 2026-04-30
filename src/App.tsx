@@ -155,6 +155,7 @@ import { AccountActivationView as SharedAccountActivationView } from './features
 import { DashboardView as SharedDashboardView } from './features/dashboard/DashboardView';
 import { MobileRechargeView as SharedMobileRechargeView } from './features/mobile-recharge/MobileRechargeView';
 import { AdminView } from './features/admin/AdminView';
+import { AdminLoginView } from './features/admin/AdminLoginView';
 import { DriveOfferView as SharedDriveOfferView } from './features/drive-offer/DriveOfferView';
 import { ReferralView as SharedReferralView } from './features/referral/ReferralView';
 import { FolderAView as SharedFolderAView } from './features/workstation/FolderAView';
@@ -397,6 +398,12 @@ export default function App() {
   useEffect(() => {
     if (!isAuthReady) return;
     if (view !== 'admin') return;
+    // On the dedicated admin subdomain, never bounce off 'admin' -- a
+    // logged-out visitor should see the dedicated AdminLoginView, and a
+    // non-admin gets a restriction message inside the admin shell.
+    // Bouncing here would fight the host-lock effect below and either
+    // loop or render nothing.
+    if (isOnAdminHost()) return;
     if (!isLoggedIn || !isAdmin) {
       if (typeof window !== 'undefined') {
         if (window.location.pathname === '/admin') {
@@ -883,6 +890,39 @@ export default function App() {
       // Generic message -- don't leak provider state to the user.
       console.error('[auth] password reset request failed:', error);
       alert('Could not start password reset right now. Please try again shortly.');
+    }
+  };
+
+  // Admin-shell login (no rules checkbox, no phone-number lookup,
+  // no Google sign-up). Used by the dedicated AdminLoginView rendered
+  // on the admin subdomain when no session is active. We deliberately
+  // keep this minimal: the admin login form only accepts an email and
+  // a password, which mirrors how operators are provisioned.
+  const [adminAuthSubmitting, setAdminAuthSubmitting] = useState(false);
+  const handleAdminLogin = async () => {
+    if (!loginEmail || !loginPassword) {
+      alert('Enter your operator credentials to continue.');
+      return;
+    }
+    setAdminAuthSubmitting(true);
+    try {
+      const { error: loginError } = await signIn.email({
+        email: loginEmail,
+        password: loginPassword,
+      });
+      if (loginError) throw loginError;
+      // Stay on the admin shell; AdminView mounts as soon as the session
+      // hydrates and `isAdmin` flips true.
+      setShowWelcome(true);
+    } catch (error: any) {
+      console.error('Admin login error:', error);
+      if (error?.message?.includes('Invalid') || error?.message?.includes('credentials')) {
+        alert('Invalid operator credentials.');
+      } else {
+        alert(error?.message || 'Sign-in failed. Try again shortly.');
+      }
+    } finally {
+      setAdminAuthSubmitting(false);
     }
   };
 
@@ -2648,6 +2688,19 @@ export default function App() {
           </div>
         )}
         {view !== 'reset-password' && isLoggedIn && user.status !== 'active' && !isAdmin && <RestrictionScreen />}
+        {view === 'admin' && !isLoggedIn && (
+          <div key="admin-login">
+            <AdminLoginView
+              email={loginEmail}
+              password={loginPassword}
+              onEmailChange={setLoginEmail}
+              onPasswordChange={setLoginPassword}
+              onSubmit={handleAdminLogin}
+              onForgotPassword={handlePasswordReset}
+              isSubmitting={adminAuthSubmitting}
+            />
+          </div>
+        )}
         {view === 'login' && !isLoggedIn && loginView}
         {view === 'home' && homeView}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
