@@ -25,7 +25,7 @@
  */
 
 import { useEffect, useState, type ReactNode } from 'react';
-import { ArrowLeft, Bell, Boxes, Menu, X } from 'lucide-react';
+import { ArrowLeft, Bell, Boxes, LogOut, Menu, X } from 'lucide-react';
 
 export interface AdminNavItem {
   id: string;
@@ -46,7 +46,22 @@ export interface AdminLayoutProps {
   activeId: string;
   onSelect: (id: string) => void;
   title: string;
+  /**
+   * "Exit" out of the admin shell back to the public site. On a
+   * dedicated admin subdomain this should `window.location.assign(...)`
+   * to the public host, not just flip an in-app view (the host-lock
+   * effect would snap it back).
+   */
   onBack?: () => void;
+  /**
+   * Sign the operator out (call `signOut()`, drop the Clerk session,
+   * and let the admin shell flip to the AdminLoginView). This is a
+   * separate concern from `onBack` -- one ends the session, the other
+   * just navigates to the public site.
+   */
+  onSignOut?: () => void | Promise<void>;
+  /** Optional label shown next to the sign-out button (operator name / email). */
+  operatorLabel?: string;
   /** Slot to the right of the title bar (left of the bell). */
   headerExtras?: ReactNode;
   children: ReactNode;
@@ -58,6 +73,8 @@ export function AdminLayout({
   onSelect,
   title,
   onBack,
+  onSignOut,
+  operatorLabel,
   headerExtras,
   children,
 }: AdminLayoutProps) {
@@ -201,11 +218,18 @@ export function AdminLayout({
               {title}
             </h1>
             {headerExtras}
+            {operatorLabel && (
+              <span
+                className="hidden md:inline-flex items-center px-2.5 py-1 rounded-full bg-slate-800/60 border border-slate-700/70 text-[11px] font-semibold text-slate-300 max-w-[180px] truncate"
+                title={operatorLabel}
+              >
+                {operatorLabel}
+              </span>
+            )}
             <button
               type="button"
               className="relative p-2.5 rounded-full bg-blue-500/15 text-blue-400 hover:bg-blue-500/25 transition-colors"
               aria-label="Notifications"
-              onClick={onBack}
             >
               <Bell className="w-5 h-5" />
             </button>
@@ -218,6 +242,17 @@ export function AdminLayout({
               >
                 <ArrowLeft className="w-4 h-4" />
                 Exit
+              </button>
+            )}
+            {onSignOut && (
+              <button
+                type="button"
+                onClick={() => void onSignOut()}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold text-rose-300 bg-rose-500/10 border border-rose-500/30 hover:bg-rose-500/20 hover:text-rose-200 transition-colors"
+                title="Sign out of admin console"
+              >
+                <LogOut className="w-4 h-4" />
+                <span className="hidden sm:inline">Sign out</span>
               </button>
             )}
           </header>
