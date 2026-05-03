@@ -62,11 +62,18 @@
 
 @layer base {
   body {
-    @apply bg-slate-50 text-slate-900 font-sans antialiased;
-    /* Redesign: flat neutral background, no gradient. The radial
-     * gradient from the legacy "premium" theme was visible on every
-     * screen and added contrast noise behind cards. */
-    background: var(--ui-background);
+    @apply text-slate-900 font-sans antialiased;
+    /* Modern fintech ambient: a soft, fixed mesh gradient sits behind
+     * the whole app. Cards layer over it with `backdrop-blur`, which
+     * is what gives the glass surfaces their depth (the real tint
+     * comes from this background, not from the cards themselves). */
+    background-color: #eef2ff;
+    background-image:
+      radial-gradient(1100px 600px at -10% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
+      radial-gradient(900px 600px at 110% 0%, rgba(139, 92, 246, 0.18), transparent 55%),
+      radial-gradient(800px 800px at 50% 110%, rgba(56, 189, 248, 0.14), transparent 55%),
+      linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+    background-attachment: fixed;
     min-height: 100vh;
   }
 
@@ -84,29 +91,70 @@
 
 @layer components {
   /* ----------------------------------------------------------------
-   * Legacy utility shims (redesign migration step).
+   * Modern fintech glass surfaces.
    *
-   * Hundreds of feature views still reference `.glass`, `.glass-card`,
-   * `.premium-card`, `.neon-text`, `.neon-border`, `.glitch-text` and
-   * `.shimmer`. The redesign plan §1 calls these out as visual noise
-   * that hides function. Rather than touch every file, we redefine
-   * each utility here as a *calm* equivalent (plain white surface,
-   * 1px border, soft shadow, no infinite animations) so legacy markup
-   * inherits the new design language automatically.
+   * `.glass`, `.glass-card`, `.premium-card` are the legacy utility
+   * names used across hundreds of legacy feature views. We redefine
+   * them here as proper frosted-glass surfaces (translucent white,
+   * `backdrop-blur`, soft hairline border, single soft shadow) so
+   * existing markup inherits the modern aesthetic automatically.
    *
-   * The classes will be deleted entirely in a later PR once every
-   * screen has been migrated to the primitives in `src/components/ui/`.
+   * Compared to the original "premium" version: no infinite shimmer,
+   * no chromatic glitch, single accent. Compared to the previous
+   * pass: the cards are now translucent, blurred, and layer over a
+   * mesh-gradient body — the effect users expect from Revolut /
+   * Cash App / bKash 2024.
    * ---------------------------------------------------------------- */
   .glass {
-    @apply bg-white border border-slate-200 shadow-sm;
+    @apply bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)];
   }
 
   .glass-card {
-    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-shadow duration-200;
+    @apply bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl p-5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)] transition-all duration-300;
+  }
+
+  .glass-card:hover {
+    @apply shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] bg-white/80;
   }
 
   .premium-card {
-    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-shadow duration-200 relative overflow-hidden;
+    @apply bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl p-5 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)] transition-all duration-300 relative overflow-hidden;
+  }
+
+  /* Glow helper used by primary CTAs and the hero balance card. The
+   * glow is a softly diffused shadow in the brand colour — gives
+   * primary actions a subtle "lift" without animating anything. */
+  .glow-primary {
+    box-shadow:
+      0 8px 24px -6px rgba(99, 102, 241, 0.45),
+      0 2px 6px -2px rgba(99, 102, 241, 0.35);
+  }
+
+  .glow-violet {
+    box-shadow:
+      0 12px 32px -8px rgba(139, 92, 246, 0.5),
+      0 4px 10px -4px rgba(99, 102, 241, 0.4);
+  }
+
+  /* Aurora background: rich diagonal gradient used on the home hero
+   * (balance card) and a couple of feature heroes. The conic-ish
+   * effect is built from layered radial gradients so we don't need
+   * conic-gradient (poor support on older Android WebViews). */
+  .bg-aurora {
+    background-image:
+      radial-gradient(120% 120% at 0% 0%, #6366f1 0%, transparent 60%),
+      radial-gradient(120% 120% at 100% 0%, #8b5cf6 0%, transparent 55%),
+      radial-gradient(140% 100% at 50% 100%, #0ea5e9 0%, transparent 60%),
+      linear-gradient(135deg, #4338ca 0%, #6d28d9 100%);
+  }
+
+  /* A subtle inner highlight, used on glass surfaces that sit on top
+   * of dark gradient backgrounds (hero balance card, etc). */
+  .glass-highlight {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.04) 100%),
+      rgba(255, 255, 255, 0.08);
+    @apply backdrop-blur-md border border-white/20;
   }
 
   .bento-grid {

@@ -32,47 +32,54 @@ export interface BottomNavProps {
 
 export function BottomNav({ tabs, active, onSelect, className }: BottomNavProps) {
   return (
-    <nav
-      aria-label="Primary"
+    <div
       className={cn(
-        'fixed bottom-0 inset-x-0 z-40 bg-white/95 backdrop-blur',
-        'border-t border-slate-200',
-        // Respect iOS home indicator and Android nav gesture inset.
-        'pb-[env(safe-area-inset-bottom)]',
+        'fixed bottom-0 inset-x-0 z-40 px-3 pb-[max(12px,env(safe-area-inset-bottom))] pt-2',
+        'pointer-events-none',
         className,
       )}
     >
-      <ul className="flex items-stretch justify-around max-w-md mx-auto">
-        {tabs.map((tab) => {
-          const isActive = tab.key === active;
-          return (
-            <li key={tab.key} className="flex-1">
-              <button
-                type="button"
-                onClick={() => onSelect(tab.key)}
-                aria-current={isActive ? 'page' : undefined}
-                className={cn(
-                  'w-full h-16 flex flex-col items-center justify-center gap-0.5',
-                  'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500',
-                  isActive ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700',
-                )}
-              >
-                <span className="relative inline-flex">
-                  {tab.icon}
-                  {tab.badge !== undefined && tab.badge > 0 && (
-                    <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-red-600 text-white text-[10px] font-semibold flex items-center justify-center">
-                      {tab.badge > 99 ? '99+' : tab.badge}
-                    </span>
+      <nav
+        aria-label="Primary"
+        className="pointer-events-auto max-w-md mx-auto rounded-3xl bg-white/70 backdrop-blur-2xl border border-white/60 shadow-[0_12px_36px_-12px_rgba(15,23,42,0.25)]"
+      >
+        <ul className="flex items-stretch justify-around">
+          {tabs.map((tab) => {
+            const isActive = tab.key === active;
+            return (
+              <li key={tab.key} className="flex-1 p-1.5">
+                <button
+                  type="button"
+                  onClick={() => onSelect(tab.key)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={cn(
+                    'w-full h-14 flex flex-col items-center justify-center gap-1 rounded-2xl',
+                    'transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500',
+                    isActive
+                      ? 'bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-[0_6px_18px_-6px_rgba(99,102,241,0.6)]'
+                      : 'text-slate-500 hover:text-slate-800 hover:bg-white/60',
                   )}
-                </span>
-                <span className="text-[11px] font-medium leading-none">
-                  {tab.label}
-                </span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+                >
+                  <span className="relative inline-flex">
+                    {tab.icon}
+                    {tab.badge !== undefined && tab.badge > 0 && (
+                      <span className="absolute -top-1 -right-2 min-w-[16px] h-4 px-1 rounded-full bg-rose-500 text-white text-[10px] font-semibold flex items-center justify-center shadow-md">
+                        {tab.badge > 99 ? '99+' : tab.badge}
+                      </span>
+                    )}
+                  </span>
+                  <span className={cn(
+                    'text-[10px] font-semibold leading-none tracking-wide',
+                    isActive ? 'opacity-100' : 'opacity-80',
+                  )}>
+                    {tab.label}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+    </div>
   );
 }

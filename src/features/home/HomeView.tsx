@@ -1,46 +1,46 @@
 /**
- * HomeView — redesigned, calm landing screen.
+ * HomeView — modern fintech-style landing screen.
  *
- * Implements §3 + §5 of `plans/user-friendly-ui-redesign-for-production-launch.md`:
- *   - Greeting + balance summary
- *   - Activate-account banner only when needed
- *   - 4 quick-action chips (Withdraw / Refer / Recharge / Support)
- *   - 5 grouped Earn category cards (no more 16-tile dump)
- *   - Recent activity from `taskHistory` (last 5)
- *   - Daily reward CTA (only when feature is enabled and not yet claimed)
- *   - Notice banner (admin global notice)
- *
- * Rendered inside the existing App shell; the parent supplies a top
- * spacing offset and bottom padding for the persistent BottomNav.
+ * Combines the IA improvements from
+ * `plans/user-friendly-ui-redesign-for-production-launch.md` (5
+ * grouped Earn categories instead of 16-tile dump, persistent shell,
+ * activate-banner only when needed) with a richer visual language:
+ *   - gradient hero balance card with soft glow
+ *   - frosted-glass surfaces over a mesh-gradient body
+ *   - per-category accent gradients with subtle motion
+ *   - animated tap response on every interactive surface
  */
 import {
   ArrowRight,
   Bell,
   Briefcase,
   ChevronRight,
+  Eye,
+  EyeOff,
   Gamepad2,
   Gift,
   Headphones,
   Megaphone,
   PlayCircle,
+  Send,
   ShieldCheck,
   Smartphone,
+  Sparkles,
   TrendingUp,
   User,
   Users,
   Wallet,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { useState, type ReactNode } from 'react';
 import type { UserProfile, View } from '../../types';
 import {
-  BalancePill,
   Button,
   Card,
   Chip,
   EmptyState,
   ListRow,
   SectionHeader,
-  Stat,
 } from '../../components/ui';
 
 interface Props {
@@ -67,15 +67,14 @@ interface CategoryDef {
   description: string;
   destination: View;
   icon: ReactNode;
-  /** Cards from `INCOME_CARDS` that are gated under this category. If
-   *  none of them are in `enabledCards` the category card is hidden. */
+  /** Tailwind gradient classes for the icon tile. */
+  iconBg: string;
+  /** Subtle background tint for the whole card. */
+  cardTint: string;
+  /** Cards from `INCOME_CARDS` that are gated under this category. */
   gateTitles: string[];
 }
 
-/** Five Earn category cards — the de-duplicated version of the legacy
- *  16-tile `INCOME_CARDS` dump. The `gateTitles` are matched against
- *  the admin's `enabledCards` flag so a category only appears when at
- *  least one of its underlying tiles is enabled. */
 const CATEGORIES: CategoryDef[] = [
   {
     id: 'daily',
@@ -83,6 +82,8 @@ const CATEGORIES: CategoryDef[] = [
     description: 'Today\'s job and micro tasks',
     destination: 'folder-a',
     icon: <Briefcase className="w-6 h-6" />,
+    iconBg: 'from-indigo-500 to-blue-500',
+    cardTint: 'from-indigo-500/5 to-blue-500/5',
     gateTitles: ['Daily Job', 'Micro Tasks', 'Premium Jobs'],
   },
   {
@@ -91,6 +92,8 @@ const CATEGORIES: CategoryDef[] = [
     description: 'Watch ads, read news, spin to win',
     destination: 'ads-earn',
     icon: <PlayCircle className="w-6 h-6" />,
+    iconBg: 'from-amber-500 to-orange-500',
+    cardTint: 'from-amber-500/5 to-orange-500/5',
     gateTitles: ['Ads Earn', 'TOP NEWS'],
   },
   {
@@ -99,6 +102,8 @@ const CATEGORIES: CategoryDef[] = [
     description: 'Social tasks, SMM panel, boosting',
     destination: 'social-hub',
     icon: <Megaphone className="w-6 h-6" />,
+    iconBg: 'from-pink-500 to-rose-500',
+    cardTint: 'from-pink-500/5 to-rose-500/5',
     gateTitles: ['Fb Marketing', 'SOCIAL', 'SMM & BOOSTING'],
   },
   {
@@ -107,6 +112,8 @@ const CATEGORIES: CategoryDef[] = [
     description: 'OTP, Gmail, Dollar, e-commerce',
     destination: 'otp-buy-sell',
     icon: <TrendingUp className="w-6 h-6" />,
+    iconBg: 'from-emerald-500 to-teal-500',
+    cardTint: 'from-emerald-500/5 to-teal-500/5',
     gateTitles: ['BUY SELL', 'Gmail Sell', 'Asset Trading', 'E-commerce'],
   },
   {
@@ -115,19 +122,20 @@ const CATEGORIES: CategoryDef[] = [
     description: 'Tournaments and Ludo earn',
     destination: 'gaming',
     icon: <Gamepad2 className="w-6 h-6" />,
+    iconBg: 'from-violet-500 to-purple-600',
+    cardTint: 'from-violet-500/5 to-purple-500/5',
     gateTitles: ['GAMING'],
   },
 ];
 
 function formatBdt(amount: number): string {
-  return `৳${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 function greeting(name: string | undefined | null): string {
   const hour = new Date().getHours();
   const part = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   if (!name) return part;
-  // Use first word of the name for compact display.
   return `${part}, ${name.split(/\s+/)[0]}`;
 }
 
@@ -144,6 +152,7 @@ export function HomeView({
   enabledCards,
   isAdmin,
 }: Props) {
+  const [balanceHidden, setBalanceHidden] = useState(false);
   const hasUnreadNotifications = user.notifications.length > 0;
   const recentTasks = user.taskHistory.slice(0, 5);
 
@@ -152,33 +161,33 @@ export function HomeView({
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen pb-28">
       {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/40 border-b border-white/40">
         <div className="max-w-md mx-auto flex items-center gap-3 px-4 py-3">
           <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-500 truncate">{greeting(user.name)}</p>
-            <h1 className="text-base font-semibold text-slate-900 truncate">
+            <p className="text-xs text-slate-600 truncate">{greeting(user.name)}</p>
+            <h1 className="text-base font-semibold text-slate-900 truncate flex items-center gap-1.5">
               Top Earning
+              <Sparkles className="w-4 h-4 text-amber-500" />
             </h1>
           </div>
-          <BalancePill amount={user.mainBalance} onClick={() => setView('finance')} />
           <button
             type="button"
             onClick={onOpenNotifications}
             aria-label="Notifications"
-            className="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <Bell className="w-5 h-5" />
             {hasUnreadNotifications && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-red-500 border border-white" />
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
             )}
           </button>
           <button
             type="button"
             onClick={() => setView('profile')}
             aria-label="Profile"
-            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <User className="w-5 h-5" />
           </button>
@@ -186,79 +195,117 @@ export function HomeView({
       </header>
 
       <main className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {/* Activate banner — only when account is inactive */}
-        {!user.isActive && (
-          <Card padded className="border-red-200 bg-red-50">
-            <div className="flex items-start gap-3">
-              <span className="shrink-0 w-10 h-10 rounded-full bg-red-100 text-red-600 inline-flex items-center justify-center">
-                <ShieldCheck className="w-5 h-5" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-slate-900">
-                  Activate your account
-                </p>
-                <p className="text-sm text-slate-600 mt-0.5">
-                  Unlock withdrawals and earn referral commission.
-                </p>
+        {/* Hero balance card — gradient with soft glow */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+        >
+          <Card variant="gradient" glow padded className="p-6">
+            <div className="relative z-10">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <div className="flex items-center gap-2 text-indigo-100/90">
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-sm font-medium">Available balance</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setBalanceHidden((v) => !v)}
+                  aria-label={balanceHidden ? 'Show balance' : 'Hide balance'}
+                  className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors"
+                >
+                  {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <p className="text-4xl font-bold tracking-tight tabular-nums">
+                {balanceHidden ? '••••••' : (
+                  <>
+                    <span className="text-indigo-100/80 text-2xl mr-1 align-top">৳</span>
+                    {formatBdt(user.mainBalance)}
+                  </>
+                )}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl glass-highlight px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Earned</p>
+                  <p className="text-base font-semibold tabular-nums mt-0.5">
+                    ৳{balanceHidden ? '••••' : formatBdt(user.totalEarned)}
+                  </p>
+                </div>
+                <div className="rounded-xl glass-highlight px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Pending</p>
+                  <p className="text-base font-semibold tabular-nums mt-0.5">
+                    ৳{balanceHidden ? '••••' : formatBdt(user.pendingPayout)}
+                  </p>
+                </div>
+              </div>
+              <div className="mt-4 flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setView('finance')}
+                  className="flex-1 h-11 rounded-xl bg-white text-indigo-700 font-semibold text-sm shadow-sm hover:shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Wallet className="w-4 h-4" /> Withdraw
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView('referral')}
+                  className="flex-1 h-11 rounded-xl bg-white/15 text-white font-semibold text-sm border border-white/20 hover:bg-white/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-4 h-4" /> Refer
+                </button>
               </div>
             </div>
-            <div className="mt-3">
-              <Button
-                fullWidth
-                onClick={() => setView('account-activation')}
-                rightIcon={<ArrowRight className="w-4 h-4" />}
-              >
-                Activate now
-              </Button>
-            </div>
           </Card>
-        )}
+        </motion.div>
 
-        {/* Balance summary */}
-        <Card padded>
-          <SectionHeader
-            title="Your balance"
-            action={
-              <button
-                type="button"
-                onClick={() => setView('dashboard')}
-                className="text-sm font-medium text-blue-600 hover:underline focus:outline-none"
-              >
-                Details
-              </button>
-            }
-          />
-          <div className="grid grid-cols-3 gap-3">
-            <Stat
-              label="Available"
-              value={formatBdt(user.mainBalance)}
-              icon={<Wallet className="w-4 h-4" />}
-            />
-            <Stat
-              label="Earned"
-              value={formatBdt(user.totalEarned)}
-              tone="success"
-            />
-            <Stat
-              label="Pending"
-              value={formatBdt(user.pendingPayout)}
-            />
-          </div>
-        </Card>
+        {/* Activate banner */}
+        {!user.isActive && (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: 0.05 }}
+          >
+            <Card padded className="border-rose-200/70 bg-gradient-to-br from-rose-50/80 to-amber-50/80">
+              <div className="flex items-start gap-3">
+                <span className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 text-white inline-flex items-center justify-center shadow-md">
+                  <ShieldCheck className="w-5 h-5" />
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-base font-semibold text-slate-900">
+                    Activate your account
+                  </p>
+                  <p className="text-sm text-slate-600 mt-0.5">
+                    Unlock withdrawals and referral commission.
+                  </p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <Button
+                  fullWidth
+                  onClick={() => setView('account-activation')}
+                  rightIcon={<ArrowRight className="w-4 h-4" />}
+                >
+                  Activate now
+                </Button>
+              </div>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Daily reward */}
         {dailyClaimEnabled && (
           <Card padded>
             <div className="flex items-center gap-3">
-              <span className="shrink-0 w-10 h-10 rounded-full bg-blue-50 text-blue-600 inline-flex items-center justify-center">
+              <span className="shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white inline-flex items-center justify-center shadow-md">
                 <Gift className="w-5 h-5" />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-medium text-slate-900">Daily reward</p>
+                <p className="text-base font-semibold text-slate-900">Daily reward</p>
                 <p className="text-sm text-slate-600">
                   {user.dailyClaimed
                     ? 'Come back tomorrow'
-                    : `Claim ${formatBdt(dailyReward)} today`}
+                    : `Claim ৳${formatBdt(dailyReward)} today`}
                 </p>
               </div>
               <Button
@@ -274,21 +321,7 @@ export function HomeView({
         )}
 
         {/* Quick actions */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4">
-          <Chip
-            tone="primary"
-            leadingIcon={<Wallet className="w-4 h-4" />}
-            onClick={() => setView('finance')}
-          >
-            Withdraw
-          </Chip>
-          <Chip
-            tone="primary"
-            leadingIcon={<Users className="w-4 h-4" />}
-            onClick={() => setView('referral')}
-          >
-            Refer
-          </Chip>
+        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
           <Chip
             tone="primary"
             leadingIcon={<Smartphone className="w-4 h-4" />}
@@ -303,13 +336,27 @@ export function HomeView({
           >
             Support
           </Chip>
+          <Chip
+            tone="primary"
+            leadingIcon={<Users className="w-4 h-4" />}
+            onClick={() => setView('leaderboard')}
+          >
+            Leaderboard
+          </Chip>
+          <Chip
+            tone="primary"
+            leadingIcon={<TrendingUp className="w-4 h-4" />}
+            onClick={() => setView('spin')}
+          >
+            Spin
+          </Chip>
         </div>
 
         {/* Notice */}
         {globalNotice && (
-          <Card padded className="bg-blue-50 border-blue-100">
+          <Card padded className="bg-gradient-to-r from-indigo-50/70 to-violet-50/70 border-indigo-100/60">
             <div className="flex items-start gap-3">
-              <span className="shrink-0 mt-0.5 inline-flex w-8 h-8 rounded-full bg-blue-100 text-blue-700 items-center justify-center">
+              <span className="shrink-0 mt-0.5 inline-flex w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white items-center justify-center shadow-sm">
                 <Megaphone className="w-4 h-4" />
               </span>
               <p className="flex-1 text-sm text-slate-800 leading-relaxed">
@@ -323,17 +370,29 @@ export function HomeView({
         <section>
           <SectionHeader title="Earn" subtitle="Pick a category to start" />
           <div className="grid grid-cols-1 gap-3">
-            {visibleCategories.map((cat) => (
-              <button
+            {visibleCategories.map((cat, i) => (
+              <motion.button
                 key={cat.id}
                 type="button"
                 onClick={() => setView(cat.destination)}
-                className="bg-white border border-slate-200 rounded-2xl shadow-sm p-4 flex items-center gap-4 text-left transition-shadow hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                whileHover={{ y: -2 }}
+                whileTap={{ scale: 0.98 }}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.25, delay: 0.05 + i * 0.04 }}
+                className={`relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)] p-4 flex items-center gap-4 text-left transition-shadow hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
               >
-                <span className="shrink-0 w-12 h-12 rounded-xl bg-blue-50 text-blue-600 inline-flex items-center justify-center">
+                {/* Subtle category tint background */}
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${cat.cardTint}`}
+                />
+                <span
+                  className={`relative shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-br ${cat.iconBg} text-white inline-flex items-center justify-center shadow-md`}
+                >
                   {cat.icon}
                 </span>
-                <span className="flex-1 min-w-0">
+                <span className="relative flex-1 min-w-0">
                   <span className="block text-base font-semibold text-slate-900">
                     {cat.title}
                   </span>
@@ -341,8 +400,8 @@ export function HomeView({
                     {cat.description}
                   </span>
                 </span>
-                <ChevronRight className="w-5 h-5 text-slate-400 shrink-0" />
-              </button>
+                <ChevronRight className="relative w-5 h-5 text-slate-400 shrink-0" />
+              </motion.button>
             ))}
             {visibleCategories.length === 0 && (
               <Card padded>
@@ -364,7 +423,7 @@ export function HomeView({
                 <button
                   type="button"
                   onClick={() => setView('dashboard')}
-                  className="text-sm font-medium text-blue-600 hover:underline focus:outline-none"
+                  className="text-sm font-semibold text-indigo-600 hover:underline focus:outline-none"
                 >
                   See all
                 </button>
@@ -391,8 +450,8 @@ export function HomeView({
                   title={task.title}
                   subtitle={task.date}
                   trailing={
-                    <span className="text-base font-semibold text-green-600 tabular-nums">
-                      +{formatBdt(task.reward)}
+                    <span className="text-base font-semibold text-emerald-600 tabular-nums">
+                      +৳{formatBdt(task.reward)}
                     </span>
                   }
                   showChevron={false}
@@ -404,18 +463,19 @@ export function HomeView({
 
         {/* Trust strip */}
         <Card padded>
-          <div className="grid grid-cols-2 divide-x divide-slate-200">
-            <Stat
-              label="Total paid"
-              value={`৳${totalPaid.toLocaleString('en-US')}+`}
-              tone="success"
-              className="pr-3"
-            />
-            <Stat
-              label="Active workers"
-              value={`${(activeWorkerCount / 1000).toFixed(0)}k+`}
-              className="pl-3"
-            />
+          <div className="grid grid-cols-2 divide-x divide-slate-200/60">
+            <div className="pr-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Total paid</p>
+              <p className="text-lg font-semibold tabular-nums text-emerald-600 mt-0.5">
+                ৳{totalPaid.toLocaleString('en-US')}+
+              </p>
+            </div>
+            <div className="pl-3">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Active workers</p>
+              <p className="text-lg font-semibold tabular-nums text-indigo-600 mt-0.5">
+                {(activeWorkerCount / 1000).toFixed(0)}k+
+              </p>
+            </div>
           </div>
         </Card>
       </main>

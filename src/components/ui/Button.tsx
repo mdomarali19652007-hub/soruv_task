@@ -31,14 +31,20 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const VARIANT_CLASSES: Record<ButtonVariant, string> = {
+  // Primary uses the brand indigo→violet gradient with a soft glow so
+  // the CTA visibly "lifts" off the glass background. Active state
+  // dampens the glow rather than darkening the gradient — feels more
+  // tactile on a phone screen.
   primary:
-    'bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 disabled:bg-blue-300',
+    'bg-gradient-to-br from-indigo-500 to-violet-600 text-white glow-primary hover:from-indigo-500 hover:to-violet-500 hover:glow-violet active:scale-[0.98] disabled:opacity-50 disabled:shadow-none',
+  // Secondary is a frosted-glass surface so it harmonises with `Card`
+  // primitives sitting on the same screen.
   secondary:
-    'bg-white text-slate-900 border border-slate-200 hover:bg-slate-50 active:bg-slate-100 disabled:text-slate-400',
+    'bg-white/70 backdrop-blur-md text-slate-900 border border-white/60 shadow-sm hover:bg-white/90 active:bg-white disabled:opacity-50',
   ghost:
-    'bg-transparent text-slate-700 hover:bg-slate-100 active:bg-slate-200 disabled:text-slate-300',
+    'bg-transparent text-slate-700 hover:bg-white/60 active:bg-white/80 disabled:text-slate-300',
   danger:
-    'bg-red-600 text-white hover:bg-red-700 active:bg-red-800 disabled:bg-red-300',
+    'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_8px_24px_-6px_rgba(239,68,68,0.45)] hover:from-rose-500 hover:to-rose-600 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
@@ -71,8 +77,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       disabled={isDisabled}
       aria-busy={loading || undefined}
       className={cn(
-        'inline-flex items-center justify-center font-medium select-none',
-        'transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2',
+        'inline-flex items-center justify-center font-semibold select-none',
+        'transition-all duration-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2',
         'disabled:cursor-not-allowed',
         SIZE_CLASSES[size],
         VARIANT_CLASSES[variant],
