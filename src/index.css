@@ -63,8 +63,10 @@
 @layer base {
   body {
     @apply bg-slate-50 text-slate-900 font-sans antialiased;
-    background: radial-gradient(circle at top right, #f8fafc, #e2e8f0);
-    background-attachment: fixed;
+    /* Redesign: flat neutral background, no gradient. The radial
+     * gradient from the legacy "premium" theme was visible on every
+     * screen and added contrast noise behind cards. */
+    background: var(--ui-background);
     min-height: 100vh;
   }
 
@@ -81,16 +83,30 @@
 }
 
 @layer components {
+  /* ----------------------------------------------------------------
+   * Legacy utility shims (redesign migration step).
+   *
+   * Hundreds of feature views still reference `.glass`, `.glass-card`,
+   * `.premium-card`, `.neon-text`, `.neon-border`, `.glitch-text` and
+   * `.shimmer`. The redesign plan §1 calls these out as visual noise
+   * that hides function. Rather than touch every file, we redefine
+   * each utility here as a *calm* equivalent (plain white surface,
+   * 1px border, soft shadow, no infinite animations) so legacy markup
+   * inherits the new design language automatically.
+   *
+   * The classes will be deleted entirely in a later PR once every
+   * screen has been migrated to the primitives in `src/components/ui/`.
+   * ---------------------------------------------------------------- */
   .glass {
-    @apply bg-white/80 backdrop-blur-2xl border border-white/30 shadow-[0_8px_32px_0_rgba(31,38,135,0.07)];
+    @apply bg-white border border-slate-200 shadow-sm;
   }
-  
+
   .glass-card {
-    @apply bg-white/70 backdrop-blur-xl border border-white/40 rounded-[32px] p-6 shadow-[0_8px_32px_0_rgba(31,38,135,0.05)] hover:shadow-[0_8px_32px_0_rgba(31,38,135,0.1)] hover:bg-white/90 transition-all duration-500;
+    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-shadow duration-200;
   }
 
   .premium-card {
-    @apply bg-white border border-slate-100 rounded-[32px] p-6 shadow-sm hover:shadow-xl hover:border-indigo-500/20 transition-all duration-500 relative overflow-hidden;
+    @apply bg-white border border-slate-200 rounded-2xl p-5 shadow-sm transition-shadow duration-200 relative overflow-hidden;
   }
 
   .bento-grid {
@@ -99,62 +115,32 @@
     gap: 1rem;
   }
 
+  /* `.shimmer` previously ran an infinite gradient sweep -- expensive
+   * on mid-range Android and listed in the redesign plan as noise. We
+   * keep the class name (used in many places) but disable the
+   * animation. The element still renders; it just stops moving. */
   .shimmer {
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent);
-    background-size: 200% 100%;
-    animation: shimmer 2s infinite;
+    background: transparent;
   }
 
-  @keyframes shimmer {
-    0% { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
-  }
-
+  /* `.neon-text` and `.neon-border` used to add glow effects. We keep
+   * the indigo accent on `.neon-text` so emphasis isn't lost, but
+   * drop the text-shadow / box-shadow that produced the "neon" look. */
   .neon-text {
     @apply text-indigo-600;
-    text-shadow: 0 0 30px rgba(79, 70, 229, 0.15);
   }
 
   .neon-border {
-    box-shadow: 0 0 20px rgba(79, 70, 229, 0.1);
-    border-color: rgba(79, 70, 229, 0.2);
+    /* No-op. Border colour is left to whatever class set it. */
   }
 
+  /* `.glitch-text` no longer renders the animated chromatic-aberration
+   * pseudo-elements. The class is now a simple `position: relative`
+   * marker so any absolutely-positioned children (e.g. tooltips)
+   * still anchor correctly. */
   .glitch-text {
     position: relative;
     @apply text-slate-900;
-  }
-
-  .glitch-text::before,
-  .glitch-text::after {
-    content: attr(data-text);
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    opacity: 0.5;
-  }
-
-  .glitch-text::before {
-    color: #4f46e5;
-    z-index: -1;
-    animation: glitch 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) both infinite;
-  }
-
-  .glitch-text::after {
-    color: #ec4899;
-    z-index: -2;
-    animation: glitch 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) reverse both infinite;
-  }
-
-  @keyframes glitch {
-    0% { transform: translate(0); }
-    20% { transform: translate(-1px, 1px); }
-    40% { transform: translate(-1px, -1px); }
-    60% { transform: translate(1px, 1px); }
-    80% { transform: translate(1px, -1px); }
-    100% { transform: translate(0); }
   }
 }
 
