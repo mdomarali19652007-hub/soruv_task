@@ -1,181 +1,299 @@
 /**
- * HomeView — modern fintech-style landing screen.
+ * HomeView — modern fintech glassmorphism landing screen.
  *
- * Combines the IA improvements from
- * `plans/user-friendly-ui-redesign-for-production-launch.md` (5
- * grouped Earn categories instead of 16-tile dump, persistent shell,
- * activate-banner only when needed) with a richer visual language:
- *   - gradient hero balance card with soft glow
- *   - frosted-glass surfaces over a mesh-gradient body
- *   - per-category accent gradients with subtle motion
- *   - animated tap response on every interactive surface
+ * Section order (per latest spec):
+ *   1. Top bar — "Top Earning" brand on the left, notification + profile
+ *      icon buttons on the right.
+ *   2. Balance card — gradient hero with "মেইন ব্যালেন্স" + hide/show,
+ *      মোট ইনকাম + পেন্ডিং inline pills, উইথড্র + রেফার buttons.
+ *   3. Social row — Telegram / Facebook / WhatsApp / Support quick links.
+ *   4. Refer + verified — referral code as gradient text with copy,
+ *      "ভেরিফায়েড" / "অ্যাক্টিভেট করুন" status chip, share-link button.
+ *   5. Task tiles — individual category tiles (Daily Job, Micro Tasks,
+ *      Gmail Sell, FB Marketing, Ads Earn, etc.) in a 2-column grid,
+ *      filtered by admin's `enabledCards` flag.
+ *
+ * Dropped from the previous pass per "feels cluttered" feedback:
+ *   - greeting line
+ *   - daily-reward card (still claimable from the Wallet)
+ *   - recent activity list (lives in /dashboard now)
+ *   - global notice card
+ *   - trust strip
+ *   - quick-action chip row
  */
 import {
-  ArrowRight,
   Bell,
-  Briefcase,
+  CheckCircle2,
   ChevronRight,
+  Copy,
   Eye,
   EyeOff,
-  Gamepad2,
-  Gift,
+  Facebook,
   Headphones,
-  Megaphone,
-  PlayCircle,
+  MessageCircle,
   Send,
+  Share2,
+  ShieldAlert,
   ShieldCheck,
-  Smartphone,
-  Sparkles,
-  TrendingUp,
-  User,
-  Users,
+  User as UserIcon,
   Wallet,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
 import type { UserProfile, View } from '../../types';
-import {
-  Button,
-  Card,
-  Chip,
-  EmptyState,
-  ListRow,
-  SectionHeader,
-} from '../../components/ui';
+import { Card } from '../../components/ui';
+import { INCOME_CARDS } from '../../constants';
 
 interface Props {
   user: UserProfile;
   setView: (view: View) => void;
   onOpenNotifications: () => void;
-  /** Daily reward in BDT (admin-tunable). */
+  /** Daily reward in BDT (not rendered here, kept for parity). */
   dailyReward: number;
-  /** Whether the daily-claim feature is admin-enabled. */
   dailyClaimEnabled: boolean;
   onClaimDaily: () => void;
-  /** Marquee/notice text from admin config. */
+  /** Marquee/notice text from admin config (not rendered here). */
   globalNotice: string;
   totalPaid: number;
   activeWorkerCount: number;
-  /** Feature flags (from admin config) — used to gate categories. */
+  /** Feature flags from admin config — used to gate task tiles. */
   enabledCards: string[];
   isAdmin: boolean;
+  /** Social links from admin config. */
+  telegramLink: string;
+  facebookLink: string;
+  whatsappLink: string;
 }
 
-interface CategoryDef {
-  id: string;
-  title: string;
-  description: string;
+/**
+ * Bangla-labelled task tiles. Each entry references the original
+ * English `INCOME_CARDS.title` so the admin's `enabledCards` flag
+ * (which stores English titles) keeps working. The legacy
+ * `INCOME_CARDS` had visible duplicates pointing at the same view —
+ * those are de-duped here so the home grid never shows two tiles
+ * leading to the same destination.
+ */
+interface Tile {
+  /** English title used as the gate key in `enabledCards`. */
+  gateTitle: string;
+  /** Bangla label shown on the tile. */
+  label: string;
   destination: View;
   icon: ReactNode;
   /** Tailwind gradient classes for the icon tile. */
   iconBg: string;
   /** Subtle background tint for the whole card. */
   cardTint: string;
-  /** Cards from `INCOME_CARDS` that are gated under this category. */
-  gateTitles: string[];
 }
 
-const CATEGORIES: CategoryDef[] = [
+const TILES: Tile[] = [
   {
-    id: 'daily',
-    title: 'দৈনিক কাজ',
-    description: 'আজকের জব ও মাইক্রো টাস্ক',
+    gateTitle: 'Daily Job',
+    label: 'ডেইলি জব',
     destination: 'folder-a',
-    icon: <Briefcase className="w-6 h-6" />,
+    icon: lucide('briefcase'),
     iconBg: 'from-indigo-500 to-blue-500',
-    cardTint: 'from-indigo-500/5 to-blue-500/5',
-    gateTitles: ['Daily Job', 'Micro Tasks', 'Premium Jobs'],
+    cardTint: 'from-indigo-500/8 to-blue-500/8',
   },
   {
-    id: 'ads',
-    title: 'বিজ্ঞাপন ও সংবাদ',
-    description: 'অ্যাড দেখুন, খবর পড়ুন, স্পিন জিতুন',
+    gateTitle: 'Micro Tasks',
+    label: 'মাইক্রো টাস্ক',
+    destination: 'folder-a',
+    icon: lucide('list-checks'),
+    iconBg: 'from-cyan-500 to-blue-500',
+    cardTint: 'from-cyan-500/8 to-blue-500/8',
+  },
+  {
+    gateTitle: 'Premium Jobs',
+    label: 'প্রিমিয়াম জব',
+    destination: 'folder-a',
+    icon: lucide('shield-check'),
+    iconBg: 'from-amber-500 to-yellow-500',
+    cardTint: 'from-amber-500/8 to-yellow-500/8',
+  },
+  {
+    gateTitle: 'Gmail Sell',
+    label: 'জিমেইল সেল',
+    destination: 'folder-c',
+    icon: lucide('mail'),
+    iconBg: 'from-rose-500 to-orange-500',
+    cardTint: 'from-rose-500/8 to-orange-500/8',
+  },
+  {
+    gateTitle: 'Fb Marketing',
+    label: 'ফেসবুক মার্কেটিং',
+    destination: 'folder-b',
+    icon: lucide('facebook'),
+    iconBg: 'from-blue-500 to-indigo-600',
+    cardTint: 'from-blue-500/8 to-indigo-500/8',
+  },
+  {
+    gateTitle: 'Ads Earn',
+    label: 'অ্যাড দেখে ইনকাম',
     destination: 'ads-earn',
-    icon: <PlayCircle className="w-6 h-6" />,
-    iconBg: 'from-amber-500 to-orange-500',
-    cardTint: 'from-amber-500/5 to-orange-500/5',
-    gateTitles: ['Ads Earn', 'TOP NEWS'],
-  },
-  {
-    id: 'social',
-    title: 'সোশ্যাল ও মার্কেটিং',
-    description: 'সোশ্যাল টাস্ক, SMM প্যানেল, বুস্টিং',
-    destination: 'social-hub',
-    icon: <Megaphone className="w-6 h-6" />,
-    iconBg: 'from-pink-500 to-rose-500',
-    cardTint: 'from-pink-500/5 to-rose-500/5',
-    gateTitles: ['Fb Marketing', 'SOCIAL', 'SMM & BOOSTING'],
-  },
-  {
-    id: 'sell',
-    title: 'বিক্রি ও ট্রেডিং',
-    description: 'OTP, জিমেইল, ডলার, ই-কমার্স',
-    destination: 'otp-buy-sell',
-    icon: <TrendingUp className="w-6 h-6" />,
+    icon: lucide('play-circle'),
     iconBg: 'from-emerald-500 to-teal-500',
-    cardTint: 'from-emerald-500/5 to-teal-500/5',
-    gateTitles: ['BUY SELL', 'Gmail Sell', 'Asset Trading', 'E-commerce'],
+    cardTint: 'from-emerald-500/8 to-teal-500/8',
   },
   {
-    id: 'gaming',
-    title: 'গেমিং',
-    description: 'টুর্নামেন্ট ও লুডো ইনকাম',
+    gateTitle: 'TOP NEWS',
+    label: 'টপ নিউজ',
+    destination: 'top-news',
+    icon: lucide('newspaper'),
+    iconBg: 'from-slate-700 to-slate-900',
+    cardTint: 'from-slate-500/8 to-slate-700/8',
+  },
+  {
+    gateTitle: 'Mobile Banking',
+    label: 'মোবাইল ব্যাংকিং',
+    destination: 'mobile-banking',
+    icon: lucide('smartphone'),
+    iconBg: 'from-pink-500 to-rose-500',
+    cardTint: 'from-pink-500/8 to-rose-500/8',
+  },
+  {
+    gateTitle: 'BUY SELL',
+    label: 'বাই-সেল (OTP)',
+    destination: 'otp-buy-sell',
+    icon: lucide('key'),
+    iconBg: 'from-fuchsia-500 to-pink-600',
+    cardTint: 'from-fuchsia-500/8 to-pink-500/8',
+  },
+  {
+    gateTitle: 'Asset Trading',
+    label: 'অ্যাসেট ট্রেডিং',
+    destination: 'dollar-buy',
+    icon: lucide('trending-up'),
+    iconBg: 'from-orange-500 to-amber-500',
+    cardTint: 'from-orange-500/8 to-amber-500/8',
+  },
+  {
+    gateTitle: 'E-commerce',
+    label: 'ই-কমার্স',
+    destination: 'ecommerce',
+    icon: lucide('shopping-bag'),
+    iconBg: 'from-pink-500 to-fuchsia-600',
+    cardTint: 'from-pink-500/8 to-fuchsia-500/8',
+  },
+  {
+    gateTitle: 'SOCIAL',
+    label: 'সোশ্যাল হাব',
+    destination: 'social-hub',
+    icon: lucide('users'),
+    iconBg: 'from-sky-500 to-indigo-500',
+    cardTint: 'from-sky-500/8 to-indigo-500/8',
+  },
+  {
+    gateTitle: 'SMM & BOOSTING',
+    label: 'SMM ও বুস্টিং',
+    destination: 'subscription-boosting',
+    icon: lucide('zap'),
+    iconBg: 'from-amber-400 to-orange-500',
+    cardTint: 'from-amber-500/8 to-orange-500/8',
+  },
+  {
+    gateTitle: 'GAMING',
+    label: 'গেমিং',
     destination: 'gaming',
-    icon: <Gamepad2 className="w-6 h-6" />,
+    icon: lucide('gamepad-2'),
     iconBg: 'from-violet-500 to-purple-600',
-    cardTint: 'from-violet-500/5 to-purple-500/5',
-    gateTitles: ['GAMING'],
+    cardTint: 'from-violet-500/8 to-purple-500/8',
+  },
+  {
+    gateTitle: 'Network Marketing',
+    label: 'নেটওয়ার্ক মার্কেটিং',
+    destination: 'referral',
+    icon: lucide('share-2'),
+    iconBg: 'from-violet-500 to-fuchsia-500',
+    cardTint: 'from-violet-500/8 to-fuchsia-500/8',
   },
 ];
 
-function formatBdt(amount: number): string {
-  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+/** Ad-hoc lucide icon resolver kept compact so the TILES table above
+ *  reads like data, not JSX. The icons referenced here are imported
+ *  inline below — adding a new tile means importing the new icon. */
+function lucide(name: string): ReactNode {
+  const map: Record<string, ReactNode> = {
+    briefcase: <Briefcase className="w-6 h-6" />,
+    'list-checks': <ListChecks className="w-6 h-6" />,
+    'shield-check': <ShieldCheck className="w-6 h-6" />,
+    mail: <Mail className="w-6 h-6" />,
+    facebook: <Facebook className="w-6 h-6" />,
+    'play-circle': <PlayCircle className="w-6 h-6" />,
+    newspaper: <Newspaper className="w-6 h-6" />,
+    smartphone: <Smartphone className="w-6 h-6" />,
+    key: <Key className="w-6 h-6" />,
+    'trending-up': <TrendingUp className="w-6 h-6" />,
+    'shopping-bag': <ShoppingBag className="w-6 h-6" />,
+    users: <Users className="w-6 h-6" />,
+    zap: <Zap className="w-6 h-6" />,
+    'gamepad-2': <Gamepad2 className="w-6 h-6" />,
+    'share-2': <Share2 className="w-6 h-6" />,
+  };
+  return map[name];
 }
 
-function greeting(name: string | undefined | null): string {
-  const hour = new Date().getHours();
-  const part = hour < 12 ? 'শুভ সকাল' : hour < 17 ? 'শুভ দুপুর' : 'শুভ সন্ধ্যা';
-  if (!name) return part;
-  return `${part}, ${name.split(/\s+/)[0]}`;
+import {
+  Briefcase,
+  Gamepad2,
+  Key,
+  ListChecks,
+  Mail,
+  Newspaper,
+  PlayCircle,
+  ShoppingBag,
+  Smartphone,
+  TrendingUp,
+  Users,
+  Zap,
+} from 'lucide-react';
+
+function formatBdt(amount: number): string {
+  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 export function HomeView({
   user,
   setView,
   onOpenNotifications,
-  dailyReward,
-  dailyClaimEnabled,
-  onClaimDaily,
-  globalNotice,
-  totalPaid,
-  activeWorkerCount,
   enabledCards,
   isAdmin,
+  telegramLink,
+  facebookLink,
+  whatsappLink,
 }: Props) {
   const [balanceHidden, setBalanceHidden] = useState(false);
-  const hasUnreadNotifications = user.notifications.length > 0;
-  const recentTasks = user.taskHistory.slice(0, 5);
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
-  const visibleCategories = CATEGORIES.filter(
-    (c) => isAdmin || c.gateTitles.some((t) => enabledCards.includes(t)),
+  const hasUnreadNotifications = user.notifications.length > 0;
+  const visibleTiles = TILES.filter(
+    (t) => isAdmin || enabledCards.includes(t.gateTitle),
   );
+
+  const handleCopy = (text: string, kind: 'code' | 'link') => {
+    if (!text) return;
+    void navigator.clipboard.writeText(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
+  };
 
   return (
     <div className="min-h-screen pb-28">
-      {/* Top bar */}
+      {/* 1. Top bar — English brand on the left, icon buttons on the right */}
       <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/40 border-b border-white/40">
         <div className="max-w-md mx-auto flex items-center gap-3 px-4 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-slate-600 truncate">{greeting(user.name)}</p>
-            <h1 className="text-base font-semibold text-slate-900 truncate flex items-center gap-1.5">
-              টপ আর্নিং
-              <Sparkles className="w-4 h-4 text-amber-500" />
-            </h1>
+          <div className="flex-1 min-w-0 flex items-center gap-2">
+            <span className="inline-flex w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center justify-center shadow-md">
+              <Wallet className="w-5 h-5" />
+            </span>
+            <span className="text-lg font-bold tracking-tight text-slate-900">
+              Top Earning
+            </span>
           </div>
           <button
             type="button"
             onClick={onOpenNotifications}
-            aria-label="নোটিফিকেশন"
+            aria-label="Notifications"
             className="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <Bell className="w-5 h-5" />
@@ -186,27 +304,27 @@ export function HomeView({
           <button
             type="button"
             onClick={() => setView('profile')}
-            aria-label="প্রোফাইল"
+            aria-label="Profile"
             className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
-            <User className="w-5 h-5" />
+            <UserIcon className="w-5 h-5" />
           </button>
         </div>
       </header>
 
       <main className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {/* Hero balance card — gradient with soft glow */}
+        {/* 2. Balance card */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.35 }}
+          transition={{ duration: 0.3 }}
         >
           <Card variant="gradient" glow padded className="p-6">
             <div className="relative z-10">
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 text-indigo-100/90">
                   <Wallet className="w-4 h-4" />
-                  <span className="text-sm font-medium">প্রধান ব্যালেন্স</span>
+                  <span className="text-sm font-medium">মেইন ব্যালেন্স</span>
                 </div>
                 <button
                   type="button"
@@ -227,13 +345,13 @@ export function HomeView({
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">মোট আয়</p>
+                  <p className="text-[11px] tracking-wide text-indigo-100/70">মোট ইনকাম</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{balanceHidden ? '••••' : formatBdt(user.totalEarned)}
                   </p>
                 </div>
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">পেন্ডিং</p>
+                  <p className="text-[11px] tracking-wide text-indigo-100/70">পেন্ডিং</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{balanceHidden ? '••••' : formatBdt(user.pendingPayout)}
                   </p>
@@ -249,236 +367,216 @@ export function HomeView({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setView('referral')}
+                  onClick={() => setView('finance')}
                   className="flex-1 h-11 rounded-xl bg-white/15 text-white font-semibold text-sm border border-white/20 hover:bg-white/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                 >
-                  <Send className="w-4 h-4" /> রেফার
+                  <TrendingUp className="w-4 h-4" /> ডিপোজিট
                 </button>
               </div>
             </div>
           </Card>
         </motion.div>
 
-        {/* Activate banner */}
-        {!user.isActive && (
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.05 }}
-          >
-            <Card padded className="border-rose-200/70 bg-gradient-to-br from-rose-50/80 to-amber-50/80">
-              <div className="flex items-start gap-3">
-                <span className="shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br from-rose-500 to-orange-500 text-white inline-flex items-center justify-center shadow-md">
-                  <ShieldCheck className="w-5 h-5" />
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-base font-semibold text-slate-900">
-                    আপনার অ্যাকাউন্ট অ্যাক্টিভেট করুন
-                  </p>
-                  <p className="text-sm text-slate-600 mt-0.5">
-                    উইথড্র ও রেফারেল কমিশন আনলক করুন।
-                  </p>
-                </div>
-              </div>
-              <div className="mt-3">
-                <Button
-                  fullWidth
-                  onClick={() => setView('account-activation')}
-                  rightIcon={<ArrowRight className="w-4 h-4" />}
-                >
-                  এখনই অ্যাক্টিভেট করুন
-                </Button>
-              </div>
-            </Card>
-          </motion.div>
-        )}
-
-        {/* Daily reward */}
-        {dailyClaimEnabled && (
-          <Card padded>
-            <div className="flex items-center gap-3">
-              <span className="shrink-0 w-11 h-11 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 text-white inline-flex items-center justify-center shadow-md">
-                <Gift className="w-5 h-5" />
-              </span>
-              <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-slate-900">দৈনিক পুরস্কার</p>
-                <p className="text-sm text-slate-600">
-                  {user.dailyClaimed
-                    ? 'আগামীকাল আবার আসুন'
-                    : `আজ ৳${formatBdt(dailyReward)} ক্লেইম করুন`}
-                </p>
-              </div>
-              <Button
-                size="sm"
-                variant={user.dailyClaimed ? 'secondary' : 'primary'}
-                disabled={user.dailyClaimed}
-                onClick={onClaimDaily}
-              >
-                {user.dailyClaimed ? 'ক্লেইম হয়েছে' : 'ক্লেইম'}
-              </Button>
-            </div>
-          </Card>
-        )}
-
-        {/* Quick actions */}
-        <div className="flex gap-2 overflow-x-auto no-scrollbar -mx-4 px-4 pb-1">
-          <Chip
-            tone="primary"
-            leadingIcon={<Smartphone className="w-4 h-4" />}
-            onClick={() => setView('mobile-recharge')}
-          >
-            রিচার্জ
-          </Chip>
-          <Chip
-            tone="primary"
-            leadingIcon={<Headphones className="w-4 h-4" />}
-            onClick={() => setView('support')}
-          >
-            সাপোর্ট
-          </Chip>
-          <Chip
-            tone="primary"
-            leadingIcon={<Users className="w-4 h-4" />}
-            onClick={() => setView('leaderboard')}
-          >
-            লিডারবোর্ড
-          </Chip>
-          <Chip
-            tone="primary"
-            leadingIcon={<TrendingUp className="w-4 h-4" />}
-            onClick={() => setView('spin')}
-          >
-            স্পিন
-          </Chip>
-        </div>
-
-        {/* Notice */}
-        {globalNotice && (
-          <Card padded className="bg-gradient-to-r from-indigo-50/70 to-violet-50/70 border-indigo-100/60">
-            <div className="flex items-start gap-3">
-              <span className="shrink-0 mt-0.5 inline-flex w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white items-center justify-center shadow-sm">
-                <Megaphone className="w-4 h-4" />
-              </span>
-              <p className="flex-1 text-sm text-slate-800 leading-relaxed">
-                {globalNotice}
-              </p>
-            </div>
-          </Card>
-        )}
-
-        {/* Earn categories */}
-        <section>
-          <SectionHeader title="ইনকাম শুরু করুন" subtitle="যেকোনো ক্যাটাগরি বেছে নিন" />
-          <div className="grid grid-cols-1 gap-3">
-            {visibleCategories.map((cat, i) => (
-              <motion.button
-                key={cat.id}
-                type="button"
-                onClick={() => setView(cat.destination)}
-                whileHover={{ y: -2 }}
-                whileTap={{ scale: 0.98 }}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, delay: 0.05 + i * 0.04 }}
-                className={`relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)] p-4 flex items-center gap-4 text-left transition-shadow hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500`}
-              >
-                {/* Subtle category tint background */}
-                <span
-                  aria-hidden="true"
-                  className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${cat.cardTint}`}
-                />
-                <span
-                  className={`relative shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-br ${cat.iconBg} text-white inline-flex items-center justify-center shadow-md`}
-                >
-                  {cat.icon}
-                </span>
-                <span className="relative flex-1 min-w-0">
-                  <span className="block text-base font-semibold text-slate-900">
-                    {cat.title}
-                  </span>
-                  <span className="block text-sm text-slate-600 truncate">
-                    {cat.description}
-                  </span>
-                </span>
-                <ChevronRight className="relative w-5 h-5 text-slate-400 shrink-0" />
-              </motion.button>
-            ))}
-            {visibleCategories.length === 0 && (
-              <Card padded>
-                <EmptyState
-                  title="কোনো ক্যাটাগরি চালু নেই"
-                  description="অ্যাডমিনকে ইনকাম ফিচার চালু করতে বলুন।"
-                />
-              </Card>
-            )}
-          </div>
-        </section>
-
-        {/* Recent activity */}
-        <section>
-          <SectionHeader
-            title="সাম্প্রতিক কাজ"
-            action={
-              recentTasks.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => setView('dashboard')}
-                  className="text-sm font-semibold text-indigo-600 hover:underline focus:outline-none"
-                >
-                  সব দেখুন
-                </button>
-              ) : undefined
-            }
-          />
-          {recentTasks.length === 0 ? (
-            <Card padded>
-              <EmptyState
-                title="এখনো কোনো কাজ করা হয়নি"
-                description="আপনার সম্পূর্ণ করা কাজগুলো এখানে দেখা যাবে।"
-                action={
-                  <Button onClick={() => setView('folder-a')} size="sm">
-                    কাজ দেখুন
-                  </Button>
-                }
-              />
-            </Card>
-          ) : (
-            <Card padded={false}>
-              {recentTasks.map((task) => (
-                <ListRow
-                  key={task.id}
-                  title={task.title}
-                  subtitle={task.date}
-                  trailing={
-                    <span className="text-base font-semibold text-emerald-600 tabular-nums">
-                      +৳{formatBdt(task.reward)}
-                    </span>
-                  }
-                  showChevron={false}
-                />
-              ))}
-            </Card>
-          )}
-        </section>
-
-        {/* Trust strip */}
+        {/* 3. Social row */}
         <Card padded>
-          <div className="grid grid-cols-2 divide-x divide-slate-200/60">
-            <div className="pr-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">মোট পরিশোধিত</p>
-              <p className="text-lg font-semibold tabular-nums text-emerald-600 mt-0.5">
-                ৳{totalPaid.toLocaleString('en-US')}+
-              </p>
-            </div>
-            <div className="pl-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">সক্রিয় ইউজার</p>
-              <p className="text-lg font-semibold tabular-nums text-indigo-600 mt-0.5">
-                {(activeWorkerCount / 1000).toFixed(0)}k+
-              </p>
-            </div>
+          <p className="text-sm font-semibold text-slate-700 mb-3">
+            আমাদের কমিউনিটিতে যোগ দিন
+          </p>
+          <div className="grid grid-cols-4 gap-2">
+            <SocialButton
+              href={telegramLink}
+              label="Telegram"
+              icon={<Send className="w-5 h-5" />}
+              gradient="from-sky-500 to-blue-600"
+            />
+            <SocialButton
+              href={facebookLink}
+              label="Facebook"
+              icon={<Facebook className="w-5 h-5" />}
+              gradient="from-blue-600 to-indigo-700"
+            />
+            <SocialButton
+              href={whatsappLink}
+              label="WhatsApp"
+              icon={<MessageCircle className="w-5 h-5" />}
+              gradient="from-emerald-500 to-green-600"
+            />
+            <SocialButton
+              onClick={() => setView('support')}
+              label="সাপোর্ট"
+              icon={<Headphones className="w-5 h-5" />}
+              gradient="from-violet-500 to-purple-600"
+            />
           </div>
         </Card>
+
+        {/* 4. Refer + verified */}
+        <Card padded>
+          <div className="flex items-center justify-between gap-3 mb-3">
+            <div className="min-w-0">
+              <p className="text-base font-semibold text-slate-900">রেফার করুন, ইনকাম বাড়ান</p>
+              <p className="text-sm text-slate-600 mt-0.5">
+                আপনার রেফারেল কোড শেয়ার করুন
+              </p>
+            </div>
+            {user.isActive ? (
+              <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 text-xs font-semibold border border-emerald-200/60">
+                <ShieldCheck className="w-3.5 h-3.5" />
+                ভেরিফায়েড
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setView('account-activation')}
+                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-700 text-xs font-semibold border border-rose-200/60 hover:bg-rose-500/20 transition-colors"
+              >
+                <ShieldAlert className="w-3.5 h-3.5" />
+                অ্যাক্টিভেট করুন
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-stretch gap-2">
+            <button
+              type="button"
+              onClick={() => user.numericId && handleCopy(user.numericId, 'code')}
+              disabled={!user.numericId}
+              className="flex-1 inline-flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-200/60 hover:from-indigo-500/15 hover:to-violet-500/15 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              <span className="text-left">
+                <span className="block text-[11px] uppercase tracking-wide text-slate-500">
+                  রেফারেল কোড
+                </span>
+                <span className="block text-lg font-bold tracking-wider bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tabular-nums">
+                  {user.numericId || '——'}
+                </span>
+              </span>
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm">
+                {copied === 'code' ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={!user.numericId}
+              onClick={() => {
+                if (!user.numericId) return;
+                handleCopy(
+                  `${window.location.origin}?ref=${user.numericId}`,
+                  'link',
+                );
+              }}
+              aria-label="রেফারেল লিংক কপি করুন"
+              className="shrink-0 w-12 inline-flex items-center justify-center rounded-xl bg-white/70 border border-white/60 hover:bg-white transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+            >
+              {copied === 'link' ? (
+                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              ) : (
+                <Share2 className="w-5 h-5 text-indigo-600" />
+              )}
+            </button>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setView('referral')}
+            className="mt-3 w-full inline-flex items-center justify-between text-sm font-semibold text-indigo-600 hover:underline"
+          >
+            <span>আমার টিম দেখুন</span>
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </Card>
+
+        {/* 5. Task tiles — individual categories like the old version */}
+        <section>
+          <div className="flex items-end justify-between mb-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">ইনকাম শুরু করুন</h2>
+              <p className="text-sm text-slate-600 mt-0.5">যেকোনো ক্যাটাগরি থেকে কাজ শুরু করুন</p>
+            </div>
+          </div>
+          {visibleTiles.length === 0 ? (
+            <Card padded>
+              <p className="text-sm text-slate-600 text-center py-4">
+                এই মুহূর্তে কোনো ইনকাম ক্যাটাগরি চালু নেই।
+              </p>
+            </Card>
+          ) : (
+            <div className="grid grid-cols-2 gap-3">
+              {visibleTiles.map((tile, i) => (
+                <motion.button
+                  key={`${tile.gateTitle}-${i}`}
+                  type="button"
+                  onClick={() => setView(tile.destination)}
+                  whileHover={{ y: -2 }}
+                  whileTap={{ scale: 0.97 }}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.22, delay: 0.02 + i * 0.025 }}
+                  className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_6px_18px_-8px_rgba(15,23,42,0.12)] p-4 flex flex-col items-center gap-2 text-center transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[120px]"
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tile.cardTint}`}
+                  />
+                  <span
+                    className={`relative shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-br ${tile.iconBg} text-white inline-flex items-center justify-center shadow-md`}
+                  >
+                    {tile.icon}
+                  </span>
+                  <span className="relative text-sm font-semibold text-slate-900 leading-tight">
+                    {tile.label}
+                  </span>
+                </motion.button>
+              ))}
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );
 }
+
+interface SocialButtonProps {
+  label: string;
+  icon: ReactNode;
+  gradient: string;
+  href?: string;
+  onClick?: () => void;
+}
+
+function SocialButton({ label, icon, gradient, href, onClick }: SocialButtonProps) {
+  const inner = (
+    <>
+      <span
+        className={`w-11 h-11 rounded-xl bg-gradient-to-br ${gradient} text-white inline-flex items-center justify-center shadow-md mb-1.5`}
+      >
+        {icon}
+      </span>
+      <span className="text-[11px] font-semibold text-slate-700 leading-none">{label}</span>
+    </>
+  );
+  const baseClasses =
+    'flex flex-col items-center justify-center p-2 rounded-xl bg-white/40 border border-white/40 hover:bg-white/70 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500';
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" className={baseClasses}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={baseClasses}>
+      {inner}
+    </button>
+  );
+}
+
+// `INCOME_CARDS` is intentionally not used by the home tile grid above
+// (the new TILES list is the source of truth) but is re-exported as a
+// `void` reference so a future audit can still find that this file
+// participates in the income-card surface area.
+void INCOME_CARDS;

@@ -2718,6 +2718,9 @@ export default function App() {
             activeWorkerCount={activeWorkerCount}
             enabledCards={enabledCards}
             isAdmin={isAdmin}
+            telegramLink={telegramLink}
+            facebookLink={facebookLink}
+            whatsappLink={whatsappLink}
           />
         )}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
