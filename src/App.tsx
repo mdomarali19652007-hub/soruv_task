@@ -178,6 +178,9 @@ import { MobileBankingView as SharedMobileBankingView } from './features/mobile-
 import { GamingView as SharedGamingView } from './features/gaming/GamingView';
 import { WorkStationView as SharedWorkStationView } from './features/workstation/WorkStationView';
 import { SocialHubView as SharedSocialHubView } from './features/social/SocialHubView';
+import { HomeView as RedesignedHomeView } from './features/home/HomeView';
+import { BottomNav, type BottomNavTab } from './components/ui';
+import { Home as HomeIcon, Briefcase as EarnIcon, Wallet as WalletIcon, Users as NetworkIcon, Menu as MoreIcon } from 'lucide-react';
 
 // Silence unused-import warnings for types/utilities that may not be
 // referenced yet in this file but are part of the public module surface
@@ -2702,7 +2705,21 @@ export default function App() {
           </div>
         )}
         {view === 'login' && !isLoggedIn && loginView}
-        {view === 'home' && homeView}
+        {view === 'home' && (
+          <RedesignedHomeView
+            user={user}
+            setView={setView}
+            onOpenNotifications={() => setShowNotifications(true)}
+            dailyReward={dailyReward}
+            dailyClaimEnabled={enabledFeatures.includes('daily-claim') || isAdmin}
+            onClaimDaily={claimDaily}
+            globalNotice={globalNotice}
+            totalPaid={totalPaid}
+            activeWorkerCount={activeWorkerCount}
+            enabledCards={enabledCards}
+            isAdmin={isAdmin}
+          />
+        )}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
         {view === 'referral' && <ReferralView key="referral" />}
         {view === 'top-news' && <TopNewsView key="top-news" />}
@@ -2796,33 +2813,34 @@ export default function App() {
         {view === 'social-job' && <SocialJobView key="social-job" />}
       </AnimatePresence>}
 
-      {/* Bottom Navigation - hide on login, email verification, and the
+      {/* Bottom Navigation — redesigned 5-tab shell.
+          Hidden on login, email verification, password reset, and the
           admin shell (both the dedicated admin subdomain and the
-          legacy apex `/admin` route). */}
+          legacy apex `/admin` route).
+
+          Plan reference: §3 / §4 of
+          `plans/user-friendly-ui-redesign-for-production-launch.md`. */}
       {isAuthReady && isLoggedIn && view !== 'login' && view !== 'admin'
-        && !isOnAdminHost() && !needsEmailVerification && (
-        <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto px-6 py-4 z-50">
-          <div className="glass rounded-[32px] p-2 flex justify-between items-center border border-white/40 shadow-2xl">
-            {[
-              { id: 'home', icon: <Globe className="w-6 h-6" />, label: 'Home' },
-              { id: 'dashboard', icon: <LayoutDashboard className="w-6 h-6" />, label: 'Stats' },
-              { id: 'workstation', icon: <FolderOpen className="w-6 h-6" />, label: 'Work' },
-              { id: 'finance', icon: <CreditCard className="w-6 h-6" />, label: 'Wallet' },
-              { id: 'settings', icon: <Settings className="w-6 h-6" />, label: 'Settings' },
-            ].map((item) => (
-              <button
-                key={item.id}
-                onClick={() => setView(item.id as View)}
-                className={`flex flex-col items-center gap-1 p-3 rounded-2xl transition-all duration-300 ${view === item.id ? 'bg-indigo-600 text-white scale-110 shadow-lg shadow-indigo-500/20' : 'text-slate-400 hover:text-slate-600'
-                  }`}
-              >
-                {item.icon}
-                {view === item.id && <span className="text-[8px] font-black uppercase tracking-tighter">{item.label}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+        && view !== 'reset-password'
+        && !isOnAdminHost() && !needsEmailVerification && (() => {
+        const navTabs: BottomNavTab[] = [
+          { key: 'home', label: 'Home', icon: <HomeIcon className="w-5 h-5" /> },
+          { key: 'workstation', label: 'Earn', icon: <EarnIcon className="w-5 h-5" /> },
+          { key: 'finance', label: 'Wallet', icon: <WalletIcon className="w-5 h-5" /> },
+          { key: 'referral', label: 'Network', icon: <NetworkIcon className="w-5 h-5" /> },
+          { key: 'settings', label: 'More', icon: <MoreIcon className="w-5 h-5" /> },
+        ];
+        // The active tab is whichever nav root the current view falls under.
+        // Detail screens (e.g. `dashboard`, `top-news`) keep no tab highlighted.
+        const activeTab = navTabs.some(t => t.key === view) ? view : '';
+        return (
+          <BottomNav
+            tabs={navTabs}
+            active={activeTab}
+            onSelect={(key) => setView(key as View)}
+          />
+        );
+      })()}
 
       {/* Global Styles for Marquee */}
       <style>{`

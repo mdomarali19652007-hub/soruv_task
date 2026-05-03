@@ -21,3 +21,4 @@ export { SectionHeader, type SectionHeaderProps } from './SectionHeader';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Skeleton, SkeletonText, type SkeletonProps } from './Skeleton';
 export { BalancePill, type BalancePillProps } from './BalancePill';
+export { BottomNav, type BottomNavProps, type BottomNavTab } from './BottomNav';

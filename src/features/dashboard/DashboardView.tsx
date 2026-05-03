@@ -1,15 +1,38 @@
 /**
- * Stats / dashboard screen showing profile, balances, referral summary,
- * achievements and recent task history.
+ * DashboardView — redesigned stats screen.
  *
- * Phase 3 extraction from src/App.tsx. Read-only aside from the
- * clipboard copy interaction, so the prop surface stays small.
+ * Replaces the previous "premium" markup (`glass-card`, `glitch-text`,
+ * `text-[8px] uppercase tracking-widest` labels, gradient avatar rings)
+ * with the calm primitives in `src/components/ui/`.
+ *
+ * The shape of the props is unchanged so App.tsx wiring is identical
+ * to the legacy module — only the visual layer is new.
+ *
+ * Plan reference: §1, §4, §5 of
+ * `plans/user-friendly-ui-redesign-for-production-launch.md`.
  */
 
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, Copy, ExternalLink, FileText, User, Users, Wallet } from 'lucide-react';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  Copy,
+  ExternalLink,
+  FileText,
+  Share2,
+  Trophy,
+  User,
+} from 'lucide-react';
 import type { UserProfile, View } from '../../types';
+import {
+  Button,
+  Card,
+  Chip,
+  EmptyState,
+  ListRow,
+  SectionHeader,
+  Stat,
+} from '../../components/ui';
 
 interface Props {
   user: UserProfile;
@@ -19,229 +42,268 @@ interface Props {
   referralCommissionRate: number;
 }
 
-export function DashboardView({ user, setView, allUsers, referralCommissionRate }: Props) {
-  const [copied, setCopied] = useState(false);
+function formatBdt(amount: number): string {
+  return `৳${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+}
 
-  const handleCopy = (text: string) => {
-    navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+export function DashboardView({
+  user,
+  setView,
+  allUsers,
+  referralCommissionRate,
+}: Props) {
+  const [copied, setCopied] = useState<'code' | 'link' | null>(null);
+  const profilePic = (user as unknown as { profilePic?: string }).profilePic;
+
+  const totalReferrals = allUsers.filter((u) => u.referredBy === user.id).length;
+  const activeReferrals = allUsers.filter(
+    (u) => u.referredBy === user.id && u.isActive,
+  ).length;
+
+  const handleCopy = (text: string, kind: 'code' | 'link') => {
+    if (!text) return;
+    void navigator.clipboard.writeText(text);
+    setCopied(kind);
+    setTimeout(() => setCopied(null), 2000);
   };
 
   return (
-    <div className="min-h-screen pb-32">
-      <div className="p-6 pt-12">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button onClick={() => setView('home')} className="p-3 glass rounded-2xl text-slate-700">
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2 className="text-2xl font-black neon-text text-slate-900 glitch-text" data-text="Stats">
-              Stats
-            </h2>
-          </div>
+    <div className="min-h-screen bg-slate-50 pb-24">
+      {/* Top bar */}
+      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+        <div className="max-w-md mx-auto flex items-center gap-3 px-3 py-3">
+          <button
+            type="button"
+            onClick={() => setView('home')}
+            aria-label="Back to home"
+            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+          >
+            <ArrowLeft className="w-5 h-5" />
+          </button>
+          <h1 className="flex-1 text-base font-semibold text-slate-900 truncate">
+            Stats
+          </h1>
         </div>
+      </header>
 
-        {/* Profile Card */}
-        <div className="glass-card mb-8 relative overflow-hidden group border-white/40 shadow-xl">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 blur-3xl rounded-full -mr-16 -mt-16 group-hover:bg-indigo-500/20 transition-all" />
-          <div className="flex items-center gap-5 relative z-10">
-            <div className="w-20 h-20 rounded-[24px] bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center shadow-xl neon-border overflow-hidden">
-              {(user as unknown as { profilePic?: string }).profilePic ? (
+      <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+        {/* Profile card */}
+        <Card padded>
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center overflow-hidden shrink-0">
+              {profilePic ? (
                 <img
-                  src={(user as unknown as { profilePic?: string }).profilePic}
+                  src={profilePic}
                   alt="Profile"
                   className="w-full h-full object-cover"
                   referrerPolicy="no-referrer"
                 />
               ) : (
-                <User className="w-10 h-10 text-white" />
+                <User className="w-8 h-8" />
               )}
             </div>
-            <div>
-              <h3 className="text-xl font-black text-slate-900">{user.name}</h3>
-              <p className="text-xs font-bold text-slate-500 mb-2">{user.id}</p>
-              <div className="flex gap-2">
-                <span className="bg-indigo-500/10 text-indigo-600 px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border border-indigo-500/20">
-                  {user.rank} Rank
-                </span>
-                <span
-                  className={`px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest border ${
-                    user.isActive
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                      : 'bg-rose-500/10 text-rose-600 border-rose-500/20 cursor-pointer'
-                  }`}
-                  onClick={() => !user.isActive && setView('account-activation')}
-                >
-                  {user.isActive ? 'Active' : 'Inactive'}
-                </span>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-lg font-semibold text-slate-900 truncate">
+                {user.name || 'Unnamed'}
+              </h2>
+              {user.id && (
+                <p className="text-sm text-slate-500 truncate">{user.id}</p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <Chip tone="primary">{user.rank} rank</Chip>
+                {user.isActive ? (
+                  <Chip tone="success">Active</Chip>
+                ) : (
+                  <Chip tone="danger" onClick={() => setView('account-activation')}>
+                    Inactive — activate
+                  </Chip>
+                )}
               </div>
-              {user.isActive && (
-                <p className="text-[8px] font-black text-emerald-600 uppercase mt-2">
-                  Expires: {new Date(user.activationExpiry).toLocaleDateString()}
+              {user.isActive && user.activationExpiry && (
+                <p className="text-xs text-slate-500 mt-2">
+                  Expires {new Date(user.activationExpiry).toLocaleDateString()}
                 </p>
               )}
             </div>
           </div>
-        </div>
+        </Card>
 
-        {/* Live Balance Grid */}
-        <div className="grid grid-cols-1 gap-4 mb-8">
-          <div className="glass-card bg-gradient-to-br from-indigo-500/5 to-violet-600/5 border-indigo-500/10 shadow-lg">
-            <div className="flex justify-between items-start mb-4">
-              <div className="p-3 bg-indigo-500/20 rounded-2xl">
-                <Wallet className="w-6 h-6 text-indigo-600" />
-              </div>
-              <span className="text-[10px] font-black text-indigo-600 bg-indigo-500/10 px-2 py-1 rounded-lg uppercase">
-                Main Balance
-              </span>
-            </div>
-            <p className="text-3xl font-black text-slate-900 mb-1">৳ {user.mainBalance.toFixed(2)}</p>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4">Available Balance</p>
+        {/* Balances */}
+        <Card padded>
+          <SectionHeader
+            title="Balances"
+            action={
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => setView('finance')}
+              >
+                Withdraw
+              </Button>
+            }
+          />
+          <div className="grid grid-cols-3 gap-3">
+            <Stat label="Available" value={formatBdt(user.mainBalance)} />
+            <Stat
+              label="Earned"
+              value={formatBdt(user.totalEarned)}
+              tone="success"
+            />
+            <Stat label="Pending" value={formatBdt(user.pendingPayout)} />
           </div>
+        </Card>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div className="glass-card p-5 border-emerald-500/10 shadow-md">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Total Earned</p>
-              <p className="text-xl font-black text-emerald-600">৳ {user.totalEarned.toFixed(2)}</p>
-            </div>
-            <div className="glass-card p-5 border-indigo-500/10 shadow-md">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-2">Pending</p>
-              <p className="text-xl font-black text-indigo-600">৳ {user.pendingPayout.toFixed(2)}</p>
-            </div>
-          </div>
-        </div>
+        {/* Referral program */}
+        <Card padded>
+          <SectionHeader
+            title="Referral program"
+            subtitle={`Lifetime commission: ${referralCommissionRate}%`}
+          />
 
-        {/* Enhanced Referral Section */}
-        <div className="glass-card mb-8 border-white/40 shadow-xl bg-gradient-to-br from-indigo-500/5 to-violet-600/5 p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
-              <Users className="w-4 h-4 text-indigo-500" />
-              Referral Program
-            </h3>
-          </div>
-
-          <div className="text-center mb-8">
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">Your Referral Code</p>
-            <div
-              onClick={() => user.numericId && handleCopy(user.numericId)}
-              aria-disabled={!user.numericId}
-              className={`relative inline-flex items-center gap-4 bg-white border-2 border-indigo-100 px-10 py-5 rounded-[32px] transition-all group shadow-sm ${
-                user.numericId
-                  ? 'cursor-pointer hover:border-indigo-500 active:scale-95'
-                  : 'cursor-not-allowed opacity-60'
-              }`}
-            >
-              <span className="text-4xl font-black text-indigo-600 tracking-[0.1em]">{user.numericId || '——'}</span>
-              <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
-                <Copy className="w-6 h-6 text-indigo-600" />
-              </div>
-
-              <AnimatePresence>
-                {copied && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, x: '-50%' }}
-                    animate={{ opacity: 1, y: -60, x: '-50%' }}
-                    exit={{ opacity: 0, y: -80, x: '-50%' }}
-                    className="absolute left-1/2 bg-slate-900 text-white text-[10px] font-black px-4 py-2 rounded-full uppercase tracking-widest shadow-xl whitespace-nowrap"
-                  >
-                    Copied Successfully!
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
+          <div className="mt-1 flex flex-col items-center text-center">
+            <p className="text-sm text-slate-600 mb-2">Your referral code</p>
             <button
+              type="button"
+              onClick={() => user.numericId && handleCopy(user.numericId, 'code')}
               disabled={!user.numericId}
+              className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            >
+              <span className="text-3xl font-semibold tracking-wider text-blue-700 tabular-nums">
+                {user.numericId || '——'}
+              </span>
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-white text-blue-600 border border-blue-100">
+                {copied === 'code' ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <Copy className="w-4 h-4" />
+                )}
+              </span>
+            </button>
+            {copied === 'code' && (
+              <p className="text-xs text-green-600 mt-2">Copied!</p>
+            )}
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!user.numericId}
+              leftIcon={
+                copied === 'link' ? (
+                  <CheckCircle2 className="w-4 h-4" />
+                ) : (
+                  <Share2 className="w-4 h-4" />
+                )
+              }
+              className="mt-3"
               onClick={() => {
                 if (!user.numericId) return;
-                const link = `${window.location.origin}?ref=${user.numericId}`;
-                handleCopy(link);
+                handleCopy(
+                  `${window.location.origin}?ref=${user.numericId}`,
+                  'link',
+                );
               }}
-              className="mt-4 flex items-center gap-2 mx-auto text-[10px] font-black text-indigo-600 uppercase tracking-widest hover:underline disabled:opacity-50 disabled:no-underline disabled:cursor-not-allowed"
             >
-              <ExternalLink className="w-3 h-3" />
-              Copy Referral Link
-            </button>
+              {copied === 'link' ? 'Link copied' : 'Copy referral link'}
+            </Button>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 mb-6">
-            <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Total</p>
-              <p className="text-sm font-black text-slate-900">
-                {allUsers.filter((u) => u.referredBy === user.id).length}
-              </p>
-            </div>
-            <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Active</p>
-              <p className="text-sm font-black text-emerald-600">
-                {allUsers.filter((u) => u.referredBy === user.id && u.isActive).length}
-              </p>
-            </div>
-            <div className="p-3 bg-white rounded-2xl border border-slate-100 shadow-sm">
-              <p className="text-[7px] font-black text-slate-400 uppercase tracking-widest">Earned</p>
-              <p className="text-sm font-black text-indigo-600">৳ {user.totalCommission?.toFixed(2) || '0.00'}</p>
-            </div>
+          <div className="mt-5 grid grid-cols-3 gap-3">
+            <Stat label="Total" value={totalReferrals} />
+            <Stat label="Active" value={activeReferrals} tone="success" />
+            <Stat
+              label="Earned"
+              value={formatBdt(user.totalCommission ?? 0)}
+            />
           </div>
 
-          <div className="p-4 bg-indigo-500/10 rounded-2xl border border-indigo-500/20">
-            <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mb-2">Referral Rules</p>
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-slate-600 font-bold">Lifetime Commission</p>
-              <p className="text-[10px] font-black text-indigo-600 uppercase">{referralCommissionRate}%</p>
-            </div>
-            <p className="text-[8px] text-slate-400 font-bold mt-1 uppercase tracking-tighter">
-              Earn from every task your team completes
-            </p>
+          <div className="mt-4">
+            <Button
+              fullWidth
+              variant="secondary"
+              onClick={() => setView('referral')}
+              rightIcon={<ExternalLink className="w-4 h-4" />}
+            >
+              Open referral hub
+            </Button>
           </div>
-        </div>
+        </Card>
 
         {/* Achievements */}
-        <div className="mt-8">
-          <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 px-2">Achievements</h3>
-          <div className="space-y-3">
-            {user.achievements.map((ach) => (
-              <div key={ach.id} className="glass-card p-4 border-white/40 shadow-sm">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-800 uppercase">{ach.title}</span>
-                  <span className="text-[10px] font-bold text-indigo-600">
-                    {ach.progress}/{ach.goal}
-                  </span>
-                </div>
-                <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-indigo-400 to-violet-600"
-                    style={{ width: `${(ach.progress / ach.goal) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Task History */}
-        <div className="mt-8">
-          <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-4 px-2">Recent Tasks</h3>
-          {user.taskHistory.length === 0 ? (
-            <div className="glass-card p-8 text-center border-white/40 shadow-sm">
-              <FileText className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-              <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">No tasks completed yet</p>
-            </div>
+        <section>
+          <SectionHeader title="Achievements" />
+          {user.achievements.length === 0 ? (
+            <Card padded>
+              <EmptyState
+                icon={<Trophy className="w-7 h-7" />}
+                title="No achievements yet"
+                description="Complete tasks to unlock milestones."
+              />
+            </Card>
           ) : (
             <div className="space-y-3">
-              {user.taskHistory.map((task) => (
-                <div key={task.id} className="glass-card flex justify-between items-center p-4 border-white/40 shadow-sm">
-                  <div>
-                    <p className="text-xs font-black text-slate-800 uppercase">{task.title}</p>
-                    <p className="text-[10px] font-bold text-slate-400">{task.date}</p>
-                  </div>
-                  <p className="text-emerald-600 font-black text-xs">+৳ {task.reward.toFixed(2)}</p>
-                </div>
-              ))}
+              {user.achievements.map((ach) => {
+                const pct = Math.min(
+                  100,
+                  Math.round((ach.progress / Math.max(1, ach.goal)) * 100),
+                );
+                return (
+                  <Card key={ach.id} padded>
+                    <div className="flex items-center justify-between mb-2 gap-3">
+                      <p className="text-base font-medium text-slate-900 truncate">
+                        {ach.title}
+                      </p>
+                      <p className="text-sm font-medium text-slate-700 tabular-nums shrink-0">
+                        {ach.progress}/{ach.goal}
+                      </p>
+                    </div>
+                    <div
+                      className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"
+                      role="progressbar"
+                      aria-valuenow={pct}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                    >
+                      <div
+                        className="h-full bg-blue-600"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           )}
-        </div>
-      </div>
+        </section>
+
+        {/* Recent tasks */}
+        <section>
+          <SectionHeader title="Recent tasks" />
+          {user.taskHistory.length === 0 ? (
+            <Card padded>
+              <EmptyState
+                icon={<FileText className="w-7 h-7" />}
+                title="No tasks completed yet"
+                description="Earnings from completed tasks show up here."
+              />
+            </Card>
+          ) : (
+            <Card padded={false}>
+              {user.taskHistory.slice(0, 20).map((task) => (
+                <ListRow
+                  key={task.id}
+                  title={task.title}
+                  subtitle={task.date}
+                  trailing={
+                    <span className="text-base font-semibold text-green-600 tabular-nums">
+                      +{formatBdt(task.reward)}
+                    </span>
+                  }
+                  showChevron={false}
+                />
+              ))}
+            </Card>
+          )}
+        </section>
+      </main>
     </div>
   );
 }
