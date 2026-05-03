@@ -81,7 +81,7 @@ export function DashboardView({
             <ArrowLeft className="w-5 h-5" />
           </button>
           <h1 className="flex-1 text-base font-semibold text-slate-900 truncate">
-            Stats
+            পরিসংখ্যান
           </h1>
         </div>
       </header>
@@ -109,24 +109,24 @@ export function DashboardView({
               </div>
               <div className="flex-1 min-w-0">
                 <h2 className="text-lg font-semibold text-slate-900 truncate">
-                  {user.name || 'Unnamed'}
+                  {user.name || 'নামহীন'}
                 </h2>
                 {user.id && (
                   <p className="text-sm text-slate-500 truncate">{user.id}</p>
                 )}
                 <div className="mt-2 flex flex-wrap gap-2">
-                  <Chip tone="primary">{user.rank} rank</Chip>
+                  <Chip tone="primary">{user.rank} র‍্যাঙ্ক</Chip>
                   {user.isActive ? (
-                    <Chip tone="success">Active</Chip>
+                    <Chip tone="success">অ্যাক্টিভ</Chip>
                   ) : (
                     <Chip tone="danger" onClick={() => setView('account-activation')}>
-                      Inactive — activate
+                      ইনঅ্যাক্টিভ — অ্যাক্টিভেট করুন
                     </Chip>
                   )}
                 </div>
                 {user.isActive && user.activationExpiry && (
                   <p className="text-xs text-slate-500 mt-2">
-                    Expires {new Date(user.activationExpiry).toLocaleDateString()}
+                    মেয়াদ শেষ: {new Date(user.activationExpiry).toLocaleDateString('bn-BD')}
                   </p>
                 )}
               </div>
@@ -145,14 +145,14 @@ export function DashboardView({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-indigo-100/90">
                   <Wallet className="w-4 h-4" />
-                  <span className="text-sm font-medium">Available balance</span>
+                  <span className="text-sm font-medium">প্রধান ব্যালেন্স</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setView('finance')}
-                  className="text-xs font-semibold uppercase tracking-wide text-white bg-white/15 hover:bg-white/25 transition-colors rounded-full px-3 py-1"
+                  className="text-xs font-semibold tracking-wide text-white bg-white/15 hover:bg-white/25 transition-colors rounded-full px-3 py-1"
                 >
-                  Withdraw
+                  উইথড্র
                 </button>
               </div>
               <p className="text-4xl font-bold tracking-tight tabular-nums">
@@ -161,13 +161,13 @@ export function DashboardView({
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Earned</p>
+                  <p className="text-[11px] tracking-wide text-indigo-100/70">মোট আয়</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{formatBdt(user.totalEarned)}
                   </p>
                 </div>
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Pending</p>
+                  <p className="text-[11px] tracking-wide text-indigo-100/70">পেন্ডিং</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{formatBdt(user.pendingPayout)}
                   </p>
@@ -180,12 +180,12 @@ export function DashboardView({
         {/* Referral program — frosted glass with prominent code */}
         <Card padded>
           <SectionHeader
-            title="Referral program"
-            subtitle={`Lifetime commission: ${referralCommissionRate}%`}
+            title="রেফারেল প্রোগ্রাম"
+            subtitle={`লাইফটাইম কমিশন: ${referralCommissionRate}%`}
           />
 
           <div className="mt-1 flex flex-col items-center text-center">
-            <p className="text-sm text-slate-600 mb-2">Your referral code</p>
+            <p className="text-sm text-slate-600 mb-2">আপনার রেফারেল কোড</p>
             <button
               type="button"
               onClick={() => user.numericId && handleCopy(user.numericId, 'code')}
@@ -204,7 +204,7 @@ export function DashboardView({
               </span>
             </button>
             {copied === 'code' && (
-              <p className="text-xs text-emerald-600 mt-2">Copied!</p>
+              <p className="text-xs text-emerald-600 mt-2">কপি হয়েছে!</p>
             )}
             <Button
               size="sm"
@@ -226,25 +226,25 @@ export function DashboardView({
                 );
               }}
             >
-              {copied === 'link' ? 'Link copied' : 'Copy referral link'}
+              {copied === 'link' ? 'লিংক কপি হয়েছে' : 'রেফারেল লিংক কপি করুন'}
             </Button>
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-3">
             <div className="rounded-xl bg-white/60 border border-white/70 backdrop-blur p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+              <p className="text-xs tracking-wide text-slate-500">মোট</p>
               <p className="text-lg font-semibold text-slate-900 mt-0.5 tabular-nums">
                 {totalReferrals}
               </p>
             </div>
             <div className="rounded-xl bg-emerald-500/10 border border-emerald-200/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-emerald-700/80">Active</p>
+              <p className="text-xs tracking-wide text-emerald-700/80">অ্যাক্টিভ</p>
               <p className="text-lg font-semibold text-emerald-700 mt-0.5 tabular-nums">
                 {activeReferrals}
               </p>
             </div>
             <div className="rounded-xl bg-indigo-500/10 border border-indigo-200/60 p-3 text-center">
-              <p className="text-xs uppercase tracking-wide text-indigo-700/80">Earned</p>
+              <p className="text-xs tracking-wide text-indigo-700/80">আয়</p>
               <p className="text-lg font-semibold text-indigo-700 mt-0.5 tabular-nums">
                 ৳{formatBdt(user.totalCommission ?? 0)}
               </p>
@@ -258,20 +258,20 @@ export function DashboardView({
               onClick={() => setView('referral')}
               rightIcon={<ExternalLink className="w-4 h-4" />}
             >
-              Open referral hub
+              রেফারেল হাব খুলুন
             </Button>
           </div>
         </Card>
 
         {/* Achievements */}
         <section>
-          <SectionHeader title="Achievements" />
+          <SectionHeader title="অর্জনসমূহ" />
           {user.achievements.length === 0 ? (
             <Card padded>
               <EmptyState
                 icon={<Trophy className="w-7 h-7" />}
-                title="No achievements yet"
-                description="Complete tasks to unlock milestones."
+                title="এখনো কোনো অর্জন নেই"
+                description="কাজ সম্পন্ন করে মাইলফলক আনলক করুন।"
               />
             </Card>
           ) : (
@@ -318,13 +318,13 @@ export function DashboardView({
 
         {/* Recent tasks */}
         <section>
-          <SectionHeader title="Recent tasks" />
+          <SectionHeader title="সাম্প্রতিক কাজ" />
           {user.taskHistory.length === 0 ? (
             <Card padded>
               <EmptyState
                 icon={<FileText className="w-7 h-7" />}
-                title="No tasks completed yet"
-                description="Earnings from completed tasks show up here."
+                title="এখনো কোনো কাজ সম্পন্ন হয়নি"
+                description="সম্পন্ন কাজ থেকে আয় এখানে দেখা যাবে।"
               />
             </Card>
           ) : (

@@ -2824,11 +2824,11 @@ export default function App() {
         && view !== 'reset-password'
         && !isOnAdminHost() && !needsEmailVerification && (() => {
         const navTabs: BottomNavTab[] = [
-          { key: 'home', label: 'Home', icon: <HomeIcon className="w-5 h-5" /> },
-          { key: 'workstation', label: 'Earn', icon: <EarnIcon className="w-5 h-5" /> },
-          { key: 'finance', label: 'Wallet', icon: <WalletIcon className="w-5 h-5" /> },
-          { key: 'referral', label: 'Network', icon: <NetworkIcon className="w-5 h-5" /> },
-          { key: 'settings', label: 'More', icon: <MoreIcon className="w-5 h-5" /> },
+          { key: 'home', label: 'হোম', icon: <HomeIcon className="w-5 h-5" /> },
+          { key: 'workstation', label: 'ইনকাম', icon: <EarnIcon className="w-5 h-5" /> },
+          { key: 'finance', label: 'ওয়ালেট', icon: <WalletIcon className="w-5 h-5" /> },
+          { key: 'referral', label: 'টিম', icon: <NetworkIcon className="w-5 h-5" /> },
+          { key: 'settings', label: 'আরো', icon: <MoreIcon className="w-5 h-5" /> },
         ];
         // The active tab is whichever nav root the current view falls under.
         // Detail screens (e.g. `dashboard`, `top-news`) keep no tab highlighted.

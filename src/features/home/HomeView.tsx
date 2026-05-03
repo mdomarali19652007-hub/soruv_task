@@ -78,8 +78,8 @@ interface CategoryDef {
 const CATEGORIES: CategoryDef[] = [
   {
     id: 'daily',
-    title: 'Daily Tasks',
-    description: 'Today\'s job and micro tasks',
+    title: 'দৈনিক কাজ',
+    description: 'আজকের জব ও মাইক্রো টাস্ক',
     destination: 'folder-a',
     icon: <Briefcase className="w-6 h-6" />,
     iconBg: 'from-indigo-500 to-blue-500',
@@ -88,8 +88,8 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'ads',
-    title: 'Ads & News',
-    description: 'Watch ads, read news, spin to win',
+    title: 'বিজ্ঞাপন ও সংবাদ',
+    description: 'অ্যাড দেখুন, খবর পড়ুন, স্পিন জিতুন',
     destination: 'ads-earn',
     icon: <PlayCircle className="w-6 h-6" />,
     iconBg: 'from-amber-500 to-orange-500',
@@ -98,8 +98,8 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'social',
-    title: 'Social & Marketing',
-    description: 'Social tasks, SMM panel, boosting',
+    title: 'সোশ্যাল ও মার্কেটিং',
+    description: 'সোশ্যাল টাস্ক, SMM প্যানেল, বুস্টিং',
     destination: 'social-hub',
     icon: <Megaphone className="w-6 h-6" />,
     iconBg: 'from-pink-500 to-rose-500',
@@ -108,8 +108,8 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'sell',
-    title: 'Sell & Trade',
-    description: 'OTP, Gmail, Dollar, e-commerce',
+    title: 'বিক্রি ও ট্রেডিং',
+    description: 'OTP, জিমেইল, ডলার, ই-কমার্স',
     destination: 'otp-buy-sell',
     icon: <TrendingUp className="w-6 h-6" />,
     iconBg: 'from-emerald-500 to-teal-500',
@@ -118,8 +118,8 @@ const CATEGORIES: CategoryDef[] = [
   },
   {
     id: 'gaming',
-    title: 'Gaming',
-    description: 'Tournaments and Ludo earn',
+    title: 'গেমিং',
+    description: 'টুর্নামেন্ট ও লুডো ইনকাম',
     destination: 'gaming',
     icon: <Gamepad2 className="w-6 h-6" />,
     iconBg: 'from-violet-500 to-purple-600',
@@ -134,7 +134,7 @@ function formatBdt(amount: number): string {
 
 function greeting(name: string | undefined | null): string {
   const hour = new Date().getHours();
-  const part = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const part = hour < 12 ? 'শুভ সকাল' : hour < 17 ? 'শুভ দুপুর' : 'শুভ সন্ধ্যা';
   if (!name) return part;
   return `${part}, ${name.split(/\s+/)[0]}`;
 }
@@ -168,14 +168,14 @@ export function HomeView({
           <div className="flex-1 min-w-0">
             <p className="text-xs text-slate-600 truncate">{greeting(user.name)}</p>
             <h1 className="text-base font-semibold text-slate-900 truncate flex items-center gap-1.5">
-              Top Earning
+              টপ আর্নিং
               <Sparkles className="w-4 h-4 text-amber-500" />
             </h1>
           </div>
           <button
             type="button"
             onClick={onOpenNotifications}
-            aria-label="Notifications"
+            aria-label="নোটিফিকেশন"
             className="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <Bell className="w-5 h-5" />
@@ -186,7 +186,7 @@ export function HomeView({
           <button
             type="button"
             onClick={() => setView('profile')}
-            aria-label="Profile"
+            aria-label="প্রোফাইল"
             className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <User className="w-5 h-5" />
@@ -206,12 +206,12 @@ export function HomeView({
               <div className="flex items-center justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2 text-indigo-100/90">
                   <Wallet className="w-4 h-4" />
-                  <span className="text-sm font-medium">Available balance</span>
+                  <span className="text-sm font-medium">প্রধান ব্যালেন্স</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => setBalanceHidden((v) => !v)}
-                  aria-label={balanceHidden ? 'Show balance' : 'Hide balance'}
+                  aria-label={balanceHidden ? 'ব্যালেন্স দেখান' : 'ব্যালেন্স লুকান'}
                   className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors"
                 >
                   {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -227,13 +227,13 @@ export function HomeView({
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Earned</p>
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">মোট আয়</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{balanceHidden ? '••••' : formatBdt(user.totalEarned)}
                   </p>
                 </div>
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Pending</p>
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">পেন্ডিং</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{balanceHidden ? '••••' : formatBdt(user.pendingPayout)}
                   </p>
@@ -245,14 +245,14 @@ export function HomeView({
                   onClick={() => setView('finance')}
                   className="flex-1 h-11 rounded-xl bg-white text-indigo-700 font-semibold text-sm shadow-sm hover:shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                 >
-                  <Wallet className="w-4 h-4" /> Withdraw
+                  <Wallet className="w-4 h-4" /> উইথড্র
                 </button>
                 <button
                   type="button"
                   onClick={() => setView('referral')}
                   className="flex-1 h-11 rounded-xl bg-white/15 text-white font-semibold text-sm border border-white/20 hover:bg-white/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
                 >
-                  <Send className="w-4 h-4" /> Refer
+                  <Send className="w-4 h-4" /> রেফার
                 </button>
               </div>
             </div>
@@ -273,10 +273,10 @@ export function HomeView({
                 </span>
                 <div className="flex-1 min-w-0">
                   <p className="text-base font-semibold text-slate-900">
-                    Activate your account
+                    আপনার অ্যাকাউন্ট অ্যাক্টিভেট করুন
                   </p>
                   <p className="text-sm text-slate-600 mt-0.5">
-                    Unlock withdrawals and referral commission.
+                    উইথড্র ও রেফারেল কমিশন আনলক করুন।
                   </p>
                 </div>
               </div>
@@ -286,7 +286,7 @@ export function HomeView({
                   onClick={() => setView('account-activation')}
                   rightIcon={<ArrowRight className="w-4 h-4" />}
                 >
-                  Activate now
+                  এখনই অ্যাক্টিভেট করুন
                 </Button>
               </div>
             </Card>
@@ -301,11 +301,11 @@ export function HomeView({
                 <Gift className="w-5 h-5" />
               </span>
               <div className="flex-1 min-w-0">
-                <p className="text-base font-semibold text-slate-900">Daily reward</p>
+                <p className="text-base font-semibold text-slate-900">দৈনিক পুরস্কার</p>
                 <p className="text-sm text-slate-600">
                   {user.dailyClaimed
-                    ? 'Come back tomorrow'
-                    : `Claim ৳${formatBdt(dailyReward)} today`}
+                    ? 'আগামীকাল আবার আসুন'
+                    : `আজ ৳${formatBdt(dailyReward)} ক্লেইম করুন`}
                 </p>
               </div>
               <Button
@@ -314,7 +314,7 @@ export function HomeView({
                 disabled={user.dailyClaimed}
                 onClick={onClaimDaily}
               >
-                {user.dailyClaimed ? 'Claimed' : 'Claim'}
+                {user.dailyClaimed ? 'ক্লেইম হয়েছে' : 'ক্লেইম'}
               </Button>
             </div>
           </Card>
@@ -327,28 +327,28 @@ export function HomeView({
             leadingIcon={<Smartphone className="w-4 h-4" />}
             onClick={() => setView('mobile-recharge')}
           >
-            Recharge
+            রিচার্জ
           </Chip>
           <Chip
             tone="primary"
             leadingIcon={<Headphones className="w-4 h-4" />}
             onClick={() => setView('support')}
           >
-            Support
+            সাপোর্ট
           </Chip>
           <Chip
             tone="primary"
             leadingIcon={<Users className="w-4 h-4" />}
             onClick={() => setView('leaderboard')}
           >
-            Leaderboard
+            লিডারবোর্ড
           </Chip>
           <Chip
             tone="primary"
             leadingIcon={<TrendingUp className="w-4 h-4" />}
             onClick={() => setView('spin')}
           >
-            Spin
+            স্পিন
           </Chip>
         </div>
 
@@ -368,7 +368,7 @@ export function HomeView({
 
         {/* Earn categories */}
         <section>
-          <SectionHeader title="Earn" subtitle="Pick a category to start" />
+          <SectionHeader title="ইনকাম শুরু করুন" subtitle="যেকোনো ক্যাটাগরি বেছে নিন" />
           <div className="grid grid-cols-1 gap-3">
             {visibleCategories.map((cat, i) => (
               <motion.button
@@ -406,8 +406,8 @@ export function HomeView({
             {visibleCategories.length === 0 && (
               <Card padded>
                 <EmptyState
-                  title="No categories enabled"
-                  description="Ask an admin to enable earning features."
+                  title="কোনো ক্যাটাগরি চালু নেই"
+                  description="অ্যাডমিনকে ইনকাম ফিচার চালু করতে বলুন।"
                 />
               </Card>
             )}
@@ -417,7 +417,7 @@ export function HomeView({
         {/* Recent activity */}
         <section>
           <SectionHeader
-            title="Recent activity"
+            title="সাম্প্রতিক কাজ"
             action={
               recentTasks.length > 0 ? (
                 <button
@@ -425,7 +425,7 @@ export function HomeView({
                   onClick={() => setView('dashboard')}
                   className="text-sm font-semibold text-indigo-600 hover:underline focus:outline-none"
                 >
-                  See all
+                  সব দেখুন
                 </button>
               ) : undefined
             }
@@ -433,11 +433,11 @@ export function HomeView({
           {recentTasks.length === 0 ? (
             <Card padded>
               <EmptyState
-                title="No tasks yet"
-                description="Your completed tasks will appear here."
+                title="এখনো কোনো কাজ করা হয়নি"
+                description="আপনার সম্পূর্ণ করা কাজগুলো এখানে দেখা যাবে।"
                 action={
                   <Button onClick={() => setView('folder-a')} size="sm">
-                    Browse tasks
+                    কাজ দেখুন
                   </Button>
                 }
               />
@@ -465,13 +465,13 @@ export function HomeView({
         <Card padded>
           <div className="grid grid-cols-2 divide-x divide-slate-200/60">
             <div className="pr-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Total paid</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">মোট পরিশোধিত</p>
               <p className="text-lg font-semibold tabular-nums text-emerald-600 mt-0.5">
                 ৳{totalPaid.toLocaleString('en-US')}+
               </p>
             </div>
             <div className="pl-3">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Active workers</p>
+              <p className="text-xs uppercase tracking-wide text-slate-500">সক্রিয় ইউজার</p>
               <p className="text-lg font-semibold tabular-nums text-indigo-600 mt-0.5">
                 {(activeWorkerCount / 1000).toFixed(0)}k+
               </p>
