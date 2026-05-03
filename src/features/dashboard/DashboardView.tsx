@@ -1,20 +1,19 @@
 /**
- * DashboardView — redesigned stats screen.
+ * DashboardView — modern fintech-style stats screen.
  *
- * Replaces the previous "premium" markup (`glass-card`, `glitch-text`,
- * `text-[8px] uppercase tracking-widest` labels, gradient avatar rings)
- * with the calm primitives in `src/components/ui/`.
+ * Glass / gradient aesthetic that matches `HomeView`:
+ *   - hero balance card with brand gradient and soft glow
+ *   - frosted-glass referral card with a prominent code pill
+ *   - achievement progress bars rendered with gradient fills and
+ *     `aria-valuenow` for accessibility
  *
- * The shape of the props is unchanged so App.tsx wiring is identical
- * to the legacy module — only the visual layer is new.
- *
- * Plan reference: §1, §4, §5 of
- * `plans/user-friendly-ui-redesign-for-production-launch.md`.
+ * The shape of the props is unchanged so App.tsx wiring is identical.
  */
 
 import { useState } from 'react';
 import {
   ArrowLeft,
+  Award,
   CheckCircle2,
   Copy,
   ExternalLink,
@@ -22,7 +21,9 @@ import {
   Share2,
   Trophy,
   User,
+  Wallet,
 } from 'lucide-react';
+import { motion } from 'motion/react';
 import type { UserProfile, View } from '../../types';
 import {
   Button,
@@ -31,7 +32,6 @@ import {
   EmptyState,
   ListRow,
   SectionHeader,
-  Stat,
 } from '../../components/ui';
 
 interface Props {
@@ -43,7 +43,7 @@ interface Props {
 }
 
 function formatBdt(amount: number): string {
-  return `৳${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })}`;
+  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
 export function DashboardView({
@@ -68,15 +68,15 @@ export function DashboardView({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-24">
+    <div className="min-h-screen pb-28">
       {/* Top bar */}
-      <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200">
+      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/40 border-b border-white/40">
         <div className="max-w-md mx-auto flex items-center gap-3 px-3 py-3">
           <button
             type="button"
             onClick={() => setView('home')}
             aria-label="Back to home"
-            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
           >
             <ArrowLeft className="w-5 h-5" />
           </button>
@@ -88,72 +88,96 @@ export function DashboardView({
 
       <main className="max-w-md mx-auto px-4 py-4 space-y-4">
         {/* Profile card */}
-        <Card padded>
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center overflow-hidden shrink-0">
-              {profilePic ? (
-                <img
-                  src={profilePic}
-                  alt="Profile"
-                  className="w-full h-full object-cover"
-                  referrerPolicy="no-referrer"
-                />
-              ) : (
-                <User className="w-8 h-8" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <h2 className="text-lg font-semibold text-slate-900 truncate">
-                {user.name || 'Unnamed'}
-              </h2>
-              {user.id && (
-                <p className="text-sm text-slate-500 truncate">{user.id}</p>
-              )}
-              <div className="mt-2 flex flex-wrap gap-2">
-                <Chip tone="primary">{user.rank} rank</Chip>
-                {user.isActive ? (
-                  <Chip tone="success">Active</Chip>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card padded>
+            <div className="flex items-center gap-4">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center overflow-hidden shrink-0 shadow-md">
+                {profilePic ? (
+                  <img
+                    src={profilePic}
+                    alt="Profile"
+                    className="w-full h-full object-cover"
+                    referrerPolicy="no-referrer"
+                  />
                 ) : (
-                  <Chip tone="danger" onClick={() => setView('account-activation')}>
-                    Inactive — activate
-                  </Chip>
+                  <User className="w-8 h-8" />
                 )}
               </div>
-              {user.isActive && user.activationExpiry && (
-                <p className="text-xs text-slate-500 mt-2">
-                  Expires {new Date(user.activationExpiry).toLocaleDateString()}
-                </p>
-              )}
+              <div className="flex-1 min-w-0">
+                <h2 className="text-lg font-semibold text-slate-900 truncate">
+                  {user.name || 'Unnamed'}
+                </h2>
+                {user.id && (
+                  <p className="text-sm text-slate-500 truncate">{user.id}</p>
+                )}
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Chip tone="primary">{user.rank} rank</Chip>
+                  {user.isActive ? (
+                    <Chip tone="success">Active</Chip>
+                  ) : (
+                    <Chip tone="danger" onClick={() => setView('account-activation')}>
+                      Inactive — activate
+                    </Chip>
+                  )}
+                </div>
+                {user.isActive && user.activationExpiry && (
+                  <p className="text-xs text-slate-500 mt-2">
+                    Expires {new Date(user.activationExpiry).toLocaleDateString()}
+                  </p>
+                )}
+              </div>
             </div>
-          </div>
-        </Card>
+          </Card>
+        </motion.div>
 
-        {/* Balances */}
-        <Card padded>
-          <SectionHeader
-            title="Balances"
-            action={
-              <Button
-                size="sm"
-                variant="secondary"
-                onClick={() => setView('finance')}
-              >
-                Withdraw
-              </Button>
-            }
-          />
-          <div className="grid grid-cols-3 gap-3">
-            <Stat label="Available" value={formatBdt(user.mainBalance)} />
-            <Stat
-              label="Earned"
-              value={formatBdt(user.totalEarned)}
-              tone="success"
-            />
-            <Stat label="Pending" value={formatBdt(user.pendingPayout)} />
-          </div>
-        </Card>
+        {/* Hero balance — gradient with glow */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+        >
+          <Card variant="gradient" glow padded className="p-6">
+            <div className="relative z-10">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2 text-indigo-100/90">
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-sm font-medium">Available balance</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setView('finance')}
+                  className="text-xs font-semibold uppercase tracking-wide text-white bg-white/15 hover:bg-white/25 transition-colors rounded-full px-3 py-1"
+                >
+                  Withdraw
+                </button>
+              </div>
+              <p className="text-4xl font-bold tracking-tight tabular-nums">
+                <span className="text-indigo-100/80 text-2xl mr-1 align-top">৳</span>
+                {formatBdt(user.mainBalance)}
+              </p>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-xl glass-highlight px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Earned</p>
+                  <p className="text-base font-semibold tabular-nums mt-0.5">
+                    ৳{formatBdt(user.totalEarned)}
+                  </p>
+                </div>
+                <div className="rounded-xl glass-highlight px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-wide text-indigo-100/70">Pending</p>
+                  <p className="text-base font-semibold tabular-nums mt-0.5">
+                    ৳{formatBdt(user.pendingPayout)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </motion.div>
 
-        {/* Referral program */}
+        {/* Referral program — frosted glass with prominent code */}
         <Card padded>
           <SectionHeader
             title="Referral program"
@@ -166,12 +190,12 @@ export function DashboardView({
               type="button"
               onClick={() => user.numericId && handleCopy(user.numericId, 'code')}
               disabled={!user.numericId}
-              className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-blue-50 border border-blue-100 hover:bg-blue-100 transition-colors disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              className="inline-flex items-center gap-3 px-5 py-3 rounded-2xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-200/60 hover:from-indigo-500/15 hover:to-violet-500/15 hover:shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
             >
-              <span className="text-3xl font-semibold tracking-wider text-blue-700 tabular-nums">
+              <span className="text-3xl font-bold tracking-wider bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tabular-nums">
                 {user.numericId || '——'}
               </span>
-              <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-white text-blue-600 border border-blue-100">
+              <span className="inline-flex w-9 h-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm">
                 {copied === 'code' ? (
                   <CheckCircle2 className="w-4 h-4" />
                 ) : (
@@ -180,7 +204,7 @@ export function DashboardView({
               </span>
             </button>
             {copied === 'code' && (
-              <p className="text-xs text-green-600 mt-2">Copied!</p>
+              <p className="text-xs text-emerald-600 mt-2">Copied!</p>
             )}
             <Button
               size="sm"
@@ -207,12 +231,24 @@ export function DashboardView({
           </div>
 
           <div className="mt-5 grid grid-cols-3 gap-3">
-            <Stat label="Total" value={totalReferrals} />
-            <Stat label="Active" value={activeReferrals} tone="success" />
-            <Stat
-              label="Earned"
-              value={formatBdt(user.totalCommission ?? 0)}
-            />
+            <div className="rounded-xl bg-white/60 border border-white/70 backdrop-blur p-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-slate-500">Total</p>
+              <p className="text-lg font-semibold text-slate-900 mt-0.5 tabular-nums">
+                {totalReferrals}
+              </p>
+            </div>
+            <div className="rounded-xl bg-emerald-500/10 border border-emerald-200/60 p-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-emerald-700/80">Active</p>
+              <p className="text-lg font-semibold text-emerald-700 mt-0.5 tabular-nums">
+                {activeReferrals}
+              </p>
+            </div>
+            <div className="rounded-xl bg-indigo-500/10 border border-indigo-200/60 p-3 text-center">
+              <p className="text-xs uppercase tracking-wide text-indigo-700/80">Earned</p>
+              <p className="text-lg font-semibold text-indigo-700 mt-0.5 tabular-nums">
+                ৳{formatBdt(user.totalCommission ?? 0)}
+              </p>
+            </div>
           </div>
 
           <div className="mt-4">
@@ -245,25 +281,31 @@ export function DashboardView({
                   100,
                   Math.round((ach.progress / Math.max(1, ach.goal)) * 100),
                 );
+                const done = pct >= 100;
                 return (
                   <Card key={ach.id} padded>
                     <div className="flex items-center justify-between mb-2 gap-3">
-                      <p className="text-base font-medium text-slate-900 truncate">
-                        {ach.title}
-                      </p>
-                      <p className="text-sm font-medium text-slate-700 tabular-nums shrink-0">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`shrink-0 w-9 h-9 rounded-xl text-white inline-flex items-center justify-center shadow-sm ${done ? 'bg-gradient-to-br from-emerald-400 to-emerald-600' : 'bg-gradient-to-br from-indigo-400 to-violet-600'}`}>
+                          <Award className="w-4 h-4" />
+                        </span>
+                        <p className="text-base font-semibold text-slate-900 truncate">
+                          {ach.title}
+                        </p>
+                      </div>
+                      <p className="text-sm font-semibold text-slate-700 tabular-nums shrink-0">
                         {ach.progress}/{ach.goal}
                       </p>
                     </div>
                     <div
-                      className="w-full h-2 bg-slate-100 rounded-full overflow-hidden"
+                      className="w-full h-2 bg-slate-200/70 rounded-full overflow-hidden"
                       role="progressbar"
                       aria-valuenow={pct}
                       aria-valuemin={0}
                       aria-valuemax={100}
                     >
                       <div
-                        className="h-full bg-blue-600"
+                        className={`h-full rounded-full bg-gradient-to-r ${done ? 'from-emerald-400 to-emerald-600' : 'from-indigo-500 to-violet-500'}`}
                         style={{ width: `${pct}%` }}
                       />
                     </div>
@@ -293,8 +335,8 @@ export function DashboardView({
                   title={task.title}
                   subtitle={task.date}
                   trailing={
-                    <span className="text-base font-semibold text-green-600 tabular-nums">
-                      +{formatBdt(task.reward)}
+                    <span className="text-base font-semibold text-emerald-600 tabular-nums">
+                      +৳{formatBdt(task.reward)}
                     </span>
                   }
                   showChevron={false}

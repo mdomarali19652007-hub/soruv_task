@@ -49,7 +49,7 @@ export function BalancePill({
   const formatted = formatAmount(amount, locale);
   const baseClasses = cn(
     'inline-flex items-center gap-2 px-3 h-10 rounded-full',
-    'bg-blue-50 text-blue-700 border border-blue-100',
+    'bg-white/70 backdrop-blur-md text-indigo-700 border border-white/60 shadow-sm',
     'text-sm font-semibold tabular-nums',
     className,
   );
@@ -72,7 +72,7 @@ export function BalancePill({
         onClick={onClick}
         className={cn(
           baseClasses,
-          'transition-colors hover:bg-blue-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
+          'transition-all hover:bg-white/90 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1',
         )}
         aria-label={`Balance: ${currency}${formatted}`}
       >
