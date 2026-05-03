@@ -1,5 +1,53 @@
 @import "tailwindcss";
 
+/* ====================================================================
+ * Design tokens (UI redesign — PR 1)
+ * ====================================================================
+ * Single source of truth for the new "calm" visual system described in
+ * `plans/user-friendly-ui-redesign-for-production-launch.md`. These
+ * values back the primitives in `src/components/ui/` and should be
+ * preferred over ad-hoc Tailwind colour classes for any *new* UI.
+ *
+ * Existing screens still use the legacy `.glass-card` / `.neon-*`
+ * utilities further down this file; they will be removed in a later
+ * PR (see plan §6, PR 8). Until then both systems coexist.
+ * ==================================================================== */
+:root {
+  /* Brand */
+  --ui-primary: #2563eb;        /* blue-600  */
+  --ui-primary-hover: #1d4ed8;  /* blue-700  */
+  --ui-primary-soft: #dbeafe;   /* blue-100  */
+
+  /* Status */
+  --ui-success: #16a34a;        /* green-600 */
+  --ui-success-soft: #dcfce7;   /* green-100 */
+  --ui-danger: #dc2626;         /* red-600   */
+  --ui-danger-soft: #fee2e2;    /* red-100   */
+  --ui-warning: #d97706;        /* amber-600 */
+  --ui-warning-soft: #fef3c7;   /* amber-100 */
+
+  /* Neutrals */
+  --ui-surface: #ffffff;
+  --ui-background: #f8fafc;     /* slate-50  */
+  --ui-border: #e2e8f0;          /* slate-200 */
+  --ui-border-strong: #cbd5e1;   /* slate-300 */
+  --ui-text: #0f172a;            /* slate-900 */
+  --ui-text-muted: #475569;      /* slate-600 */
+  --ui-text-faint: #94a3b8;      /* slate-400 */
+
+  /* Radii */
+  --ui-radius-card: 16px;
+  --ui-radius-button: 12px;
+  --ui-radius-chip: 9999px;
+
+  /* Elevation — single soft shadow, no multi-layer glass blur */
+  --ui-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 1px 1px rgba(15, 23, 42, 0.03);
+  --ui-shadow-hover: 0 4px 12px rgba(15, 23, 42, 0.06);
+
+  /* Minimum tap target (WCAG / Material) */
+  --ui-tap: 44px;
+}
+
 @theme {
   --color-neon-blue: #00f2fe;
   --color-deep-sky: #4facfe;
