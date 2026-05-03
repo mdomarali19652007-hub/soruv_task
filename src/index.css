@@ -52,12 +52,14 @@
   --color-neon-blue: #00f2fe;
   --color-deep-sky: #4facfe;
   /*
-   * Inter handles Latin text. "Hind Siliguri" sits next in the stack
-   * so any Bangla glyph (which Inter does not cover) automatically
-   * falls back to the proper Bangla face. Loaded from Google Fonts in
+   * Hind Siliguri is the de-facto Bangla face for Bangladeshi web UIs
+   * and ships proper glyphs for every Bangla letter. We put it FIRST
+   * so the entire app — Bangla text and Latin numerals alike — ships
+   * a consistent baseline. Inter sits next as a Latin-only fallback;
+   * system-ui is the last resort. Loaded from Google Fonts in
    * `index.html`.
    */
-  --font-sans: "Inter", "Hind Siliguri", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Hind Siliguri", "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -192,6 +194,40 @@
   }
 }
 
+/* ====================================================================
+ * Feature-view harmonisation.
+ *
+ * Every legacy feature view in `src/features/**` opens with a root
+ * `<div className="min-h-screen pb-32 bg-slate-50">` (or `bg-slate-100`,
+ * `bg-[#F8FAFC]`) which paints an opaque slate background OVER the
+ * body's mesh gradient — making feature pages look "out of place"
+ * next to the new home/dashboard.
+ *
+ * The rule below makes those root containers transparent so the
+ * body's mesh gradient bleeds through. Form inputs that use
+ * `bg-slate-50` are NOT affected — the selector requires
+ * `min-h-screen` to be on the same element.
+ *
+ * Admin shells (`.admin-shell`) opt out — admin uses a navy palette
+ * unrelated to the consumer redesign.
+ * ==================================================================== */
+.min-h-screen.bg-slate-50:not(.admin-shell),
+.min-h-screen.bg-slate-100:not(.admin-shell),
+.min-h-screen.bg-\[\#F8FAFC\]:not(.admin-shell) {
+  background-color: transparent !important;
+}
+
+/* Inputs in legacy feature cards use raw `bg-slate-50` rounded panels
+ * which compete visually with the glass cards around them. Soften
+ * them to a frosted white when nested inside `.glass-card`. */
+.glass-card input.bg-slate-50,
+.glass-card textarea.bg-slate-50,
+.glass-card select.bg-slate-50 {
+  background-color: rgb(255 255 255 / 0.6);
+  backdrop-filter: blur(8px);
+  border-color: rgb(255 255 255 / 0.7);
+}
+
 /* Custom scrollbar for premium effect */
 ::-webkit-scrollbar {
   width: 6px;
@@ -207,7 +243,11 @@
 }
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  /* Same stack as the redesign block at the top of the file. Kept
+   * here so the secondary `@theme` rule (used to register the
+   * `animate-shake` keyword with Tailwind 4) does not override the
+   * Bangla-first stack. */
+  --font-sans: "Hind Siliguri", "Inter", ui-sans-serif, system-ui, sans-serif;
   --animate-shake: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
 }
 
