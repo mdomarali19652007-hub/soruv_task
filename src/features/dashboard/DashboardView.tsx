@@ -145,7 +145,7 @@ export function DashboardView({
               <div className="flex items-center justify-between mb-2">
                 <div className="flex items-center gap-2 text-indigo-100/90">
                   <Wallet className="w-4 h-4" />
-                  <span className="text-sm font-medium">প্রধান ব্যালেন্স</span>
+                  <span className="text-sm font-medium">মেইন ব্যালেন্স</span>
                 </div>
                 <button
                   type="button"
@@ -161,7 +161,7 @@ export function DashboardView({
               </p>
               <div className="mt-4 grid grid-cols-2 gap-3">
                 <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] tracking-wide text-indigo-100/70">মোট আয়</p>
+                  <p className="text-[11px] tracking-wide text-indigo-100/70">মোট ইনকাম</p>
                   <p className="text-base font-semibold tabular-nums mt-0.5">
                     ৳{formatBdt(user.totalEarned)}
                   </p>
@@ -244,7 +244,7 @@ export function DashboardView({
               </p>
             </div>
             <div className="rounded-xl bg-indigo-500/10 border border-indigo-200/60 p-3 text-center">
-              <p className="text-xs tracking-wide text-indigo-700/80">আয়</p>
+              <p className="text-xs tracking-wide text-indigo-700/80">ইনকাম</p>
               <p className="text-lg font-semibold text-indigo-700 mt-0.5 tabular-nums">
                 ৳{formatBdt(user.totalCommission ?? 0)}
               </p>
