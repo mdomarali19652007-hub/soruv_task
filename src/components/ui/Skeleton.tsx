@@ -12,14 +12,20 @@ export interface SkeletonProps {
   className?: string;
   /** When true, renders as a perfect circle (avatars). */
   circle?: boolean;
+  /**
+   * When true, uses an animated indigo-tinted shimmer sweep instead
+   * of the default pulse. The sweep is suppressed automatically under
+   * `prefers-reduced-motion: reduce` (see `index.css`).
+   */
+  shimmer?: boolean;
 }
 
-export function Skeleton({ className, circle = false }: SkeletonProps) {
+export function Skeleton({ className, circle = false, shimmer = false }: SkeletonProps) {
   return (
     <div
       aria-hidden="true"
       className={cn(
-        'bg-slate-200 animate-pulse',
+        shimmer ? 'skeleton-shimmer' : 'bg-slate-200 animate-pulse',
         circle ? 'rounded-full' : 'rounded-md',
         className,
       )}

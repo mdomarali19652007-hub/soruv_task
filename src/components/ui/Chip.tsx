@@ -42,7 +42,7 @@ export function Chip({
 }: ChipProps) {
   const baseClasses = cn(
     'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-medium',
-    'transition-colors',
+    'transition-all duration-200',
     TONE_CLASSES[tone],
     className,
   );
@@ -56,9 +56,10 @@ export function Chip({
         className={cn(
           baseClasses,
           'min-h-[32px] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1',
+          'hover:-translate-y-0.5 active:translate-y-0 active:scale-95',
           selected
-            ? 'bg-blue-600 text-white hover:bg-blue-700'
-            : 'hover:bg-slate-200',
+            ? 'bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.55)] hover:shadow-[0_6px_18px_-4px_rgba(37,99,235,0.65)]'
+            : 'hover:bg-slate-200 hover:shadow-sm',
         )}
         {...rest}
       >

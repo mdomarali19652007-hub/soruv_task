@@ -46,7 +46,18 @@ export function SubmissionLoader({ isSubmitting, submissionProgress }: Props) {
             </div>
           </div>
           <h3 className="text-white font-black text-xl uppercase tracking-[0.3em] mb-2">Processing...</h3>
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest">দয়া করে অপেক্ষা করুন</p>
+          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">দয়া করে অপেক্ষা করুন</p>
+          {/* Three bouncing dots — playful, GPU-light, and a clear
+              "still working" signal beyond the silent progress ring. */}
+          <div className="flex items-center gap-2" aria-hidden="true">
+            {[0, 1, 2].map(i => (
+              <span
+                key={i}
+                className="w-2 h-2 rounded-full bg-gradient-to-br from-indigo-400 to-fuchsia-400 animate-bounce-soft"
+                style={{ animationDelay: `${i * 0.15}s` }}
+              />
+            ))}
+          </div>
         </motion.div>
       )}
     </AnimatePresence>

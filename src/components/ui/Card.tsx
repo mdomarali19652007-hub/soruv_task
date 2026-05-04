@@ -32,8 +32,12 @@ const VARIANT_CLASSES: Record<CardVariant, string> = {
     'bg-white/70 backdrop-blur-xl border border-white/60 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.12)]',
   solid:
     'bg-white border border-slate-200 shadow-sm',
+  // Hero gradient now uses an animated brand ramp — the gradient
+  // slowly drifts across the card so balance/hero panels feel alive
+  // without screaming for attention. `prefers-reduced-motion` users
+  // get a static gradient (handled in index.css).
   gradient:
-    'bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 text-white border border-white/10 shadow-[0_16px_40px_-12px_rgba(99,102,241,0.55)] overflow-hidden relative',
+    'bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-600 animate-gradient text-white border border-white/10 shadow-[0_16px_40px_-12px_rgba(99,102,241,0.55)] overflow-hidden relative',
 };
 
 export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
@@ -56,7 +60,7 @@ export const Card = forwardRef<HTMLDivElement, CardProps>(function Card(
         VARIANT_CLASSES[variant],
         padded && 'p-5',
         interactive &&
-          'hover:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] focus-within:shadow-[0_12px_36px_-8px_rgba(15,23,42,0.18)] cursor-pointer',
+          'lift-on-hover hover:shadow-[0_18px_44px_-12px_rgba(15,23,42,0.22)] focus-within:shadow-[0_18px_44px_-12px_rgba(15,23,42,0.22)] cursor-pointer',
         variant === 'gradient' && glow && 'glow-violet',
         className,
       )}
