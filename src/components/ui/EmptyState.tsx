@@ -33,10 +33,10 @@ export function EmptyState({
       role="status"
     >
       <div
-        className="w-14 h-14 rounded-full bg-slate-100 flex items-center justify-center text-slate-400"
+        className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-100 via-violet-100 to-fuchsia-100 flex items-center justify-center text-indigo-500 animate-float shadow-inner"
         aria-hidden="true"
       >
-        {icon ?? <Inbox className="w-7 h-7" />}
+        {icon ?? <Inbox className="w-8 h-8" />}
       </div>
       <div className="space-y-1">
         <p className="text-base font-semibold text-slate-900">{title}</p>

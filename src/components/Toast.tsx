@@ -72,13 +72,13 @@ export function useToast() {
           key={t.id}
           type="button"
           onClick={() => dismiss(t.id)}
-          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-2xl shadow-lg border text-left transition-all animate-in fade-in slide-in-from-top-2 duration-200 ${variantClass(t.variant)}`}
+          className={`pointer-events-auto flex items-start gap-3 px-4 py-3 rounded-2xl shadow-xl border text-left animate-pop-in backdrop-blur-md hover:-translate-y-0.5 hover:shadow-2xl transition-all duration-200 ${variantClass(t.variant)}`}
         >
-          <span className="mt-0.5 shrink-0">{variantIcon(t.variant)}</span>
+          <span className="mt-0.5 shrink-0 animate-check-pop">{variantIcon(t.variant)}</span>
           <span className="text-[11px] font-bold leading-snug flex-1 break-words">
             {t.message}
           </span>
-          <X className="w-3 h-3 mt-0.5 opacity-60 shrink-0" />
+          <X className="w-3 h-3 mt-0.5 opacity-60 shrink-0 transition-opacity hover:opacity-100" />
         </button>
       ))}
     </div>

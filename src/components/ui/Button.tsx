@@ -35,16 +35,19 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
   // the CTA visibly "lifts" off the glass background. Active state
   // dampens the glow rather than darkening the gradient — feels more
   // tactile on a phone screen.
+  //
+  // The `sheen-host` class adds a one-shot diagonal light sweep on
+  // hover for a touch of playfulness without animating constantly.
   primary:
-    'bg-gradient-to-br from-indigo-500 to-violet-600 text-white glow-primary hover:from-indigo-500 hover:to-violet-500 hover:glow-violet active:scale-[0.98] disabled:opacity-50 disabled:shadow-none',
+    'sheen-host bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-500 bg-[length:160%_160%] text-white glow-primary hover:bg-[position:100%_50%] hover:-translate-y-0.5 hover:glow-violet active:translate-y-0 active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0',
   // Secondary is a frosted-glass surface so it harmonises with `Card`
   // primitives sitting on the same screen.
   secondary:
-    'bg-white/70 backdrop-blur-md text-slate-900 border border-white/60 shadow-sm hover:bg-white/90 active:bg-white disabled:opacity-50',
+    'bg-white/70 backdrop-blur-md text-slate-900 border border-white/60 shadow-sm hover:bg-white/90 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:bg-white active:scale-[0.98] disabled:opacity-50 disabled:hover:translate-y-0',
   ghost:
-    'bg-transparent text-slate-700 hover:bg-white/60 active:bg-white/80 disabled:text-slate-300',
+    'bg-transparent text-slate-700 hover:bg-white/60 hover:scale-[1.02] active:bg-white/80 active:scale-[0.98] disabled:text-slate-300 disabled:hover:scale-100',
   danger:
-    'bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_8px_24px_-6px_rgba(239,68,68,0.45)] hover:from-rose-500 hover:to-rose-600 active:scale-[0.98] disabled:opacity-50 disabled:shadow-none',
+    'sheen-host bg-gradient-to-br from-rose-500 to-red-600 text-white shadow-[0_8px_24px_-6px_rgba(239,68,68,0.45)] hover:from-rose-500 hover:to-rose-600 hover:-translate-y-0.5 hover:shadow-[0_12px_28px_-6px_rgba(239,68,68,0.55)] active:translate-y-0 active:scale-[0.97] disabled:opacity-50 disabled:shadow-none disabled:hover:translate-y-0',
 };
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {

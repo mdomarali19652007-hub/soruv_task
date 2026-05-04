@@ -48,17 +48,20 @@ export function BalancePill({
 }: BalancePillProps) {
   const formatted = formatAmount(amount, locale);
   const baseClasses = cn(
-    'inline-flex items-center gap-2 px-3 h-10 rounded-full',
-    'bg-white/70 backdrop-blur-md text-indigo-700 border border-white/60 shadow-sm',
+    'group inline-flex items-center gap-2 px-3 h-10 rounded-full',
+    'bg-white/70 backdrop-blur-md border border-white/60 shadow-sm',
     'text-sm font-semibold tabular-nums',
     className,
   );
   const content = (
     <>
-      <span aria-hidden="true" className="inline-flex">
+      <span
+        aria-hidden="true"
+        className="inline-flex text-indigo-600 transition-transform duration-300 group-hover:[animation:ui-wiggle_0.6s_ease-in-out]"
+      >
         {icon ?? <Wallet className="w-4 h-4" />}
       </span>
-      <span>
+      <span className="gradient-text">
         {currency}
         {formatted}
       </span>
@@ -72,7 +75,7 @@ export function BalancePill({
         onClick={onClick}
         className={cn(
           baseClasses,
-          'transition-all hover:bg-white/90 hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1',
+          'transition-all duration-200 hover:bg-white/90 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1',
         )}
         aria-label={`Balance: ${currency}${formatted}`}
       >
