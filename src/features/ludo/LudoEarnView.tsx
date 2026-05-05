@@ -23,6 +23,7 @@ import {
   X,
 } from 'lucide-react';
 import type { LudoSubmission, LudoTournament, UserProfile, View } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 interface Props {
   user: Pick<UserProfile, 'id' | 'name' | 'mainBalance'>;
@@ -49,6 +50,7 @@ export function LudoEarnView({
   updateRow,
   uploadMedia,
 }: Props) {
+  const fb = useFeedback();
   const [selectedTournament, setSelectedTournament] = useState<LudoTournament | null>(null);
   const [showSubmitModal, setShowSubmitModal] = useState(false);
   const [screenshotUrl, setScreenshotUrl] = useState('');
@@ -59,17 +61,17 @@ export function LudoEarnView({
 
   const handleJoin = async (tournament: LudoTournament) => {
     if (user.mainBalance < tournament.entryFee) {
-      alert('Insufficient balance to join this tournament.');
+      fb.showToast('Insufficient balance to join this tournament.', 'error');
       return;
     }
 
     if (tournament.currentPlayers >= tournament.maxPlayers) {
-      alert('Tournament is full.');
+      fb.showToast('Tournament is full.', 'error');
       return;
     }
 
     if (tournament.playerIds?.includes(user.id)) {
-      alert('You have already joined this tournament.');
+      fb.showToast('You have already joined this tournament.', 'error');
       return;
     }
 
@@ -85,17 +87,17 @@ export function LudoEarnView({
         playerIds: [...(tournament.playerIds || []), user.id],
       });
 
-      alert('Successfully joined the tournament!');
+      fb.showToast('Successfully joined the tournament!', 'success');
       setIsSubmitting(false);
     } catch {
       setIsSubmitting(false);
-      alert('Error joining tournament.');
+      fb.showToast('Error joining tournament.', 'error');
     }
   };
 
   const handleSubmitResult = async () => {
     if (!screenshotUrl || !ludoUsername || !selectedTournament) {
-      alert('Please provide all details (Screenshot & Ludo Username).');
+      fb.showToast('Please provide all details (Screenshot & Ludo Username).', 'error');
       return;
     }
 
@@ -112,14 +114,14 @@ export function LudoEarnView({
         timestamp: Date.now(),
       });
 
-      alert('Result submitted successfully! Admin will verify soon.');
+      fb.showToast('Result submitted successfully! Admin will verify soon.', 'success');
       setShowSubmitModal(false);
       setScreenshotUrl('');
       setLudoUsername('');
       setIsSubmitting(false);
     } catch {
       setIsSubmitting(false);
-      alert('Error submitting result.');
+      fb.showToast('Error submitting result.', 'error');
     }
   };
 
@@ -286,7 +288,7 @@ export function LudoEarnView({
                       <button
                         onClick={() => {
                           navigator.clipboard.writeText(t.roomCode || '');
-                          alert('Room Code Copied!');
+                          fb.showToast('Room Code Copied!', 'success');
                         }}
                         className="p-3 bg-white rounded-xl shadow-sm text-emerald-600 active:scale-90 transition-all"
                       >
@@ -495,7 +497,7 @@ export function LudoEarnView({
                         const url = await uploadMedia(file);
                         setScreenshotUrl(url);
                       } catch (err) {
-                        alert(err instanceof Error ? err.message : 'Upload failed');
+                        fb.showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
                       }
                     }}
                   />

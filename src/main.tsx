@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import { ClerkProvider } from '@clerk/clerk-react';
 import App from './App.tsx';
+import { FeedbackProvider } from './components/feedback/FeedbackProvider';
 import './index.css';
 
 const root = document.getElementById('root');
@@ -46,7 +47,9 @@ if (root) {
     createRoot(root).render(
       <StrictMode>
         <ClerkProvider publishableKey={clerkPublishableKey || ''} afterSignOutUrl="/">
-          <App />
+          <FeedbackProvider>
+            <App />
+          </FeedbackProvider>
         </ClerkProvider>
       </StrictMode>,
     );

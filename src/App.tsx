@@ -201,6 +201,7 @@ import { AboutView as SharedAboutView } from './features/static/AboutView';
 import { ReviewsView as SharedReviewsView } from './features/static/ReviewsView';
 import { PrivacyView as SharedPrivacyView } from './features/static/PrivacyView';
 import { BottomNav, Sidebar as SharedSidebar, type BottomNavTab, type IncomePeriod } from './components/ui';
+import { useFeedback } from './components/feedback/FeedbackProvider';
 import {
   Home as HomeIcon,
   Briefcase as EarnIcon,
@@ -240,6 +241,11 @@ export type {
 };
 
 export default function App() {
+  // Feedback API: showToast (non-blocking notification), confirm
+  // (modal yes/no), prompt (modal text input). Replaces every
+  // remaining `alert()` / `confirm()` / `prompt()` call in this
+  // module with consistent in-app UI.
+  const fb = useFeedback();
   const [view, setView] = useState<View>(() => {
     // Password reset link lands on /reset-password?token=...
     // Admin panel has its own dedicated route at /admin AND a dedicated
@@ -892,19 +898,19 @@ export default function App() {
 
   const handleEmailRegister = async () => {
     if (!regData.email || !regData.password || !regData.name || !regData.phone) {
-      alert('Please fill all required fields.');
+      fb.showToast('Please fill all required fields.', 'error');
       return;
     }
     if (regData.password.length < 6) {
-      alert('Password must be at least 6 characters.');
+      fb.showToast('Password must be at least 6 characters.', 'error');
       return;
     }
     if (regData.password !== regData.confirmPassword) {
-      alert('Passwords do not match.');
+      fb.showToast('Passwords do not match.', 'error');
       return;
     }
     if (!regAccepted) {
-      alert('Please accept the rules to continue.');
+      fb.showToast('Please accept the rules to continue.', 'error');
       return;
     }
     // Referral code is required for every signup outside the very
@@ -915,18 +921,18 @@ export default function App() {
     if (!trimmedRefCode) {
       const required = await isReferralRequired();
       if (required) {
-        alert('Referral code is required. Please enter the code of the person who invited you.');
+        fb.showToast('Referral code is required. Please enter the code of the person who invited you.', 'error');
         return;
       }
       // Bootstrap: users table is empty, skip refCode validation.
     } else {
       if (!/^\d{4,10}$/.test(trimmedRefCode)) {
-        alert('Referral code must be a 6-digit number.');
+        fb.showToast('Referral code must be a 6-digit number.', 'error');
         return;
       }
       const refValid = await validateReferralCode(trimmedRefCode);
       if (!refValid) {
-        alert('This referral code is not valid. Please double-check and try again.');
+        fb.showToast('This referral code is not valid. Please double-check and try again.', 'error');
         return;
       }
     }
@@ -944,7 +950,7 @@ export default function App() {
       });
 
       if (!result.success) {
-        alert(result.error || 'Registration failed');
+        fb.showToast(result.error || 'Registration failed', 'error');
         return;
       }
 
@@ -955,41 +961,30 @@ export default function App() {
       if (result.needsEmailVerification) {
         setNeedsEmailVerification(true);
         setView('login');
-        alert('We sent a verification code to your email. Enter it to finish signing up.');
+        fb.showToast('We sent a verification code to your email. Enter it to finish signing up.', 'info');
         return;
       }
 
-      alert('Registration successful!');
+      fb.showToast('Registration successful!', 'success');
       setView('home');
     } catch (error: any) {
       console.error('Registration Error:', error);
       if (error?.message?.includes('already registered') || error?.message?.includes('already')) {
-        alert('This email is already registered. Please sign in instead.');
+        fb.showToast('This email is already registered. Please sign in instead.', 'error');
       } else {
-        alert(error.message || 'Registration failed. Please try again.');
+        fb.showToast(error.message || 'Registration failed. Please try again.', 'error');
       }
     }
   };
 
-  const handlePasswordReset = async () => {
-    const email = loginEmail || prompt('Enter your email address:');
-    if (!email) return;
-    try {
-      await requestPasswordReset(
-        email,
-        `${window.location.origin}/reset-password`,
-      );
-      // Always show the same success message regardless of whether the
-      // address exists -- this prevents user-enumeration via the reset form.
-      alert(
-        'If an account exists for this email, a password reset link has been sent. ' +
-        'Please check your inbox (and spam folder).',
-      );
-    } catch (error: any) {
-      // Generic message -- don't leak provider state to the user.
-      console.error('[auth] password reset request failed:', error);
-      alert('Could not start password reset right now. Please try again shortly.');
-    }
+  const handlePasswordReset = () => {
+    // Clerk's password-reset flow sends a 6-digit code to the user's
+    // email (NOT a magic link). Routing to `ResetPasswordView` lets
+    // the user enter their email, receive the code, type it in, and
+    // pick a new password — all on the same screen. The previous
+    // implementation only showed an `alert()` saying "a link has been
+    // sent" which never matched what Clerk actually delivers.
+    setView('reset-password');
   };
 
   // Admin-shell login (no rules checkbox, no phone-number lookup,
@@ -1000,7 +995,7 @@ export default function App() {
   const [adminAuthSubmitting, setAdminAuthSubmitting] = useState(false);
   const handleAdminLogin = async () => {
     if (!loginEmail || !loginPassword) {
-      alert('Enter your operator credentials to continue.');
+      fb.showToast('Enter your operator credentials to continue.', 'error');
       return;
     }
     setAdminAuthSubmitting(true);
@@ -1016,9 +1011,9 @@ export default function App() {
     } catch (error: any) {
       console.error('Admin login error:', error);
       if (error?.message?.includes('Invalid') || error?.message?.includes('credentials')) {
-        alert('Invalid operator credentials.');
+        fb.showToast('Invalid operator credentials.', 'error');
       } else {
-        alert(error?.message || 'Sign-in failed. Try again shortly.');
+        fb.showToast(error?.message || 'Sign-in failed. Try again shortly.', 'error');
       }
     } finally {
       setAdminAuthSubmitting(false);
@@ -1027,11 +1022,11 @@ export default function App() {
 
   const handleEmailLogin = async () => {
     if (!loginEmail || !loginPassword) {
-      alert('Please enter your credentials');
+      fb.showToast('Please enter your credentials', 'error');
       return;
     }
     if (!loginAccepted) {
-      alert('Please accept the rules to continue.');
+      fb.showToast('Please accept the rules to continue.', 'error');
       return;
     }
 
@@ -1044,7 +1039,7 @@ export default function App() {
         if (phoneResults && phoneResults.length > 0) {
           emailToUse = phoneResults[0].email;
         } else {
-          alert('No account found with this phone number.');
+          fb.showToast('No account found with this phone number.', 'error');
           return;
         }
       }
@@ -1060,9 +1055,9 @@ export default function App() {
     } catch (error: any) {
       console.error('Login Error:', error);
       if (error?.message?.includes('Invalid') || error?.message?.includes('credentials')) {
-        alert('Invalid email or password. Please check your credentials.');
+        fb.showToast('Invalid email or password. Please check your credentials.', 'error');
       } else {
-        alert(error.message || 'Login failed. Please try again.');
+        fb.showToast(error.message || 'Login failed. Please try again.', 'error');
       }
     }
   };
@@ -1089,19 +1084,19 @@ export default function App() {
           // redirect so the user gets the error up-front.
           const required = await isReferralRequired();
           if (required) {
-            alert('Referral code is required. Please enter the code of the person who invited you before continuing with Google.');
+            fb.showToast('Referral code is required. Please enter the code of the person who invited you before continuing with Google.', 'error');
             return;
           }
           // Bootstrap: no refCode is fine; leave pendingReferralCode unset.
           localStorage.removeItem('pendingReferralCode');
         } else {
           if (!/^\d{4,10}$/.test(trimmedRefCode)) {
-            alert('Referral code must be a 6-digit number.');
+            fb.showToast('Referral code must be a 6-digit number.', 'error');
             return;
           }
           const isValid = await validateReferralCode(trimmedRefCode);
           if (!isValid) {
-            alert('This referral code is not valid. Please double-check and try again.');
+            fb.showToast('This referral code is not valid. Please double-check and try again.', 'error');
             return;
           }
           // Stash the validated code so the post-OAuth
@@ -1142,7 +1137,7 @@ export default function App() {
       });
     } catch (error) {
       console.error('Login Error:', error);
-      alert('Login failed. Please try again.');
+      fb.showToast('Login failed. Please try again.', 'error');
     }
   };
 
@@ -1152,7 +1147,7 @@ export default function App() {
       // Use server-side RPC for atomic daily reward claim
       const reward = await claimDailyReward(user.id);
       confetti({ particleCount: 100, spread: 70 });
-      alert(`Claimed ৳ ${reward.toFixed(2)}!`);
+      fb.showToast(`Claimed ৳ ${reward.toFixed(2)}!`, 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `users/${user.id}`);
     }
@@ -1160,7 +1155,7 @@ export default function App() {
 
   const spin = async () => {
     if (user.mainBalance < spinCost) {
-      alert('Insufficient balance!');
+      fb.showToast('Insufficient balance!', 'error');
       return;
     }
     setIsSpinning(true);
@@ -1233,7 +1228,7 @@ export default function App() {
       confetti({ particleCount: 150, spread: 70 });
       // Only show alert if a message is provided (callers can handle their own success UI)
       if (successMessage) {
-        alert(successMessage);
+        fb.showToast(successMessage, 'success');
       }
     } catch (e) {
       clearInterval(timer);
@@ -1292,7 +1287,7 @@ export default function App() {
                 type="button"
                 role="menuitem"
                 onClick={() => {
-                  alert('Upcoming Feature!');
+                  fb.showToast('Upcoming Feature!', 'info');
                   setShowAuthMenu(false);
                 }}
                 className="w-full flex items-center gap-3 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-[#7c3aed] hover:bg-[#6366f1]/10 transition-colors border-t border-[#6366f1]/10"
@@ -2333,7 +2328,7 @@ export default function App() {
                   }
                 } catch (err) {
                   console.error('Profile photo upload failed:', err);
-                  alert('Failed to upload profile photo. Please try again.');
+                  fb.showToast('Failed to upload profile photo. Please try again.', 'error');
                 }
               }}
             />
@@ -2874,6 +2869,7 @@ export default function App() {
         {view === 'reset-password' && (
           <div key="reset-password">
             <ResetPasswordView
+              initialEmail={loginEmail}
               onReturnToLogin={() => {
                 window.history.replaceState({}, '', '/');
                 setView('login');
@@ -2891,6 +2887,7 @@ export default function App() {
               onPasswordChange={setLoginPassword}
               onSubmit={handleAdminLogin}
               onForgotPassword={handlePasswordReset}
+              onGoogleSignIn={handleGoogleLogin}
               isSubmitting={adminAuthSubmitting}
             />
           </div>

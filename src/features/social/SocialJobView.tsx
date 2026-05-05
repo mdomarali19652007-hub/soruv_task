@@ -21,6 +21,7 @@ import {
 import type { SocialSubmission, UserProfile, View } from '../../types';
 import { OperationType } from '../../types';
 import { handleDbError } from '../../utils/db-errors';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 export interface SelectedSocialJob {
   title: string;
@@ -51,6 +52,7 @@ export function SocialJobView({
   payeerAccount = '59383883',
   telegramBotUrl = 'https://t.me/IMADMIN1_BOT',
 }: Props) {
+  const fb = useFeedback();
   const [trxId, setTrxId] = useState('');
   const [screenshot, setScreenshot] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -59,7 +61,7 @@ export function SocialJobView({
 
   const handleSubmit = async () => {
     if (!trxId || !screenshot) {
-      alert('Please provide both Transaction ID and Screenshot.');
+      fb.showToast('Please provide both Transaction ID and Screenshot.', 'error');
       return;
     }
 
@@ -77,7 +79,7 @@ export function SocialJobView({
       };
 
       await insertRow('socialSubmissions', submission as unknown as Record<string, unknown>);
-      alert('Submission successful! Please wait for admin approval.');
+      fb.showToast('Submission successful! Please wait for admin approval.', 'success');
       setView('social-hub');
     } catch (e) {
       handleDbError(e, OperationType.WRITE, 'socialSubmissions');
@@ -143,7 +145,7 @@ export function SocialJobView({
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(payeerAccount);
-                  alert('Payeer account copied!');
+                  fb.showToast('Payeer account copied!', 'success');
                 }}
                 className="p-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors"
               >
@@ -185,7 +187,7 @@ export function SocialJobView({
                       const url = await uploadMedia(file);
                       setScreenshot(url);
                     } catch (err) {
-                      alert(err instanceof Error ? err.message : 'Upload failed');
+                      fb.showToast(err instanceof Error ? err.message : 'Upload failed', 'error');
                     }
                   }}
                 />

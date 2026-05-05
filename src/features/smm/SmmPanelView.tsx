@@ -14,6 +14,7 @@ import { ArrowLeft, Check, ChevronRight, Globe, History, Zap } from 'lucide-reac
 import { SMM_SERVICES } from '../../constants';
 import { handleFirestoreError } from '../../utils/db-errors';
 import { OperationType, type SmmOrder, type UserProfile, type View } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 interface Props {
   user: Pick<UserProfile, 'id' | 'name' | 'mainBalance'>;
@@ -38,6 +39,7 @@ export function SmmPanelView({
   insertRow,
   updateRow,
 }: Props) {
+  const fb = useFeedback();
   const [selectedService, setSelectedService] = useState<string | null>(null);
   const [link, setLink] = useState('');
   const [amount, setAmount] = useState<number>(0);
@@ -51,17 +53,17 @@ export function SmmPanelView({
 
   const handleOrder = async () => {
     if (!selectedService || !link || amount <= 0) {
-      alert('Please fill all fields');
+      fb.showToast('Please fill all fields', 'error');
       return;
     }
 
     if (user.mainBalance < amount) {
-      alert('Insufficient balance');
+      fb.showToast('Insufficient balance', 'error');
       return;
     }
 
     if (currentService && calculatedQuantity < currentService.min) {
-      alert(`Minimum order is ${currentService.min} for this service`);
+      fb.showToast(`Minimum order is ${currentService.min} for this service`, 'error');
       return;
     }
 
@@ -86,7 +88,7 @@ export function SmmPanelView({
         timestamp: Date.now(),
       });
 
-      alert('Order submitted successfully!');
+      fb.showToast('Order submitted successfully!', 'success');
       setLink('');
       setAmount(0);
       setSelectedService(null);

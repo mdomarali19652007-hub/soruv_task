@@ -11,6 +11,7 @@ import type { ReactNode } from 'react';
 import confetti from 'canvas-confetti';
 import { ArrowLeft, Gift, Instagram, Keyboard, Music, Send } from 'lucide-react';
 import type { UserProfile, View } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 export interface SocialJob {
   title: string;
@@ -41,9 +42,10 @@ const JOBS: SocialJob[] = [
 ];
 
 export function SocialHubView({ user, setView, setSelectedSocialJob, updateRow }: Props) {
+  const fb = useFeedback();
   const claimFreeKop = () => {
     confetti({ particleCount: 100, spread: 70 });
-    alert('You claimed a FREE gift! +৳ 5.00 added to your balance.');
+    fb.showToast('You claimed a FREE gift! +৳ 5.00 added to your balance.', 'success');
     updateRow('users', user.id, { mainBalance: 5 });
   };
 
