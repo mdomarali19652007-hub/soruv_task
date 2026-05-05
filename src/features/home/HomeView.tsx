@@ -278,7 +278,25 @@ export function HomeView({
           </Card>
         </motion.div>
 
-        {/* 2. Social row */}
+        {/* 2. Marketing banner — sits between the welcome hero and the
+            social row. Served statically from /public so it's not
+            dependent on any external image host. */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.05 }}
+          className="overflow-hidden rounded-2xl border border-white/60 shadow-[0_8px_24px_-8px_rgba(15,23,42,0.15)]"
+        >
+          <img
+            src="/home-banner.jpg"
+            alt="Top Earning প্রোমো ব্যানার"
+            loading="lazy"
+            decoding="async"
+            className="block w-full h-auto object-cover"
+          />
+        </motion.div>
+
+        {/* 3. Social row */}
         <Card padded>
           <p className="text-sm font-semibold text-slate-700 mb-3">
             আমাদের কমিউনিটিতে যোগ দিন
