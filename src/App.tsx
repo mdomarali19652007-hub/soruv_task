@@ -520,15 +520,26 @@ export default function App() {
   }, [view]);
 
   // --- Login Animation ---
+  // Fire the welcome confetti exactly once per login (the transition
+  // from logged-out -> logged-in). Without this gate, the previous
+  // implementation re-fired confetti every time the user navigated
+  // back to /home in the same session, which became annoying.
+  const confettiFiredRef = useRef(false);
   useEffect(() => {
-    if (isLoggedIn && view === 'home') {
-      confetti({
-        particleCount: 150,
-        spread: 70,
-        origin: { y: 0.6 },
-        colors: ['#6366f1', '#6366f1', '#a855f7']
-      });
+    if (!isLoggedIn) {
+      // Reset on logout so the next login re-arms the celebration.
+      confettiFiredRef.current = false;
+      return;
     }
+    if (confettiFiredRef.current) return;
+    if (view !== 'home') return;
+    confettiFiredRef.current = true;
+    confetti({
+      particleCount: 150,
+      spread: 70,
+      origin: { y: 0.6 },
+      colors: ['#6366f1', '#6366f1', '#a855f7'],
+    });
   }, [isLoggedIn, view]);
 
   // --- Better Auth Session + Profile Hydration ---
