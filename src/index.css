@@ -681,10 +681,12 @@
   }
 
   /* 2. Replace the multi-stop fixed-attached body gradient with a
-   *    cheap two-stop scrolling background. */
+   *    flat solid background — radial gradients on the body are still
+   *    expensive to repaint on mobile even with `scroll` attachment. */
   body {
     background-attachment: scroll !important;
-    background-image: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%) !important;
+    background-image: none !important;
+    background-color: #eef2ff !important;
   }
 
   /* 3. Stop all infinite ambient animations. One-shot animations
@@ -694,6 +696,9 @@
   .animate-bounce-soft,
   .animate-sparkle,
   .animate-spin-slow,
+  .animate-spin,
+  .animate-pulse,
+  .animate-ping,
   .animate-gradient,
   .gradient-text-vivid,
   .skeleton-shimmer,
@@ -706,6 +711,17 @@
    *    creates a stacking context. Disable on mobile. */
   .sheen-host::after {
     display: none !important;
+  }
+
+  /* 5. Drop the heavy multi-property `transition-all duration-300`
+   *    on the major surfaces — Tailwind animates layout-affecting
+   *    properties like `box-shadow` and `transform` together, which
+   *    triggers re-composition on hover state changes that were
+   *    triggered (incorrectly) by tap on mobile. Keep transforms on
+   *    `:active` for press feedback. */
+  .glass-card,
+  .premium-card {
+    transition: none !important;
   }
 }
 
