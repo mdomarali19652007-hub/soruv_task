@@ -344,6 +344,24 @@ export interface UserProfile {
   isAdmin?: boolean;
 }
 
+// ---------------------------------------------------------------
+// Notices marquee (Home screen rotating ticker).
+// Stored in `public.notices` (see
+// `supabase/migrations/20260606_notices_table.sql`).
+// ---------------------------------------------------------------
+
+export type NoticeLanguage = 'bn' | 'en';
+
+export interface Notice {
+  id: string;
+  text: string;
+  language: NoticeLanguage;
+  /** Stored as `is_active` in the DB; mapped here as `isActive`. */
+  isActive: boolean;
+  /** Stored as `created_at` in the DB; mapped to `createdAt` (ms). */
+  createdAt: number;
+}
+
 export interface UserMessage {
   id: string;
   userId: string;

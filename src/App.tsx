@@ -126,6 +126,7 @@ import type {
   LudoTournament,
   MicrojobSubmission,
   NewsPost,
+  Notice,
   Product,
   ProductOrder,
   RechargeRequest,
@@ -225,6 +226,7 @@ export type {
   LudoTournament,
   MicrojobSubmission,
   NewsPost,
+  Notice,
   Product,
   ProductOrder,
   RechargeRequest,
@@ -322,6 +324,7 @@ export default function App() {
   const [allUsers, setAllUsers] = useState<UserProfile[]>([]);
   const [allSocialSubmissions, setAllSocialSubmissions] = useState<SocialSubmission[]>([]);
   const [newsPosts, setNewsPosts] = useState<NewsPost[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
   const [withdrawals, setWithdrawals] = useState<{ id: string; amount: number; receiveAmount?: number; fee?: number; method: string; status: 'pending' | 'approved' | 'rejected'; date: string; reason?: string }[]>([]);
   const [dollarBuyRequests, setDollarBuyRequests] = useState<DollarBuyRequest[]>([]);
   const [gmailSubmissions, setGmailSubmissions] = useState<GmailSubmission[]>([]);
@@ -786,6 +789,31 @@ export default function App() {
     unsubs.push(subscribeToTable<SmmOrder>('smmOrders', (rows) => setSmmOrders(rows)));
     unsubs.push(subscribeToTable<UserProfile>('users', (rows) => setAllUsers(rows)));
     unsubs.push(subscribeToTable<NewsPost>('newsPosts', (rows) => setNewsPosts(rows), { orderBy: { column: 'timestamp', ascending: false } }));
+    // Notices marquee — newest-first. The DB columns are snake_case
+    // (`is_active`, `created_at`); we map them to the `Notice`
+    // (camelCase) shape the SPA consumes.
+    unsubs.push(
+      subscribeToTable<{
+        id: string;
+        text: string;
+        language: string;
+        is_active: boolean;
+        created_at: string;
+      }>(
+        'notices',
+        (rows) =>
+          setNotices(
+            rows.map((r) => ({
+              id: r.id,
+              text: r.text,
+              language: (r.language === 'en' ? 'en' : 'bn'),
+              isActive: Boolean(r.is_active),
+              createdAt: Date.parse(r.created_at) || 0,
+            })),
+          ),
+        { orderBy: { column: 'created_at', ascending: false } },
+      ),
+    );
     unsubs.push(subscribeToTable<GlobalUpload>('uploads', (rows) => setAllUploads(rows), { orderBy: { column: 'timestamp', ascending: false } }));
 
     return () => unsubs.forEach(fn => fn());
@@ -2529,6 +2557,7 @@ export default function App() {
           allUsers={allUsers}
           allSocialSubmissions={allSocialSubmissions}
           newsPosts={newsPosts}
+          notices={notices}
           withdrawals={withdrawals}
           dollarBuyRequests={dollarBuyRequests}
           gmailSubmissions={gmailSubmissions}
@@ -2884,6 +2913,7 @@ export default function App() {
             telegramLink={telegramLink}
             facebookLink={facebookLink}
             whatsappLink={whatsappLink}
+            notices={notices.filter((n) => n.isActive)}
           />
         )}
         {view === 'dashboard' && <DashboardView key="dashboard" />}
@@ -2942,6 +2972,7 @@ export default function App() {
             allUsers={allUsers}
             allSocialSubmissions={allSocialSubmissions}
             newsPosts={newsPosts}
+          notices={notices}
             withdrawals={withdrawals}
             dollarBuyRequests={dollarBuyRequests}
             gmailSubmissions={gmailSubmissions}
