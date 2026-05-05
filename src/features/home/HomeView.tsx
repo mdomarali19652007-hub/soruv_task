@@ -30,8 +30,8 @@ import {
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
-import type { UserProfile, View } from '../../types';
-import { Card, TopHeader } from '../../components/ui';
+import type { Notice, UserProfile, View } from '../../types';
+import { Card, NoticeSlider, TopHeader } from '../../components/ui';
 import { INCOME_CARDS } from '../../constants';
 
 interface Props {
@@ -55,6 +55,12 @@ interface Props {
   telegramLink: string;
   facebookLink: string;
   whatsappLink: string;
+  /**
+   * Active notices for the rotating marquee on top of the welcome
+   * banner. The list should already be filtered to active rows and
+   * sorted newest-first; the parent (App.tsx) does that.
+   */
+  notices?: Notice[];
 }
 
 interface Tile {
@@ -225,6 +231,7 @@ export function HomeView({
   telegramLink,
   facebookLink,
   whatsappLink,
+  notices,
 }: Props) {
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
@@ -251,6 +258,11 @@ export function HomeView({
       />
 
       <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+        {/* 0. Notice slider — rotating admin-driven notices in Bangla
+            or English. Falls back to a neutral message when empty so
+            the slot never goes blank. */}
+        <NoticeSlider notices={notices ?? []} />
+
         {/* 1. Hero banner — replaces the old balance hero (balance now
             lives on the Wallet tab per the restructure plan). */}
         <motion.div

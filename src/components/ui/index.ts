@@ -31,3 +31,4 @@ export {
   type IncomePeriod,
 } from './IncomeBreakdownList';
 export { StatusTabs, type StatusTabsProps, type StatusTab } from './StatusTabs';
+export { NoticeSlider, type NoticeSliderProps } from './NoticeSlider';

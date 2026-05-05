@@ -18,12 +18,13 @@ import { useState, useEffect, useRef } from 'react';
 import {
   Briefcase, Check, CheckCircle2, CreditCard, DollarSign,
   ExternalLink, Facebook, History, Image as ImageIcon,
-  LayoutDashboard, ListChecks, Loader2, Mail,
+  LayoutDashboard, ListChecks, Loader2, Mail, Megaphone,
   Newspaper, Package, PlusCircle, RefreshCw, Search, Settings as SettingsIcon, ShoppingBag,
   Smartphone, SlidersHorizontal, Trash2, Trophy, Upload, User, Users, UserX,
   Wifi, X, Zap,
 } from 'lucide-react';
 import { AdminLayout, type AdminNavGroup } from './AdminLayout';
+import { NoticesAdminPanel } from './NoticesAdminPanel';
 import { AdminDashboard } from './AdminDashboard';
 import confetti from 'canvas-confetti';
 import {
@@ -41,7 +42,7 @@ import type {
   UserProfile, GmailSubmission, MicrojobSubmission, TaskSubmission,
   SubscriptionRequest, RechargeRequest, DriveOffer, DriveOfferRequest,
   Product, ProductOrder, LudoTournament, LudoSubmission, SmmOrder,
-  GlobalUpload, NewsPost, DollarBuyRequest, SocialSubmission, View,
+  GlobalUpload, NewsPost, Notice, DollarBuyRequest, SocialSubmission, View,
 } from '../../types';
 import { INCOME_CARDS, SMM_SERVICES } from '../../constants';
 import { useReasonPrompt } from '../../components/ReasonPromptModal';
@@ -71,6 +72,7 @@ export type AdminTab =
   | 'ludo'
   | 'smm'
   | 'news'
+  | 'notices'
   | 'social'
   | 'uploads'
   | 'subscriptions';
@@ -119,6 +121,7 @@ export interface AdminViewProps {
   allUsers: UserProfile[];
   allSocialSubmissions: SocialSubmission[];
   newsPosts: NewsPost[];
+  notices: Notice[];
   withdrawals: { id: string; amount: number; receiveAmount?: number; fee?: number; method: string; status: 'pending' | 'approved' | 'rejected'; date: string; reason?: string; userId: string; timestamp: number; [key: string]: unknown }[];
   dollarBuyRequests: DollarBuyRequest[];
   gmailSubmissions: GmailSubmission[];
@@ -153,7 +156,7 @@ export function AdminView(props: AdminViewProps) {
     referralCommissionRate, referralActivationBonus,
     totalPaid, activeWorkerCount,
     gmailPassword, gmailReward, adReward, dailyAdLimit, deliveryFee,
-    allUsers, allSocialSubmissions, newsPosts, withdrawals,
+    allUsers, allSocialSubmissions, newsPosts, notices, withdrawals,
     dollarBuyRequests, gmailSubmissions, microjobSubmissions, taskSubmissions,
     subscriptionRequests, rechargeRequests, driveOffers, driveOfferRequests,
     products, productOrders, ludoTournaments, ludoSubmissions, smmOrders,
@@ -1097,6 +1100,7 @@ export function AdminView(props: AdminViewProps) {
       label: 'Content Library',
       items: [
         { id: 'news',    label: 'News',    icon: <Newspaper className="w-5 h-5" /> },
+        { id: 'notices', label: 'Notices', icon: <Megaphone className="w-5 h-5" />, badge: notices.filter(n => n.isActive).length },
         { id: 'uploads', label: 'Uploads', icon: <Upload className="w-5 h-5" /> },
       ],
     },
@@ -1131,6 +1135,7 @@ export function AdminView(props: AdminViewProps) {
     'drive-requests': 'Drive Offer Requests',
     subscriptions:    'Boosting Requests',
     news:             'News Posts',
+    notices:          'Notices Marquee',
     uploads:          'Uploads Library',
     tasks:            'Task Management',
     smm:              'SMM Panel',
@@ -1865,6 +1870,8 @@ export function AdminView(props: AdminViewProps) {
                 </div>
               </div>
             )}
+
+            {activeAdminTab === 'notices' && <NoticesAdminPanel notices={notices} />}
 
             {activeAdminTab === 'gmail' && (
               <div className="glass-card border-white/40 shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300">
