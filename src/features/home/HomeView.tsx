@@ -290,8 +290,11 @@ export function HomeView({
           <img
             src="/home-banner.jpg"
             alt="Top Earning প্রোমো ব্যানার"
+            width={900}
+            height={625}
             loading="lazy"
             decoding="async"
+            fetchPriority="low"
             className="block w-full h-auto object-cover"
           />
         </motion.div>
