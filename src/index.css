@@ -627,3 +627,85 @@
   .sheen-host:hover::after { animation: none; opacity: 0; }
 }
 
+/* ====================================================================
+ * Mobile + low-power-device performance overrides.
+ *
+ * On the desktop pass the consumer shell layers `backdrop-filter:
+ * blur(...)` over a fixed-attached multi-radial body gradient with
+ * several infinite gradient/float/sparkle animations on top. That
+ * combination is fine on a laptop GPU but can drop a mid-range
+ * Android phone to ~10-15 FPS during scroll because:
+ *   1. every `backdrop-blur` element forces a separate compositor
+ *      layer + per-frame full-screen blur,
+ *   2. `background-attachment: fixed` re-rasterises the body gradient
+ *      on every scroll frame on iOS Safari / older Chromium,
+ *   3. infinite background-position / transform animations keep the
+ *      compositor awake even when nothing is on screen.
+ *
+ * We gate the heavy treatment behind a non-touch + sufficiently-wide
+ * viewport: phones (`hover: none` + `pointer: coarse`) and screens
+ * <= 768px get a flatter — but visually equivalent — render path.
+ * Desktops keep the original glassmorphism look.
+ * ==================================================================== */
+@media (max-width: 768px), (hover: none) and (pointer: coarse) {
+  /* 1. Kill `backdrop-filter` everywhere (utilities + custom classes).
+   *    Glass surfaces fall back to a higher-opacity white, so contrast
+   *    is preserved without the blur compositor cost. */
+  .backdrop-blur-3xl,
+  .backdrop-blur-2xl,
+  .backdrop-blur-xl,
+  .backdrop-blur-lg,
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  .backdrop-blur-xs,
+  .backdrop-blur-none,
+  .backdrop-blur,
+  .glass,
+  .glass-card,
+  .glass-card:hover,
+  .premium-card,
+  .glass-highlight {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  .glass,
+  .glass-card,
+  .glass-card:hover,
+  .premium-card {
+    background-color: rgba(255, 255, 255, 0.94) !important;
+  }
+  .glass-highlight {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%),
+      rgba(255, 255, 255, 0.16) !important;
+  }
+
+  /* 2. Replace the multi-stop fixed-attached body gradient with a
+   *    cheap two-stop scrolling background. */
+  body {
+    background-attachment: scroll !important;
+    background-image: linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%) !important;
+  }
+
+  /* 3. Stop all infinite ambient animations. One-shot animations
+   *    (`animate-pop-in`, `animate-check-pop`, `animate-wiggle`) are
+   *    left alone — they're cheap and only run on entry. */
+  .animate-float,
+  .animate-bounce-soft,
+  .animate-sparkle,
+  .animate-spin-slow,
+  .animate-gradient,
+  .gradient-text-vivid,
+  .skeleton-shimmer,
+  .nagad-tap-animation {
+    animation: none !important;
+  }
+
+  /* 4. Sheen hover effect (`sheen-host::after`) is a desktop-only
+   *    polish — it fires per hover and idles otherwise, but it still
+   *    creates a stacking context. Disable on mobile. */
+  .sheen-host::after {
+    display: none !important;
+  }
+}
+
