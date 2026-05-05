@@ -321,6 +321,9 @@ export default function App() {
   const [adminGen2Rate, setAdminGen2Rate] = useState(5.00);
   const [adminGen3Rate, setAdminGen3Rate] = useState(2.00);
   const [activationFee, setActivationFee] = useState(25);
+  // Phone number admins display on the deposit form (for "Send Money").
+  // Source: settings.depositNumber (admin-editable).
+  const [depositNumber, setDepositNumber] = useState('01774397545');
   const [rechargeCommissionRate, setRechargeCommissionRate] = useState(20); // ৳ 20 per 1000
   const [activationDuration, setActivationDuration] = useState(30);
   const [referralCommissionRate, setReferralCommissionRate] = useState(5);
@@ -762,6 +765,7 @@ export default function App() {
       setAdminGen2Rate(data.gen2Rate || 5.00);
       setAdminGen3Rate(data.gen3Rate || 2.00);
       setActivationFee(data.activationFee || 25);
+      setDepositNumber(data.depositNumber || '01774397545');
       setRechargeCommissionRate(data.rechargeCommissionRate || 20);
       setActivationDuration(data.activationDuration || 30);
       setReferralCommissionRate(data.referralCommissionRate || 5);
@@ -1782,7 +1786,7 @@ export default function App() {
                 REGISTER NOW
               </button>
               <a
-                href="https://t.me/WEB_BOT_LAB"
+                href={telegramLink}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="bg-white/20 backdrop-blur-md text-white px-6 py-3 rounded-2xl font-black text-xs active:scale-95 transition-all flex items-center gap-2"
@@ -1963,6 +1967,7 @@ export default function App() {
         setIncomeDetail({ period, amount, title });
         setView('income-detail');
       }}
+      depositNumber={depositNumber}
     />
   );
 
@@ -2372,9 +2377,9 @@ export default function App() {
             <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em] text-center">Network Uplinks</p>
             <div className="flex justify-center gap-8">
               {[
-                { icon: <Send className="w-6 h-6" />, color: 'hover:text-blue-500', url: 'https://twitter.com/smarttaskbd' },
-                { icon: <Globe className="w-6 h-6" />, color: 'hover:text-rose-500', url: 'https://instagram.com/smarttaskbd' },
-                { icon: <Facebook className="w-6 h-6" />, color: 'hover:text-blue-700', url: 'https://facebook.com/smarttaskbd' },
+                { icon: <Send className="w-6 h-6" />, color: 'hover:text-blue-500', url: telegramLink },
+                { icon: <Globe className="w-6 h-6" />, color: 'hover:text-rose-500', url: whatsappLink },
+                { icon: <Facebook className="w-6 h-6" />, color: 'hover:text-blue-700', url: facebookLink },
               ].map((social, i) => (
                 <a key={i} href={social.url} target="_blank" rel="noreferrer" className={`w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-slate-400 border border-slate-100 transition-all hover:scale-110 hover:border-indigo-200 ${social.color} shadow-md`}>
                   {social.icon}
@@ -2509,7 +2514,7 @@ export default function App() {
   // reached by legitimate admins.
   if (isAuthReady && view === 'admin' && isLoggedIn && isAdmin) {
     return (
-      <div className="admin-shell min-h-screen bg-slate-950 text-slate-100 font-sans">
+      <div className="admin-shell min-h-screen text-slate-900 font-sans">
         <SubmissionLoader />
         <Suspense fallback={<div className="p-8 text-slate-400">Loading admin shell…</div>}>
         <AdminView
@@ -2910,7 +2915,26 @@ export default function App() {
             telegramLink={telegramLink}
             facebookLink={facebookLink}
             whatsappLink={whatsappLink}
-            notices={notices.filter((n) => n.isActive)}
+            notices={(() => {
+              // Prefer rows from the new `notices` table. Fall back to
+              // the legacy `settings.globalNotice` text when no active
+              // notices exist so admins who haven't migrated yet still
+              // see their banner copy on the home screen.
+              const active = notices.filter((n) => n.isActive);
+              if (active.length > 0) return active;
+              if (globalNotice && globalNotice.trim()) {
+                return [
+                  {
+                    id: 'legacy-global',
+                    text: globalNotice,
+                    language: 'bn',
+                    isActive: true,
+                    createdAt: Date.now(),
+                  },
+                ];
+              }
+              return [];
+            })()}
           />
         )}
         {view === 'dashboard' && <DashboardView key="dashboard" />}

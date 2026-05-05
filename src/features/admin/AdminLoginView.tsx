@@ -1,21 +1,12 @@
 /**
  * AdminLoginView -- dedicated sign-in surface for the admin shell.
  *
- * Rationale:
- *   The consumer login at [`src/App.tsx`](src/App.tsx:1108) is built for
- *   end-users (referral codes, country picker, Google sign-up, "join the
- *   global network" copy, light pastel palette). Showing the same form
- *   on `admin.<host>` is confusing and visually inconsistent with the
- *   navy admin shell unified in PR #67. This view is a small, focused
- *   admin-only login: email + password, no registration, no social
- *   sign-in, restrained navy theme that matches `admin-shell` so the
- *   UX feels unmistakably like an operator console without being
- *   over-the-top.
- *
- * The view stays a presentational component -- the actual `signIn.email`
- * call and any post-login navigation is owned by `App.tsx`, mirroring
- * how the consumer `loginView` is wired. We accept submit + reset
- * callbacks plus controlled inputs so App keeps a single auth code path.
+ * Uses the same indigo / violet glass palette as the consumer login
+ * (so the admin console feels like the same product) but keeps a
+ * narrow operator-focused form: email + password + optional Google
+ * sign-in. The previous version was a deliberately dark "operator
+ * console" treatment; that diverged from the rest of the app and
+ * has been retired alongside the broader theme alignment.
  */
 
 import { useState, type FormEvent } from 'react';
@@ -28,7 +19,6 @@ import {
   EyeOff,
   Loader2,
   ArrowRight,
-  Server,
 } from 'lucide-react';
 
 export interface AdminLoginViewProps {
@@ -74,36 +64,13 @@ export function AdminLoginView({
   return (
     <div
       key="admin-login"
-      className="admin-shell min-h-screen w-full relative overflow-hidden bg-slate-950 text-slate-100 flex items-center justify-center px-4 py-10"
+      className="admin-shell min-h-screen w-full relative overflow-hidden flex items-center justify-center px-4 py-10"
     >
-      {/* Background: subtle dot grid + soft radial glow. Restrained -- no
-          animated blobs, no gradient party. Just enough texture to
-          differentiate from a flat sign-in form. */}
-      <div
-        className="absolute inset-0 opacity-[0.18] pointer-events-none"
-        style={{
-          backgroundImage:
-            'radial-gradient(rgba(148, 163, 184, 0.35) 1px, transparent 1px)',
-          backgroundSize: '28px 28px',
-        }}
-      />
+      {/* Soft brand glow — matches the consumer hero look without
+          drowning the form in colour. */}
       <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-[-10%] left-1/2 -translate-x-1/2 w-[640px] h-[640px] bg-blue-500/10 blur-[140px] rounded-full" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[480px] h-[480px] bg-indigo-500/5 blur-[120px] rounded-full" />
-      </div>
-
-      {/* Top status strip -- a small operator-console flourish. */}
-      <div className="absolute top-0 inset-x-0 border-b border-slate-800/70 bg-slate-950/60 backdrop-blur-sm">
-        <div className="max-w-5xl mx-auto px-5 py-2.5 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.25em] text-slate-400">
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)]" />
-            <span>Secure Channel</span>
-          </div>
-          <div className="hidden sm:flex items-center gap-2 text-slate-500">
-            <Server className="w-3 h-3" />
-            <span>{buildTag}</span>
-          </div>
-        </div>
+        <div className="absolute -top-32 -left-24 w-[520px] h-[520px] bg-indigo-400/30 blur-[120px] rounded-full" />
+        <div className="absolute -bottom-32 -right-24 w-[520px] h-[520px] bg-fuchsia-400/25 blur-[120px] rounded-full" />
       </div>
 
       <motion.div
@@ -113,30 +80,27 @@ export function AdminLoginView({
         className="w-full max-w-[420px] relative z-10"
       >
         {/* Card */}
-        <div className="relative rounded-2xl border border-slate-800 bg-slate-900/80 backdrop-blur-md shadow-[0_30px_60px_-30px_rgba(0,0,0,0.9)]">
+        <div className="relative rounded-3xl border border-white/60 bg-white/70 backdrop-blur-2xl shadow-[0_28px_60px_-30px_rgba(99,102,241,0.45)]">
           {/* Hairline accent on top edge */}
-          <div className="absolute inset-x-6 top-0 h-px bg-gradient-to-r from-transparent via-blue-500/60 to-transparent" />
+          <div className="absolute inset-x-7 top-0 h-px bg-gradient-to-r from-transparent via-violet-500/60 to-transparent" />
 
           <div className="p-7 sm:p-8">
             {/* Header */}
-            <div className="flex items-center gap-3 mb-7">
-              <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shadow-inner">
-                <ShieldCheck
-                  className="w-5 h-5 text-blue-400"
-                  strokeWidth={2.25}
-                />
+            <div className="flex items-center gap-3 mb-6">
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white flex items-center justify-center shadow-md">
+                <ShieldCheck className="w-5 h-5" strokeWidth={2.25} />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-blue-400/80">
+                <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-indigo-600/80">
                   Admin Console
                 </p>
-                <h1 className="text-lg font-semibold text-slate-100 leading-tight">
+                <h1 className="text-lg font-semibold text-slate-900 leading-tight">
                   Operator Sign-in
                 </h1>
               </div>
             </div>
 
-            <p className="text-[12px] text-slate-400 leading-relaxed mb-6">
+            <p className="text-[12px] text-slate-600 leading-relaxed mb-6">
               Restricted access. Authorized personnel only. All sessions are
               logged for audit.
             </p>
@@ -147,15 +111,15 @@ export function AdminLoginView({
                   type="button"
                   onClick={() => void onGoogleSignIn()}
                   disabled={isSubmitting}
-                  className="w-full inline-flex items-center justify-center gap-2.5 bg-white hover:bg-slate-100 disabled:opacity-60 disabled:cursor-not-allowed text-slate-900 text-sm font-semibold py-3 rounded-lg border border-slate-200 shadow-sm transition-colors"
+                  className="w-full inline-flex items-center justify-center gap-2.5 bg-white hover:bg-slate-50 disabled:opacity-60 disabled:cursor-not-allowed text-slate-900 text-sm font-semibold py-3 rounded-xl border border-slate-200 shadow-sm transition-colors"
                 >
                   <GoogleMark />
                   <span>Continue with Google</span>
                 </button>
-                <div className="flex items-center gap-3 my-5 text-[10px] uppercase tracking-[0.25em] text-slate-500">
-                  <div className="h-px flex-1 bg-slate-800/80" />
+                <div className="flex items-center gap-3 my-5 text-[10px] uppercase tracking-[0.25em] text-slate-400">
+                  <div className="h-px flex-1 bg-slate-200" />
                   <span>or</span>
-                  <div className="h-px flex-1 bg-slate-800/80" />
+                  <div className="h-px flex-1 bg-slate-200" />
                 </div>
               </>
             )}
@@ -163,11 +127,11 @@ export function AdminLoginView({
             <form onSubmit={handleSubmit} className="space-y-4">
               {/* Email field */}
               <label className="block">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Operator ID
                 </span>
                 <div className="relative mt-1.5">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type="text"
                     autoComplete="username"
@@ -175,31 +139,31 @@ export function AdminLoginView({
                     placeholder="admin@domain.tld"
                     value={email}
                     onChange={(e) => onEmailChange(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-lg py-3 pl-10 pr-3 text-sm font-mono tracking-tight text-slate-100 placeholder:text-slate-600 outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                    className="w-full bg-white/70 border border-slate-200 rounded-xl py-3 pl-10 pr-3 text-sm font-mono tracking-tight text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
                   />
                 </div>
               </label>
 
               {/* Password field */}
               <label className="block">
-                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-400">
+                <span className="text-[10px] font-semibold uppercase tracking-[0.2em] text-slate-500">
                   Passphrase
                 </span>
                 <div className="relative mt-1.5">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                   <input
                     type={showPassword ? 'text' : 'password'}
                     autoComplete="current-password"
                     placeholder="••••••••••••"
                     value={password}
                     onChange={(e) => onPasswordChange(e.target.value)}
-                    className="w-full bg-slate-950/60 border border-slate-800 rounded-lg py-3 pl-10 pr-11 text-sm font-mono tracking-tight text-slate-100 placeholder:text-slate-600 outline-none focus:border-blue-500/60 focus:ring-2 focus:ring-blue-500/20 transition-colors"
+                    className="w-full bg-white/70 border border-slate-200 rounded-xl py-3 pl-10 pr-11 text-sm font-mono tracking-tight text-slate-900 placeholder:text-slate-400 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-colors"
                   />
                   <button
                     type="button"
                     aria-label={showPassword ? 'Hide passphrase' : 'Show passphrase'}
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1 rounded"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors p-1 rounded"
                   >
                     {showPassword ? (
                       <EyeOff className="w-4 h-4" />
@@ -211,14 +175,14 @@ export function AdminLoginView({
               </label>
 
               <div className="flex items-center justify-between pt-1">
-                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-500">
+                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.18em] text-slate-400">
                   <Lock className="w-3 h-3" />
                   <span>TLS · session-bound</span>
                 </div>
                 <button
                   type="button"
                   onClick={() => void onForgotPassword()}
-                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-400 hover:text-blue-300 transition-colors"
+                  className="text-[10px] font-semibold uppercase tracking-[0.18em] text-indigo-600 hover:text-indigo-700 transition-colors"
                 >
                   Reset access
                 </button>
@@ -227,7 +191,7 @@ export function AdminLoginView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold tracking-wide py-3 rounded-lg shadow-[0_10px_30px_-12px_rgba(59,130,246,0.7)] transition-colors"
+                className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-500 via-violet-600 to-fuchsia-500 hover:from-indigo-600 hover:via-violet-700 hover:to-fuchsia-600 disabled:opacity-60 disabled:cursor-not-allowed text-white text-sm font-semibold tracking-wide py-3 rounded-xl shadow-[0_10px_30px_-12px_rgba(99,102,241,0.7)] transition-colors"
               >
                 {isSubmitting ? (
                   <>
@@ -245,7 +209,7 @@ export function AdminLoginView({
           </div>
 
           {/* Card footer */}
-          <div className="px-7 sm:px-8 py-4 border-t border-slate-800/80 rounded-b-2xl bg-slate-950/40">
+          <div className="px-7 sm:px-8 py-4 border-t border-white/60 rounded-b-3xl bg-white/40">
             <p className="text-[10px] text-slate-500 leading-relaxed">
               Unauthorized attempts are recorded. If you do not recognize this
               console, close this tab.
@@ -254,8 +218,8 @@ export function AdminLoginView({
         </div>
 
         {/* Footer line under card */}
-        <div className="flex items-center justify-center mt-6 text-[10px] uppercase tracking-[0.25em] text-slate-600">
-          <span>Internal · Not for public use</span>
+        <div className="flex items-center justify-center mt-6 text-[10px] uppercase tracking-[0.25em] text-slate-400">
+          <span>Internal · {buildTag}</span>
         </div>
       </motion.div>
     </div>

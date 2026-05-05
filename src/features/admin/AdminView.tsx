@@ -25,6 +25,8 @@ import {
 } from 'lucide-react';
 import { AdminLayout, type AdminNavGroup } from './AdminLayout';
 import { NoticesAdminPanel } from './NoticesAdminPanel';
+import { signOut } from '../../lib/auth-client';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 import { AdminDashboard } from './AdminDashboard';
 import confetti from 'canvas-confetti';
 import {
@@ -166,6 +168,33 @@ export function AdminView(props: AdminViewProps) {
 
   const { requestReason, modalUI: reasonPromptUI } = useReasonPrompt();
   const { showToast, toastUI } = useToast();
+  const fb = useFeedback();
+
+  /**
+   * Sign out of the admin console. Confirms before terminating the
+   * Clerk session so an accidental click on the bright red "Sign out"
+   * button doesn't silently kick the operator out. After Clerk
+   * clears the session, we route back to /login at the apex domain
+   * so the next page load lands on the consumer login.
+   */
+  const handleSignOut = async () => {
+    const ok = await fb.confirm({
+      title: 'Sign out',
+      description: 'You will be signed out of the admin console. Continue?',
+      confirmLabel: 'Sign out',
+      destructive: true,
+    });
+    if (!ok) return;
+    try {
+      await signOut();
+      fb.showToast('Signed out.', 'success');
+      // Force a clean navigation to /login so any cached state is dropped.
+      window.location.assign('/');
+    } catch (err) {
+      console.warn('[admin] signOut failed:', err);
+      fb.showToast('Sign-out failed. Please try again.', 'error');
+    }
+  };
 
   /**
    * Helper that prompts the admin for a rejection / cancellation reason.
@@ -542,7 +571,6 @@ export function AdminView(props: AdminViewProps) {
           await processReferralCommission(s.userId, reward, 'Gmail Submission');
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `gmailSubmissions/${id}`);
     }
@@ -574,7 +602,6 @@ export function AdminView(props: AdminViewProps) {
           }
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `microjobSubmissions/${id}`);
     }
@@ -644,7 +671,6 @@ export function AdminView(props: AdminViewProps) {
           await processReferralCommission(s.userId, reward, 'Task');
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `taskSubmissions/${id}`);
     }
@@ -668,7 +694,6 @@ export function AdminView(props: AdminViewProps) {
     try {
       // Use server-side RPC for atomic withdrawal processing with proper locking
       await processWithdrawal(id, action, reason);
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `withdrawals/${id}`);
     } finally {
@@ -697,7 +722,6 @@ export function AdminView(props: AdminViewProps) {
     try {
       // Use server-side RPC for atomic deposit processing with proper locking
       await processDeposit(id, action, reason);
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `rechargeRequests/${id}`);
     } finally {
@@ -725,7 +749,6 @@ export function AdminView(props: AdminViewProps) {
           await adminIncrement('users', r.userId, 'mainBalance', r.amount);
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `driveOfferRequests/${id}`);
     }
@@ -747,7 +770,6 @@ export function AdminView(props: AdminViewProps) {
           await adminIncrement('users', o.userId, 'mainBalance', o.amount);
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `smmOrders/${id}`);
     }
@@ -769,7 +791,6 @@ export function AdminView(props: AdminViewProps) {
           await adminIncrement('users', r.userId, 'mainBalance', r.price);
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `dollarBuyRequests/${id}`);
     }
@@ -787,7 +808,6 @@ export function AdminView(props: AdminViewProps) {
       };
       await adminInsert('products', productData);
       setNewProduct({ name: '', price: 0, resellPrice: 0, profitPerUnit: 0, description: '', category: '', image: '', variants: '', quantityOptions: '' });
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.CREATE, 'products');
     }
@@ -824,7 +844,6 @@ export function AdminView(props: AdminViewProps) {
           await adminIncrement('users', o.userId, 'mainBalance', o.amount);
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `productOrders/${id}`);
     }
@@ -931,7 +950,6 @@ export function AdminView(props: AdminViewProps) {
           });
         }
       }
-      confetti({ particleCount: 50, spread: 60 });
     } catch (e) {
       handleFirestoreError(e, OperationType.UPDATE, `socialSubmissions/${id}`);
     }
@@ -1160,13 +1178,14 @@ export function AdminView(props: AdminViewProps) {
       onSelect={(id) => setActiveAdminTab(id as AdminTab)}
       title={TAB_TITLES[activeAdminTab]}
       onBack={() => setView('home')}
+      onSignOut={handleSignOut}
       headerExtras={
         <div className="hidden md:flex items-center gap-2">
-          <div className="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
-            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Users</p>
-            <p className="text-sm font-black text-white tabular-nums">{allUsers.length}</p>
+          <div className="px-3 py-1.5 rounded-xl bg-white/60 border border-white/60 text-center">
+            <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Users</p>
+            <p className="text-sm font-black text-indigo-700 tabular-nums">{allUsers.length}</p>
           </div>
-          <div className="px-3 py-1.5 rounded-xl bg-slate-800/60 border border-slate-700/60 text-center">
+          <div className="px-3 py-1.5 rounded-xl bg-white/60 border border-white/60 text-center">
             <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Paid</p>
             <p className="text-sm font-black text-emerald-400 tabular-nums">৳{totalPaid}</p>
           </div>

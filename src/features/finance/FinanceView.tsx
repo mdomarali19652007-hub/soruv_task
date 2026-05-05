@@ -110,6 +110,11 @@ interface Props {
    * `income-detail`.
    */
   onSelectIncomePeriod?: (period: IncomePeriod, amount: number, title: string) => void;
+  /**
+   * Admin-configurable deposit (Send Money) number shown on the
+   * deposit form. Sourced from `settings.depositNumber`.
+   */
+  depositNumber?: string;
 }
 
 function formatBdt(amount: number): string {
@@ -169,6 +174,7 @@ export function FinanceView({
   insertRow,
   onOpenSidebar,
   onSelectIncomePeriod,
+  depositNumber = '01774397545',
 }: Props) {
   const items = useMemo(
     () => aggregateIncome(user.taskHistory ?? [], user.totalEarned),
@@ -236,6 +242,7 @@ export function FinanceView({
         handleSubmission={handleSubmission}
         insertRow={insertRow}
         onOpenSidebar={onOpenSidebar}
+        depositNumber={depositNumber}
       />
     );
   }
@@ -369,6 +376,7 @@ interface DepositFormProps {
   handleSubmission: (action: () => Promise<void>, successMsg?: string) => Promise<void>;
   insertRow: (table: string, data: Record<string, unknown>) => Promise<unknown>;
   onOpenSidebar?: () => void;
+  depositNumber: string;
 }
 
 function DepositForm({
@@ -379,6 +387,7 @@ function DepositForm({
   handleSubmission,
   insertRow,
   onOpenSidebar,
+  depositNumber,
 }: DepositFormProps) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<'bKash' | 'Nagad'>('bKash');
@@ -489,13 +498,13 @@ function DepositForm({
                   Send Money to
                 </span>
                 <code className="text-sm font-bold text-emerald-700 tracking-wider">
-                  01774397545
+                  {depositNumber}
                 </code>
               </span>
               <button
                 type="button"
                 onClick={() => {
-                  navigator.clipboard.writeText('01774397545');
+                  navigator.clipboard.writeText(depositNumber);
                   confetti({ particleCount: 24, spread: 50 });
                 }}
                 className="inline-flex items-center gap-1 px-3 h-8 rounded-lg bg-emerald-500 text-white text-[11px] font-bold"
