@@ -21,4 +21,13 @@ export { SectionHeader, type SectionHeaderProps } from './SectionHeader';
 export { EmptyState, type EmptyStateProps } from './EmptyState';
 export { Skeleton, SkeletonText, type SkeletonProps } from './Skeleton';
 export { BalancePill, type BalancePillProps } from './BalancePill';
-export { BottomNav, type BottomNavProps, type BottomNavTab } from './BottomNav';
+export { BottomNav, bottomNavButtonClassName, type BottomNavProps, type BottomNavTab } from './BottomNav';
+export { TopHeader, type TopHeaderProps } from './TopHeader';
+export { Sidebar, type SidebarProps } from './Sidebar';
+export {
+  IncomeBreakdownList,
+  type IncomeBreakdownListProps,
+  type IncomeBreakdownItem,
+  type IncomePeriod,
+} from './IncomeBreakdownList';
+export { StatusTabs, type StatusTabsProps, type StatusTab } from './StatusTabs';
