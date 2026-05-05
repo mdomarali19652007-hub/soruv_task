@@ -179,8 +179,26 @@ import { GamingView as SharedGamingView } from './features/gaming/GamingView';
 import { WorkStationView as SharedWorkStationView } from './features/workstation/WorkStationView';
 import { SocialHubView as SharedSocialHubView } from './features/social/SocialHubView';
 import { HomeView as RedesignedHomeView } from './features/home/HomeView';
-import { BottomNav, type BottomNavTab } from './components/ui';
-import { Home as HomeIcon, Briefcase as EarnIcon, Wallet as WalletIcon, Users as NetworkIcon, Menu as MoreIcon } from 'lucide-react';
+import { WithdrawView as SharedWithdrawView } from './features/wallet/WithdrawView';
+import { WithdrawHistoryView as SharedWithdrawHistoryView } from './features/wallet/WithdrawHistoryView';
+import { IncomeDetailView as SharedIncomeDetailView } from './features/wallet/IncomeDetailView';
+import {
+  IncomeHistoryView as SharedIncomeHistoryView,
+  BalanceHistoryView as SharedBalanceHistoryView,
+  PaymentHistoryView as SharedPaymentHistoryView,
+} from './features/wallet/HistoryViews';
+import { AgentServicesView as SharedAgentServicesView } from './features/agent-services/AgentServicesView';
+import { AboutView as SharedAboutView } from './features/static/AboutView';
+import { ReviewsView as SharedReviewsView } from './features/static/ReviewsView';
+import { PrivacyView as SharedPrivacyView } from './features/static/PrivacyView';
+import { BottomNav, Sidebar as SharedSidebar, type BottomNavTab, type IncomePeriod } from './components/ui';
+import {
+  Home as HomeIcon,
+  Briefcase as EarnIcon,
+  Wallet as WalletIcon,
+  Users as NetworkIcon,
+  ShoppingBag as ProductIcon,
+} from 'lucide-react';
 
 // Silence unused-import warnings for types/utilities that may not be
 // referenced yet in this file but are part of the public module surface
@@ -229,6 +247,15 @@ export default function App() {
   });
   const [selectedSocialJob, setSelectedSocialJob] = useState<{ title: string, color: string, icon: any } | null>(null);
   const [financeStep, setFinanceStep] = useState<'form' | 'success' | 'deposit' | 'deposit-success'>('form');
+  // Sidebar drawer (opened from the hamburger in TopHeader). Lives at
+  // the App-shell level so it overlays every screen.
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Selected income period -> drives `IncomeDetailView` content.
+  const [incomeDetail, setIncomeDetail] = useState<{
+    period: IncomePeriod;
+    amount: number;
+    title: string;
+  } | null>(null);
   const [user, setUser] = useState<UserProfile>(INITIAL_USER);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isAuthReady, setIsAuthReady] = useState(false);
@@ -1867,6 +1894,97 @@ export default function App() {
       handleSubmission={handleSubmission}
       submitWithdrawal={submitWithdrawal}
       insertRow={insertRow}
+      onOpenSidebar={() => setSidebarOpen(true)}
+      onSelectIncomePeriod={(period, amount, title) => {
+        setIncomeDetail({ period, amount, title });
+        setView('income-detail');
+      }}
+    />
+  );
+
+  // Competitor-aligned restructure additions. Each view is exposed as
+  // a zero-arg local component so the route blocks can do
+  // `<AgentServicesView key="agent-services" />` (matching the pattern
+  // already used for DashboardView, FinanceView, etc.).
+  const AgentServicesView = () => (
+    <SharedAgentServicesView
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const WithdrawView = () => (
+    <SharedWithdrawView
+      user={user}
+      setView={setView}
+      minWithdrawal={minWithdrawal}
+      withdrawalFee={withdrawalFee}
+      isSubmitting={isSubmitting}
+      handleSubmission={handleSubmission}
+      submitWithdrawal={submitWithdrawal}
+      setLastWithdrawal={setLastWithdrawal}
+      setFinanceStep={setFinanceStep}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const WithdrawHistoryView = () => (
+    <SharedWithdrawHistoryView
+      userId={user.id}
+      withdrawals={withdrawals}
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const IncomeDetailView = () => (
+    <SharedIncomeDetailView
+      title={incomeDetail?.title ?? 'মোট ইনকাম'}
+      amount={incomeDetail?.amount ?? user.totalEarned}
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const IncomeHistoryView = () => (
+    <SharedIncomeHistoryView
+      user={user}
+      withdrawals={withdrawals}
+      recharges={rechargeRequests}
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const BalanceHistoryView = () => (
+    <SharedBalanceHistoryView
+      user={user}
+      withdrawals={withdrawals}
+      recharges={rechargeRequests}
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const PaymentHistoryView = () => (
+    <SharedPaymentHistoryView
+      user={user}
+      withdrawals={withdrawals}
+      recharges={rechargeRequests}
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const AboutView = () => (
+    <SharedAboutView
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const ReviewsView = () => (
+    <SharedReviewsView
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
+    />
+  );
+  const PrivacyView = () => (
+    <SharedPrivacyView
+      setView={setView}
+      onOpenSidebar={() => setSidebarOpen(true)}
     />
   );
 
@@ -2710,6 +2828,7 @@ export default function App() {
             user={user}
             setView={setView}
             onOpenNotifications={() => setShowNotifications(true)}
+            onOpenSidebar={() => setSidebarOpen(true)}
             dailyReward={dailyReward}
             dailyClaimEnabled={enabledFeatures.includes('daily-claim') || isAdmin}
             onClaimDaily={claimDaily}
@@ -2814,7 +2933,30 @@ export default function App() {
         {view === 'gaming' && gamingView}
         {view === 'ludo-earn' && <LudoEarnView key="ludo-earn" />}
         {view === 'social-job' && <SocialJobView key="social-job" />}
+        {view === 'agent-services' && <AgentServicesView key="agent-services" />}
+        {view === 'withdraw' && <WithdrawView key="withdraw" />}
+        {view === 'withdraw-history' && <WithdrawHistoryView key="withdraw-history" />}
+        {view === 'income-detail' && <IncomeDetailView key="income-detail" />}
+        {view === 'income-history' && <IncomeHistoryView key="income-history" />}
+        {view === 'balance-history' && <BalanceHistoryView key="balance-history" />}
+        {view === 'payment-history' && <PaymentHistoryView key="payment-history" />}
+        {view === 'about' && <AboutView key="about" />}
+        {view === 'reviews' && <ReviewsView key="reviews" />}
+        {view === 'privacy' && <PrivacyView key="privacy" />}
       </AnimatePresence>}
+
+      {/* Slide-in sidebar drawer (App-shell level — overlays every screen). */}
+      {isAuthReady && isLoggedIn && view !== 'login' && view !== 'admin'
+        && view !== 'reset-password'
+        && !isOnAdminHost() && !needsEmailVerification && (
+        <SharedSidebar
+          open={sidebarOpen}
+          onClose={() => setSidebarOpen(false)}
+          user={user}
+          allUsers={allUsers}
+          setView={setView}
+        />
+      )}
 
       {/* Bottom Navigation — redesigned 5-tab shell.
           Hidden on login, email verification, password reset, and the
@@ -2828,14 +2970,30 @@ export default function App() {
         && !isOnAdminHost() && !needsEmailVerification && (() => {
         const navTabs: BottomNavTab[] = [
           { key: 'home', label: 'হোম', icon: <HomeIcon className="w-5 h-5" /> },
-          { key: 'workstation', label: 'ইনকাম', icon: <EarnIcon className="w-5 h-5" /> },
+          { key: 'workstation', label: 'কোর্স', icon: <EarnIcon className="w-5 h-5" /> },
+          {
+            key: 'agent-services',
+            label: 'প্রোডাক্ট',
+            icon: <ProductIcon className="w-6 h-6" />,
+            centerFloating: true,
+          },
           { key: 'finance', label: 'ওয়ালেট', icon: <WalletIcon className="w-5 h-5" /> },
-          { key: 'referral', label: 'টিম', icon: <NetworkIcon className="w-5 h-5" /> },
-          { key: 'settings', label: 'আরো', icon: <MoreIcon className="w-5 h-5" /> },
+          { key: 'referral', label: 'নেটওয়ার্ক', icon: <NetworkIcon className="w-5 h-5" /> },
         ];
-        // The active tab is whichever nav root the current view falls under.
-        // Detail screens (e.g. `dashboard`, `top-news`) keep no tab highlighted.
-        const activeTab = navTabs.some(t => t.key === view) ? view : '';
+        // Map detail-views back to their parent tab so the bottom nav
+        // still highlights "Wallet" while the user is drilled into
+        // Withdraw / Income Detail / etc.
+        const VIEW_TO_TAB: Record<string, string> = {
+          withdraw: 'finance',
+          'withdraw-history': 'finance',
+          'income-detail': 'finance',
+          'income-history': 'finance',
+          'balance-history': 'finance',
+          'payment-history': 'finance',
+        };
+        const activeTab = navTabs.some(t => t.key === view)
+          ? view
+          : VIEW_TO_TAB[view] ?? '';
         return (
           <BottomNav
             tabs={navTabs}

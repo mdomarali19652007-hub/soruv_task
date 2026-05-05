@@ -82,7 +82,17 @@ export type View =
   | 'smm-panel'
   | 'top-news'
   | 'social-job'
-  | 'reset-password';
+  | 'reset-password'
+  | 'agent-services'
+  | 'withdraw'
+  | 'withdraw-history'
+  | 'income-detail'
+  | 'income-history'
+  | 'balance-history'
+  | 'payment-history'
+  | 'about'
+  | 'reviews'
+  | 'privacy';
 
 // ---------------------------------------------------------------
 // Content / catalog types

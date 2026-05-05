@@ -1,20 +1,40 @@
 /**
- * Finance / "The Vault" screen -- balance display + deposit and
- * withdrawal forms + transaction history.
+ * FinanceView — Wallet dashboard.
  *
- * Phase 8 extraction from src/App.tsx. Behavior is preserved exactly:
- * - Inactive accounts are redirected to activation before withdrawing.
- * - Withdrawal goes through the server-side RPC `submitWithdrawal` for
- *   atomicity; deposit creates a `rechargeRequests` row for admin review.
- * - Success and deposit-success states use the shared SuccessView.
+ * Per the "Competitor-aligned UI Restructure" plan this view is now
+ * the slim Wallet dashboard. It shows:
+ *   1. Balance hero (the card MOVED from HomeView).
+ *   2. Quick action row (Withdraw + Balance history + Add funds).
+ *   3. Income breakdown list (Today / Yesterday / 7d / 30d / Total),
+ *      each tile clicks through to `IncomeDetailView`.
+ *
+ * The withdrawal form / withdrawal history previously hosted in this
+ * file have moved to `src/features/wallet/`. The deposit flow stays
+ * here (it is a separate, smaller surface) and the success states
+ * for both deposit and withdrawal are still rendered here so the
+ * `financeStep` state machine in `App.tsx` keeps working unchanged.
+ *
+ * The component's prop signature is preserved so `App.tsx` does not
+ * need to change its `<FinanceView>` invocation.
  */
 
-import { useState } from 'react';
-import { motion } from 'motion/react';
+import { useMemo, useState, type ReactNode } from 'react';
 import confetti from 'canvas-confetti';
-import { ArrowLeft, Copy, CreditCard, History, PlusCircle, ShieldCheck } from 'lucide-react';
+import {
+  ArrowDownToLine,
+  Copy,
+  History as HistoryIcon,
+  PlusCircle,
+  Wallet as WalletIcon,
+} from 'lucide-react';
 import { SuccessView } from '../../components/SuccessView';
-import { isValidMobileWallet, sanitizeAccountNumber } from '../../utils/sanitize';
+import {
+  Card,
+  IncomeBreakdownList,
+  TopHeader,
+  type IncomeBreakdownItem,
+  type IncomePeriod,
+} from '../../components/ui';
 import type { UserProfile, View } from '../../types';
 
 export type FinanceStep = 'form' | 'success' | 'deposit' | 'deposit-success';
@@ -56,7 +76,10 @@ export interface DepositRecord {
 }
 
 interface Props {
-  user: Pick<UserProfile, 'id' | 'isActive' | 'mainBalance' | 'pendingPayout' | 'totalEarned'>;
+  user: Pick<
+    UserProfile,
+    'id' | 'isActive' | 'mainBalance' | 'pendingPayout' | 'totalEarned' | 'taskHistory'
+  >;
   setView: (view: View) => void;
   financeStep: FinanceStep;
   setFinanceStep: (step: FinanceStep) => void;
@@ -76,6 +99,61 @@ interface Props {
     accountNumber: string,
   ) => Promise<unknown>;
   insertRow: (table: string, data: Record<string, unknown>) => Promise<unknown>;
+  /**
+   * Optional callback so the wallet header's hamburger can open the
+   * App-shell sidebar drawer. Provided by App.tsx.
+   */
+  onOpenSidebar?: () => void;
+  /**
+   * Tracks which income period the user picked from the breakdown
+   * list. The parent (App.tsx) reads this when rendering
+   * `income-detail`.
+   */
+  onSelectIncomePeriod?: (period: IncomePeriod, amount: number, title: string) => void;
+}
+
+function formatBdt(amount: number): string {
+  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+/**
+ * Breaks `taskHistory` rewards into Today / Yesterday / last 7d / last
+ * 30d totals. Falls back to 0 silently when a row has an unparsable
+ * date — we never want a NaN to leak into the UI.
+ */
+function aggregateIncome(
+  taskHistory: UserProfile['taskHistory'],
+  totalEarned: number,
+): IncomeBreakdownItem[] {
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+  const today = startOfDay.getTime();
+  const yesterday = today - 24 * 60 * 60 * 1000;
+  const last7 = today - 7 * 24 * 60 * 60 * 1000;
+  const last30 = today - 30 * 24 * 60 * 60 * 1000;
+
+  let todaySum = 0;
+  let yesterdaySum = 0;
+  let last7Sum = 0;
+  let last30Sum = 0;
+
+  for (const row of taskHistory ?? []) {
+    const ts = Date.parse(row.date);
+    if (Number.isNaN(ts)) continue;
+    const reward = Number(row.reward) || 0;
+    if (ts >= today) todaySum += reward;
+    else if (ts >= yesterday) yesterdaySum += reward;
+    if (ts >= last7) last7Sum += reward;
+    if (ts >= last30) last30Sum += reward;
+  }
+
+  return [
+    { period: 'today', title: 'আজকের ইনকাম', amount: todaySum, subtitle: 'আজ অর্জিত' },
+    { period: 'yesterday', title: 'গতকালের ইনকাম', amount: yesterdaySum, subtitle: 'গতকাল অর্জিত' },
+    { period: 'last7', title: '৭ দিনের ইনকাম', amount: last7Sum, subtitle: 'গত ৭ দিন' },
+    { period: 'last30', title: '৩০ দিনের ইনকাম', amount: last30Sum, subtitle: 'গত ৩০ দিন' },
+    { period: 'total', title: 'মোট ইনকাম', amount: totalEarned, subtitle: 'লাইফটাইম' },
+  ];
 }
 
 export function FinanceView({
@@ -83,186 +161,21 @@ export function FinanceView({
   setView,
   financeStep,
   setFinanceStep,
-  minWithdrawal,
-  withdrawalFee,
-  withdrawals,
   lastWithdrawal,
-  setLastWithdrawal,
   lastDeposit,
   setLastDeposit,
   isSubmitting,
   handleSubmission,
-  submitWithdrawal,
   insertRow,
+  onOpenSidebar,
+  onSelectIncomePeriod,
 }: Props) {
-  const [amount, setAmount] = useState('');
-  const [method, setMethod] = useState<'bKash' | 'Nagad' | null>(null);
-  const [accountNumber, setAccountNumber] = useState('');
-  const [showHistory, setShowHistory] = useState(false);
-  const [error, setError] = useState('');
+  const items = useMemo(
+    () => aggregateIncome(user.taskHistory ?? [], user.totalEarned),
+    [user.taskHistory, user.totalEarned],
+  );
 
-  const handleWithdraw = async () => {
-    if (!user.isActive) {
-      alert('Your account is not active. Please activate your account to withdraw funds.');
-      setView('account-activation');
-      return;
-    }
-    setError('');
-    const val = parseFloat(amount);
-    const fee = (val * withdrawalFee) / 100;
-
-    if (!val || val < minWithdrawal) {
-      setError(`Minimum withdrawal is ৳ ${minWithdrawal}`);
-      return;
-    }
-    if (val > user.mainBalance) {
-      setError('Insufficient balance');
-      return;
-    }
-    if (!method) {
-      setError('Please select a withdrawal method');
-      return;
-    }
-    const sanitizedAccount = sanitizeAccountNumber(accountNumber);
-    if (!sanitizedAccount) {
-      setError('Please enter your account number');
-      return;
-    }
-    if (!isValidMobileWallet(sanitizedAccount)) {
-      setError('Please enter a valid 11-digit Bangladeshi mobile number');
-      return;
-    }
-
-    await handleSubmission(async () => {
-      await submitWithdrawal(user.id, val, method, sanitizedAccount);
-
-      setLastWithdrawal({
-        userId: user.id,
-        amount: val,
-        receiveAmount: val - fee,
-        fee,
-        method: `${method} (${sanitizedAccount})`,
-        status: 'pending',
-        date: new Date().toLocaleDateString(),
-        time: new Date().toLocaleTimeString(),
-      });
-      setAmount('');
-      setMethod(null);
-      setAccountNumber('');
-      setFinanceStep('success');
-    });
-  };
-
-  const handleDeposit = async () => {
-    setError('');
-    const val = parseFloat(amount);
-    if (!val || val < 10) {
-      setError('Minimum deposit is ৳ 10');
-      return;
-    }
-    if (!method) {
-      setError('Please select a deposit method');
-      return;
-    }
-    if (!accountNumber.trim()) {
-      setError('Please enter your sender number');
-      return;
-    }
-
-    const depositData: DepositRecord = {
-      userId: user.id,
-      phone: accountNumber,
-      operator: method,
-      amount: val,
-      type: 'Prepaid',
-      status: 'pending',
-      date: new Date().toLocaleDateString(),
-      time: new Date().toLocaleTimeString(),
-      timestamp: Date.now(),
-    };
-    setLastDeposit(depositData);
-
-    await handleSubmission(async () => {
-      await insertRow('rechargeRequests', { ...depositData });
-      setAmount('');
-      setMethod(null);
-      setAccountNumber('');
-      setFinanceStep('deposit-success');
-    });
-  };
-
-  if (showHistory) {
-    return (
-      <div className="min-h-screen pb-32 bg-slate-50">
-        <div className="p-6 pt-12">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowHistory(false)}
-                className="p-3 glass rounded-2xl text-slate-700"
-              >
-                <ArrowLeft className="w-6 h-6" />
-              </button>
-              <h2 className="text-2xl font-black text-slate-900">Vault History</h2>
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {withdrawals.filter((w) => w.userId === user.id).length === 0 ? (
-              <div className="text-center py-20 opacity-50">
-                <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em]">
-                  No transaction logs
-                </p>
-              </div>
-            ) : (
-              withdrawals
-                .filter((w) => w.userId === user.id)
-                .map((w) => (
-                  <div key={w.id} className="glass-card border-white/40 shadow-sm">
-                    <div className="flex justify-between items-start mb-3">
-                      <div>
-                        <p className="text-[10px] font-black text-indigo-600 uppercase tracking-widest">
-                          {w.method}
-                        </p>
-                        <p className="text-lg font-black text-slate-900 mt-1">
-                          ৳ {w.amount.toFixed(2)}
-                        </p>
-                        {w.fee !== undefined && (
-                          <p className="text-[8px] font-bold text-slate-400 uppercase">
-                            Fee: ৳ {w.fee.toFixed(2)} | Receive: ৳ {w.receiveAmount?.toFixed(2)}
-                          </p>
-                        )}
-                      </div>
-                      <span
-                        className={`text-[8px] font-black px-3 py-1 rounded-full uppercase tracking-tighter border ${
-                          w.status === 'approved'
-                            ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                            : w.status === 'rejected'
-                              ? 'bg-rose-500/10 text-rose-600 border-rose-500/20'
-                              : 'bg-amber-500/10 text-amber-600 border-amber-500/20'
-                        }`}
-                      >
-                        {w.status}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-slate-100">
-                      <p className="text-[8px] font-bold text-slate-400 uppercase">{w.date}</p>
-                      {w.reason && (
-                        <p className="text-[8px] font-bold text-rose-500 uppercase">
-                          Note: {w.reason}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ))
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
+  // ----- Success states (preserved from the previous implementation) -----
   if (financeStep === 'success') {
     return (
       <SuccessView
@@ -312,452 +225,304 @@ export function FinanceView({
     );
   }
 
+  // ----- Deposit form (kept inline; smaller surface than withdraw) -----
+  if (financeStep === 'deposit') {
+    return (
+      <DepositForm
+        user={user}
+        setFinanceStep={setFinanceStep}
+        setLastDeposit={setLastDeposit}
+        isSubmitting={isSubmitting}
+        handleSubmission={handleSubmission}
+        insertRow={insertRow}
+        onOpenSidebar={onOpenSidebar}
+      />
+    );
+  }
+
+  // ----- Default Wallet dashboard -----
   return (
-    <div className="min-h-screen pb-32 bg-slate-50">
-      <div className="p-6 pt-12">
-        <div className="flex items-center justify-between mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setView('home')}
-              className="p-3 glass rounded-2xl text-slate-700"
-            >
-              <ArrowLeft className="w-6 h-6" />
-            </button>
-            <h2
-              className="text-2xl font-black neon-text text-slate-900 glitch-text"
-              data-text="The Vault"
-            >
-              The Vault
-            </h2>
-          </div>
-          <button
-            onClick={() => setShowHistory(true)}
-            className="p-3 glass rounded-2xl text-indigo-600"
-          >
-            <History className="w-6 h-6" />
-          </button>
-        </div>
-
-        <div className="space-y-6">
-          {/* Balance Display */}
-          <div className="glass-card bg-gradient-to-br from-indigo-600 to-violet-700 border-none text-center py-12 shadow-2xl relative overflow-hidden">
-            <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-white/10 blur-3xl rounded-full" />
-            <div className="relative z-10">
-              <p className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em] mb-3 opacity-80">
-                Available for Extraction
-              </p>
-              <h3 className="text-5xl font-black text-white mb-6 drop-shadow-lg">
-                ৳ {user.mainBalance.toFixed(2)}
-              </h3>
-              <div className="flex justify-center gap-3">
-                <button
-                  onClick={() => setFinanceStep('deposit')}
-                  className="flex-1 bg-white text-indigo-600 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <PlusCircle className="w-4 h-4" />
-                  Deposit
-                </button>
-                <button
-                  onClick={() => setFinanceStep('form')}
-                  className="flex-1 bg-white/20 backdrop-blur-md text-white py-3 rounded-2xl font-black text-xs uppercase tracking-widest border border-white/30 shadow-lg active:scale-95 transition-all flex items-center justify-center gap-2"
-                >
-                  <CreditCard className="w-4 h-4" />
-                  Withdraw
-                </button>
-              </div>
-              <div className="flex justify-center gap-4 mt-6">
-                <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
-                  <p className="text-[8px] font-black text-indigo-100 uppercase mb-1">Pending</p>
-                  <p className="text-sm font-black text-white">
-                    ৳ {user.pendingPayout.toFixed(2)}
-                  </p>
-                </div>
-                <div className="bg-white/10 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/20">
-                  <p className="text-[8px] font-black text-indigo-100 uppercase mb-1">
-                    Total Earned
-                  </p>
-                  <p className="text-sm font-black text-white">
-                    ৳ {user.totalEarned.toFixed(2)}
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Forms */}
-          {financeStep === 'deposit' ? (
-            <div className="glass-card border-white/40 shadow-lg p-8">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
-                  <PlusCircle className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                    Deposit Funds
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-bold">Add money to your wallet</p>
-                </div>
-              </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">
-                    Amount (৳)
-                  </label>
-                  {error && (
-                    <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>
-                  )}
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">
-                      ৳
-                    </span>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="Min ৳ 10"
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 pl-8 text-lg text-slate-900 font-black outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">
-                    Sender Number
-                  </label>
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder="Your bKash/Nagad number"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm text-slate-900 font-bold outline-none focus:border-emerald-500 focus:bg-white transition-all"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setMethod('bKash')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'bKash' ? 'border-pink-500 bg-pink-500/5' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'bKash' ? 'bg-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'bg-slate-200'}`}
-                    >
-                      bKash
-                    </div>
-                    <span
-                      className={`text-[10px] font-black uppercase tracking-widest ${method === 'bKash' ? 'text-pink-600' : 'text-slate-500'}`}
-                    >
-                      bKash
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setMethod('Nagad')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'Nagad' ? 'border-orange-500 bg-orange-500/5' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'Nagad' ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/20' : 'bg-slate-200'}`}
-                    >
-                      Nagad
-                    </div>
-                    <span
-                      className={`text-[10px] font-black uppercase tracking-widest ${method === 'Nagad' ? 'text-orange-600' : 'text-slate-500'}`}
-                    >
-                      Nagad
-                    </span>
-                  </button>
-                </div>
-
-                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100">
-                  <p className="text-[10px] font-black text-emerald-600 uppercase mb-2">
-                    Deposit Rules & Instructions:
-                  </p>
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center bg-white p-3 rounded-xl border border-emerald-200">
-                      <div className="flex flex-col">
-                        <span className="text-[8px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                          Official Number (Personal)
-                        </span>
-                        <code className="text-sm font-black text-emerald-600 tracking-widest">
-                          01774397545
-                        </code>
-                      </div>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText('01774397545');
-                          confetti({ particleCount: 30, spread: 50 });
-                          alert('Number copied! Use "Send Money" only.');
-                        }}
-                        className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-[8px] font-black uppercase active:scale-95 transition-all shadow-md flex items-center gap-2"
-                      >
-                        <Copy className="w-3 h-3" />
-                        COPY
-                      </button>
-                    </div>
-                    <ul className="space-y-2">
-                      <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                        <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                        <span>
-                          Only <span className="font-black text-rose-500">&quot;Send Money&quot;</span> is
-                          allowed. No Cash-in or Recharge.
-                        </span>
-                      </li>
-                      <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                        <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                        <span>
-                          Minimum deposit amount is <span className="font-black">৳ 10</span>.
-                        </span>
-                      </li>
-                      <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                        <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                        <span>
-                          Balance will be added to your account within{' '}
-                          <span className="font-black">30-60 minutes</span> after verification.
-                        </span>
-                      </li>
-                      <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                        <div className="w-1 h-1 rounded-full bg-emerald-400 mt-1.5 shrink-0" />
-                        <span>Enter your sender number and amount accurately to avoid delays.</span>
-                      </li>
-                    </ul>
-                  </div>
-                </div>
-
-                <button
-                  onClick={handleDeposit}
-                  disabled={isSubmitting}
-                  className={`w-full py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl transition-all ${isSubmitting ? 'bg-slate-300 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white active:scale-95'}`}
-                >
-                  {isSubmitting ? 'Processing...' : 'Confirm Deposit'}
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="glass-card border-white/40 shadow-lg p-8">
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                  <p className="text-[8px] font-black text-indigo-400 uppercase mb-1">Min Limit</p>
-                  <p className="text-sm font-black text-indigo-700">৳ {minWithdrawal}</p>
-                </div>
-                <div className="p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                  <p className="text-[8px] font-black text-rose-400 uppercase mb-1">Service Fee</p>
-                  <p className="text-sm font-black text-rose-700">{withdrawalFee}%</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-3 mb-8">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center text-indigo-600">
-                  <CreditCard className="w-6 h-6" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">
-                    Initiate Extraction
-                  </h3>
-                  <p className="text-[10px] text-slate-400 font-bold">
-                    Secure payout to your mobile wallet
-                  </p>
-                </div>
-              </div>
-
-              <div className="mb-8 p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                <p className="text-[10px] font-black text-indigo-600 uppercase mb-3">
-                  Withdrawal Rules:
+    <div className="min-h-screen pb-28">
+      <TopHeader
+        title="ওয়ালেট"
+        onMenu={onOpenSidebar}
+        onProfile={() => setView('profile')}
+      />
+      <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+        {/* 1. Balance hero — moved from HomeView */}
+        <Card variant="gradient" glow padded className="p-6">
+          <div className="relative z-10">
+            <p className="text-[11px] uppercase tracking-[0.25em] text-indigo-100/80">
+              Current Balance
+            </p>
+            <p className="text-4xl font-bold tabular-nums mt-1">
+              <span className="text-indigo-100/80 text-2xl mr-1 align-top">৳</span>
+              {formatBdt(user.mainBalance)}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <div className="rounded-xl bg-white/15 border border-white/20 px-3 py-2.5">
+                <p className="text-[11px] tracking-wide text-indigo-100/70">মোট ইনকাম</p>
+                <p className="text-base font-semibold tabular-nums mt-0.5">
+                  ৳ {formatBdt(user.totalEarned)}
                 </p>
-                <ul className="space-y-2">
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>
-                      Minimum withdrawal amount is{' '}
-                      <span className="font-black">৳ {minWithdrawal}</span>.
-                    </span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>
-                      A service fee of{' '}
-                      <span className="font-black text-rose-500">{withdrawalFee}%</span> applies to
-                      every transaction (৳ 200 per ৳ 1000).
-                    </span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>
-                      Payments are processed within <span className="font-black">24 hours</span> of
-                      request.
-                    </span>
-                  </li>
-                  <li className="text-[9px] text-slate-600 flex items-start gap-2">
-                    <div className="w-1 h-1 rounded-full bg-indigo-400 mt-1.5 shrink-0" />
-                    <span>
-                      Ensure your bKash/Nagad number is correct. We are not responsible for wrong
-                      numbers.
-                    </span>
-                  </li>
-                </ul>
               </div>
-
-              <div className="space-y-6">
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">
-                    Amount (৳)
-                  </label>
-                  {error && (
-                    <p className="text-[10px] font-bold text-rose-500 mb-2 ml-1">{error}</p>
-                  )}
-                  <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-black">
-                      ৳
-                    </span>
-                    <input
-                      type="number"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder={`Min ৳ ${minWithdrawal}`}
-                      className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 pl-8 text-lg text-slate-900 font-black outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                    />
-                  </div>
-                  {parseFloat(amount) >= minWithdrawal && (
-                    <div className="mt-3 p-3 bg-indigo-50 rounded-xl border border-indigo-100 flex justify-between items-center">
-                      <div>
-                        <p className="text-[8px] font-black text-indigo-400 uppercase">
-                          Withdrawal Fee ({withdrawalFee}%)
-                        </p>
-                        <p className="text-xs font-black text-indigo-600">
-                          - ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[8px] font-black text-emerald-400 uppercase">
-                          You will receive
-                        </p>
-                        <p className="text-sm font-black text-emerald-600">
-                          ৳{' '}
-                          {(
-                            parseFloat(amount) -
-                            (parseFloat(amount) * withdrawalFee) / 100
-                          ).toFixed(2)}
-                        </p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <div>
-                  <label className="text-[10px] font-black text-slate-500 uppercase mb-2 block ml-1">
-                    Account Number
-                  </label>
-                  <input
-                    type="text"
-                    value={accountNumber}
-                    onChange={(e) => setAccountNumber(e.target.value)}
-                    placeholder="Enter bKash/Nagad number"
-                    className="w-full bg-slate-50 border border-slate-100 rounded-2xl p-5 text-sm text-slate-900 font-bold outline-none focus:border-indigo-500 focus:bg-white transition-all"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <button
-                    onClick={() => setMethod('bKash')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'bKash' ? 'border-pink-500 bg-pink-500/5' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'bKash' ? 'bg-pink-500 scale-110 shadow-lg shadow-pink-500/20' : 'bg-slate-200'}`}
-                    >
-                      bKash
-                    </div>
-                    <span
-                      className={`text-[10px] font-black uppercase tracking-widest ${method === 'bKash' ? 'text-pink-600' : 'text-slate-500'}`}
-                    >
-                      bKash Wallet
-                    </span>
-                    {method === 'bKash' && (
-                      <div className="absolute top-2 right-2 w-2 h-2 bg-pink-500 rounded-full" />
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setMethod('Nagad')}
-                    className={`p-6 rounded-3xl border-2 transition-all flex flex-col items-center gap-3 relative overflow-hidden ${method === 'Nagad' ? 'border-orange-500 bg-orange-500/5' : 'border-slate-100 bg-slate-50'}`}
-                  >
-                    <div
-                      className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black italic text-lg transition-all ${method === 'Nagad' ? 'bg-orange-500 scale-110 shadow-lg shadow-orange-500/20' : 'bg-slate-200'}`}
-                    >
-                      Nagad
-                    </div>
-                    <span
-                      className={`text-[10px] font-black uppercase tracking-widest ${method === 'Nagad' ? 'text-orange-600' : 'text-slate-500'}`}
-                    >
-                      Nagad Wallet
-                    </span>
-                    {method === 'Nagad' && (
-                      <div className="absolute top-2 right-2 w-2 h-2 bg-orange-500 rounded-full" />
-                    )}
-                  </button>
-                </div>
-
-                {amount && parseFloat(amount) >= minWithdrawal && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="p-5 bg-slate-50 rounded-2xl border border-slate-100 space-y-3"
-                  >
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-slate-400">
-                      <span>Withdrawal Amount</span>
-                      <span className="text-slate-900">৳ {parseFloat(amount).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-widest text-rose-500">
-                      <span>Service Fee ({withdrawalFee}%)</span>
-                      <span>
-                        - ৳ {((parseFloat(amount) * withdrawalFee) / 100).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="pt-3 border-t border-slate-200 flex justify-between items-center">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-slate-900">
-                        You will receive
-                      </span>
-                      <span className="text-lg font-black text-emerald-600">
-                        ৳{' '}
-                        {(
-                          parseFloat(amount) -
-                          (parseFloat(amount) * withdrawalFee) / 100
-                        ).toFixed(2)}
-                      </span>
-                    </div>
-                  </motion.div>
-                )}
-
-                <button
-                  onClick={handleWithdraw}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-violet-700 text-white py-5 rounded-[2rem] font-black text-sm uppercase tracking-[0.3em] shadow-2xl active:scale-95 transition-all neon-border"
-                >
-                  Confirm Extraction
-                </button>
+              <div className="rounded-xl bg-white/15 border border-white/20 px-3 py-2.5">
+                <p className="text-[11px] tracking-wide text-indigo-100/70">পেন্ডিং</p>
+                <p className="text-base font-semibold tabular-nums mt-0.5">
+                  ৳ {formatBdt(user.pendingPayout)}
+                </p>
               </div>
             </div>
-          )}
-
-          {/* Withdrawal Rules */}
-          <div className="glass-card bg-slate-50 border-slate-200 shadow-sm">
-            <div className="flex items-center gap-3 mb-4">
-              <ShieldCheck className="w-5 h-5 text-indigo-600" />
-              <h4 className="font-black text-sm text-slate-800 uppercase tracking-widest">
-                Withdrawal Rules
-              </h4>
+            <div className="mt-4 inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/15 border border-white/20 text-[11px] text-indigo-100">
+              <span>{new Date().toLocaleDateString()}</span>
+              <span className="opacity-50">•</span>
+              <span>{new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
-            <ul className="space-y-3">
-              {[
-                `Minimum withdrawal amount is ৳ ${minWithdrawal}.`,
-                'Payments are processed within 1-24 hours.',
-                'Ensure your account number is correct before submitting.',
-                `Withdrawal fee: ${withdrawalFee}% (৳ 200 per ৳ 1000).`,
-              ].map((rule, i) => (
-                <li key={i} className="flex gap-3 items-start">
-                  <div className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 shrink-0" />
-                  <p className="text-[11px] font-medium text-slate-600 leading-tight">{rule}</p>
-                </li>
-              ))}
-            </ul>
           </div>
+        </Card>
+
+        {/* 2. Quick action row */}
+        <div className="grid grid-cols-3 gap-2">
+          <QuickAction
+            label="উইথড্র"
+            icon={<ArrowDownToLine className="w-4 h-4" />}
+            onClick={() => setView('withdraw')}
+            tone="primary"
+          />
+          <QuickAction
+            label="ব্যালেন্স হিস্ট্রি"
+            icon={<HistoryIcon className="w-4 h-4" />}
+            onClick={() => setView('balance-history')}
+            tone="muted"
+          />
+          <QuickAction
+            label="ডিপোজিট"
+            icon={<PlusCircle className="w-4 h-4" />}
+            onClick={() => setFinanceStep('deposit')}
+            tone="muted"
+          />
         </div>
-      </div>
+
+        {/* 3. Income breakdown */}
+        <section>
+          <div className="flex items-end justify-between mb-2">
+            <h2 className="text-base font-semibold text-slate-900">ইনকাম ব্রেকডাউন</h2>
+            <button
+              type="button"
+              onClick={() => setView('income-history')}
+              className="text-xs font-semibold text-indigo-600 hover:underline"
+            >
+              সম্পূর্ণ হিস্ট্রি
+            </button>
+          </div>
+          <IncomeBreakdownList
+            items={items}
+            onSelect={(period, amount, title) => {
+              if (onSelectIncomePeriod) {
+                onSelectIncomePeriod(period, amount, title);
+              } else {
+                setView('income-detail');
+              }
+            }}
+          />
+        </section>
+      </main>
     </div>
   );
 }
+
+interface QuickActionProps {
+  label: string;
+  icon: ReactNode;
+  onClick: () => void;
+  tone: 'primary' | 'muted';
+}
+
+function QuickAction({ label, icon, onClick, tone }: QuickActionProps) {
+  const isPrimary = tone === 'primary';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={
+        isPrimary
+          ? 'h-12 rounded-2xl bg-gradient-to-br from-indigo-500 via-violet-600 to-fuchsia-500 text-white text-sm font-semibold shadow-md hover:shadow-lg active:scale-95 transition-all flex items-center justify-center gap-1.5'
+          : 'h-12 rounded-2xl bg-white border border-slate-200 text-slate-700 text-sm font-semibold shadow-sm hover:shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5'
+      }
+    >
+      {icon}
+      <span className="truncate">{label}</span>
+    </button>
+  );
+}
+
+// =============================================================
+// Deposit form — kept inline since deposit isn't extracted by the
+// restructure plan. Same logic as before, just visually trimmed.
+// =============================================================
+
+interface DepositFormProps {
+  user: Pick<UserProfile, 'id'>;
+  setFinanceStep: (step: FinanceStep) => void;
+  setLastDeposit: (record: DepositRecord | null) => void;
+  isSubmitting: boolean;
+  handleSubmission: (action: () => Promise<void>, successMsg?: string) => Promise<void>;
+  insertRow: (table: string, data: Record<string, unknown>) => Promise<unknown>;
+  onOpenSidebar?: () => void;
+}
+
+function DepositForm({
+  user,
+  setFinanceStep,
+  setLastDeposit,
+  isSubmitting,
+  handleSubmission,
+  insertRow,
+  onOpenSidebar,
+}: DepositFormProps) {
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState<'bKash' | 'Nagad'>('bKash');
+  const [accountNumber, setAccountNumber] = useState('');
+  const [error, setError] = useState('');
+
+  const handleDeposit = async () => {
+    setError('');
+    const val = parseFloat(amount);
+    if (!val || val < 10) {
+      setError('Minimum deposit is ৳ 10');
+      return;
+    }
+    if (!accountNumber.trim()) {
+      setError('Please enter your sender number');
+      return;
+    }
+    const depositData: DepositRecord = {
+      userId: user.id,
+      phone: accountNumber,
+      operator: method,
+      amount: val,
+      type: 'Prepaid',
+      status: 'pending',
+      date: new Date().toLocaleDateString(),
+      time: new Date().toLocaleTimeString(),
+      timestamp: Date.now(),
+    };
+    setLastDeposit(depositData);
+    await handleSubmission(async () => {
+      await insertRow('rechargeRequests', { ...depositData });
+      setAmount('');
+      setAccountNumber('');
+      setFinanceStep('deposit-success');
+    });
+  };
+
+  return (
+    <div className="min-h-screen pb-28 bg-slate-50">
+      <TopHeader
+        title="ডিপোজিট"
+        showBack
+        onBack={() => setFinanceStep('form')}
+        onMenu={onOpenSidebar}
+      />
+      <main className="max-w-md mx-auto px-4 py-4 space-y-4">
+        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-5 space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center text-emerald-600">
+              <PlusCircle className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-widest">
+                Deposit Funds
+              </h3>
+              <p className="text-[11px] text-slate-500">Add money to your wallet</p>
+            </div>
+          </div>
+
+          <label className="block text-[11px] font-semibold text-slate-600">
+            অ্যামাউন্ট (৳)
+            <div className="relative mt-1">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold">৳</span>
+              <input
+                type="number"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                placeholder="Min ৳ 10"
+                className="w-full h-11 pl-7 pr-3 rounded-xl border border-slate-200 bg-slate-50 text-base font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+              />
+            </div>
+          </label>
+
+          <label className="block text-[11px] font-semibold text-slate-600">
+            সেন্ডার নম্বর
+            <input
+              type="text"
+              value={accountNumber}
+              onChange={(e) => setAccountNumber(e.target.value)}
+              placeholder="bKash/Nagad number"
+              className="mt-1 w-full h-11 px-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-900 focus:outline-none focus:border-emerald-500 focus:bg-white transition-all"
+            />
+          </label>
+
+          <div className="grid grid-cols-2 gap-3">
+            {(['bKash', 'Nagad'] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setMethod(m)}
+                className={`h-12 rounded-xl border-2 text-sm font-semibold transition-all ${
+                  method === m
+                    ? m === 'bKash'
+                      ? 'border-pink-500 bg-pink-50 text-pink-600'
+                      : 'border-orange-500 bg-orange-50 text-orange-600'
+                    : 'border-slate-200 bg-white text-slate-600'
+                }`}
+              >
+                {m}
+              </button>
+            ))}
+          </div>
+
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 space-y-2 text-[11px] text-slate-700">
+            <div className="flex items-center justify-between gap-2">
+              <span>
+                <span className="block text-[9px] uppercase tracking-widest text-slate-400">
+                  Send Money to
+                </span>
+                <code className="text-sm font-bold text-emerald-700 tracking-wider">
+                  01774397545
+                </code>
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard.writeText('01774397545');
+                  confetti({ particleCount: 24, spread: 50 });
+                }}
+                className="inline-flex items-center gap-1 px-3 h-8 rounded-lg bg-emerald-500 text-white text-[11px] font-bold"
+              >
+                <Copy className="w-3 h-3" /> COPY
+              </button>
+            </div>
+            <p>• "Send Money" only — no Cash-in / Recharge.</p>
+            <p>• Minimum deposit ৳ 10.</p>
+            <p>• Balance is added within 30-60 minutes after verification.</p>
+          </div>
+
+          {error && <p className="text-xs font-semibold text-rose-600">{error}</p>}
+
+          <button
+            type="button"
+            onClick={handleDeposit}
+            disabled={isSubmitting}
+            className="w-full h-12 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold shadow-md hover:shadow-lg disabled:opacity-50 active:scale-95 transition-all"
+          >
+            {isSubmitting ? 'Processing...' : 'Confirm Deposit'}
+          </button>
+        </div>
+      </main>
+    </div>
+  );
+}
+
+// Re-export marker for type-safety analysis.
+void WalletIcon;

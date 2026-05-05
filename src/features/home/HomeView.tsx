@@ -1,53 +1,45 @@
 /**
- * HomeView — modern fintech glassmorphism landing screen.
+ * HomeView — competitor-aligned landing screen.
  *
- * Section order (per latest spec):
- *   1. Top bar — "Top Earning" brand on the left, notification + profile
- *      icon buttons on the right.
- *   2. Balance card — gradient hero with "মেইন ব্যালেন্স" + hide/show,
- *      মোট ইনকাম + পেন্ডিং inline pills, উইথড্র + রেফার buttons.
- *   3. Social row — Telegram / Facebook / WhatsApp / Support quick links.
- *   4. Refer + verified — referral code as gradient text with copy,
- *      "ভেরিফায়েড" / "অ্যাক্টিভেট করুন" status chip, share-link button.
- *   5. Task tiles — individual category tiles (Daily Job, Micro Tasks,
- *      Gmail Sell, FB Marketing, Ads Earn, etc.) in a 2-column grid,
- *      filtered by admin's `enabledCards` flag.
- *
- * Dropped from the previous pass per "feels cluttered" feedback:
- *   - greeting line
- *   - daily-reward card (still claimable from the Wallet)
- *   - recent activity list (lives in /dashboard now)
- *   - global notice card
- *   - trust strip
- *   - quick-action chip row
+ * Section order (per the "Competitor-aligned UI Restructure" plan):
+ *   1. TopHeader — hamburger (opens sidebar drawer), centered brand,
+ *      profile + bell on the right.
+ *   2. Hero banner — indigo / violet gradient welcome card. The
+ *      previous balance hero has been MOVED to the Wallet (Finance)
+ *      tab; balance no longer lives on Home.
+ *   3. Social links row — Telegram / Facebook / WhatsApp / Support.
+ *   4. Referral card — dashed-border block with the user's referral
+ *      code + a primary "কপি" button.
+ *   5. Account-status banner — solid indigo card with a "ভেরিফাই
+ *      করুন" CTA when the account is inactive (replaces the old chip).
+ *   6. Services grid — 3-column dense tile grid (was 2 columns) so
+ *      the layout matches the competitor's density without changing
+ *      the brand palette.
  */
 import {
-  Bell,
   CheckCircle2,
   ChevronRight,
   Copy,
-  Eye,
-  EyeOff,
   Facebook,
   Headphones,
   MessageCircle,
   Send,
-  Share2,
   ShieldAlert,
   ShieldCheck,
-  User as UserIcon,
-  Wallet,
+  Sparkles,
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, type ReactNode } from 'react';
 import type { UserProfile, View } from '../../types';
-import { Card } from '../../components/ui';
+import { Card, TopHeader } from '../../components/ui';
 import { INCOME_CARDS } from '../../constants';
 
 interface Props {
   user: UserProfile;
   setView: (view: View) => void;
   onOpenNotifications: () => void;
+  /** Opens the slide-in sidebar drawer rendered at the App shell. */
+  onOpenSidebar: () => void;
   /** Daily reward in BDT (not rendered here, kept for parity). */
   dailyReward: number;
   dailyClaimEnabled: boolean;
@@ -65,14 +57,6 @@ interface Props {
   whatsappLink: string;
 }
 
-/**
- * Bangla-labelled task tiles. Each entry references the original
- * English `INCOME_CARDS.title` so the admin's `enabledCards` flag
- * (which stores English titles) keeps working. The legacy
- * `INCOME_CARDS` had visible duplicates pointing at the same view —
- * those are de-duped here so the home grid never shows two tiles
- * leading to the same destination.
- */
 interface Tile {
   /** English title used as the gate key in `enabledCards`. */
   gateTitle: string;
@@ -82,8 +66,6 @@ interface Tile {
   icon: ReactNode;
   /** Tailwind gradient classes for the icon tile. */
   iconBg: string;
-  /** Subtle background tint for the whole card. */
-  cardTint: string;
 }
 
 const TILES: Tile[] = [
@@ -93,7 +75,6 @@ const TILES: Tile[] = [
     destination: 'folder-a',
     icon: lucide('briefcase'),
     iconBg: 'from-indigo-500 to-blue-500',
-    cardTint: 'from-indigo-500/8 to-blue-500/8',
   },
   {
     gateTitle: 'Micro Tasks',
@@ -101,7 +82,6 @@ const TILES: Tile[] = [
     destination: 'folder-a',
     icon: lucide('list-checks'),
     iconBg: 'from-cyan-500 to-blue-500',
-    cardTint: 'from-cyan-500/8 to-blue-500/8',
   },
   {
     gateTitle: 'Premium Jobs',
@@ -109,7 +89,6 @@ const TILES: Tile[] = [
     destination: 'folder-a',
     icon: lucide('shield-check'),
     iconBg: 'from-amber-500 to-yellow-500',
-    cardTint: 'from-amber-500/8 to-yellow-500/8',
   },
   {
     gateTitle: 'Gmail Sell',
@@ -117,7 +96,6 @@ const TILES: Tile[] = [
     destination: 'folder-c',
     icon: lucide('mail'),
     iconBg: 'from-rose-500 to-orange-500',
-    cardTint: 'from-rose-500/8 to-orange-500/8',
   },
   {
     gateTitle: 'Fb Marketing',
@@ -125,7 +103,6 @@ const TILES: Tile[] = [
     destination: 'folder-b',
     icon: lucide('facebook'),
     iconBg: 'from-blue-500 to-indigo-600',
-    cardTint: 'from-blue-500/8 to-indigo-500/8',
   },
   {
     gateTitle: 'Ads Earn',
@@ -133,7 +110,6 @@ const TILES: Tile[] = [
     destination: 'ads-earn',
     icon: lucide('play-circle'),
     iconBg: 'from-emerald-500 to-teal-500',
-    cardTint: 'from-emerald-500/8 to-teal-500/8',
   },
   {
     gateTitle: 'TOP NEWS',
@@ -141,7 +117,6 @@ const TILES: Tile[] = [
     destination: 'top-news',
     icon: lucide('newspaper'),
     iconBg: 'from-slate-700 to-slate-900',
-    cardTint: 'from-slate-500/8 to-slate-700/8',
   },
   {
     gateTitle: 'Mobile Banking',
@@ -149,7 +124,6 @@ const TILES: Tile[] = [
     destination: 'mobile-banking',
     icon: lucide('smartphone'),
     iconBg: 'from-pink-500 to-rose-500',
-    cardTint: 'from-pink-500/8 to-rose-500/8',
   },
   {
     gateTitle: 'BUY SELL',
@@ -157,7 +131,6 @@ const TILES: Tile[] = [
     destination: 'otp-buy-sell',
     icon: lucide('key'),
     iconBg: 'from-fuchsia-500 to-pink-600',
-    cardTint: 'from-fuchsia-500/8 to-pink-500/8',
   },
   {
     gateTitle: 'Asset Trading',
@@ -165,7 +138,6 @@ const TILES: Tile[] = [
     destination: 'dollar-buy',
     icon: lucide('trending-up'),
     iconBg: 'from-orange-500 to-amber-500',
-    cardTint: 'from-orange-500/8 to-amber-500/8',
   },
   {
     gateTitle: 'E-commerce',
@@ -173,7 +145,6 @@ const TILES: Tile[] = [
     destination: 'ecommerce',
     icon: lucide('shopping-bag'),
     iconBg: 'from-pink-500 to-fuchsia-600',
-    cardTint: 'from-pink-500/8 to-fuchsia-500/8',
   },
   {
     gateTitle: 'SOCIAL',
@@ -181,7 +152,6 @@ const TILES: Tile[] = [
     destination: 'social-hub',
     icon: lucide('users'),
     iconBg: 'from-sky-500 to-indigo-500',
-    cardTint: 'from-sky-500/8 to-indigo-500/8',
   },
   {
     gateTitle: 'SMM & BOOSTING',
@@ -189,7 +159,6 @@ const TILES: Tile[] = [
     destination: 'subscription-boosting',
     icon: lucide('zap'),
     iconBg: 'from-amber-400 to-orange-500',
-    cardTint: 'from-amber-500/8 to-orange-500/8',
   },
   {
     gateTitle: 'GAMING',
@@ -197,7 +166,6 @@ const TILES: Tile[] = [
     destination: 'gaming',
     icon: lucide('gamepad-2'),
     iconBg: 'from-violet-500 to-purple-600',
-    cardTint: 'from-violet-500/8 to-purple-500/8',
   },
   {
     gateTitle: 'Network Marketing',
@@ -205,33 +173,8 @@ const TILES: Tile[] = [
     destination: 'referral',
     icon: lucide('share-2'),
     iconBg: 'from-violet-500 to-fuchsia-500',
-    cardTint: 'from-violet-500/8 to-fuchsia-500/8',
   },
 ];
-
-/** Ad-hoc lucide icon resolver kept compact so the TILES table above
- *  reads like data, not JSX. The icons referenced here are imported
- *  inline below — adding a new tile means importing the new icon. */
-function lucide(name: string): ReactNode {
-  const map: Record<string, ReactNode> = {
-    briefcase: <Briefcase className="w-6 h-6" />,
-    'list-checks': <ListChecks className="w-6 h-6" />,
-    'shield-check': <ShieldCheck className="w-6 h-6" />,
-    mail: <Mail className="w-6 h-6" />,
-    facebook: <Facebook className="w-6 h-6" />,
-    'play-circle': <PlayCircle className="w-6 h-6" />,
-    newspaper: <Newspaper className="w-6 h-6" />,
-    smartphone: <Smartphone className="w-6 h-6" />,
-    key: <Key className="w-6 h-6" />,
-    'trending-up': <TrendingUp className="w-6 h-6" />,
-    'shopping-bag': <ShoppingBag className="w-6 h-6" />,
-    users: <Users className="w-6 h-6" />,
-    zap: <Zap className="w-6 h-6" />,
-    'gamepad-2': <Gamepad2 className="w-6 h-6" />,
-    'share-2': <Share2 className="w-6 h-6" />,
-  };
-  return map[name];
-}
 
 import {
   Briefcase,
@@ -241,6 +184,7 @@ import {
   Mail,
   Newspaper,
   PlayCircle,
+  Share2,
   ShoppingBag,
   Smartphone,
   TrendingUp,
@@ -248,21 +192,40 @@ import {
   Zap,
 } from 'lucide-react';
 
-function formatBdt(amount: number): string {
-  return amount.toLocaleString('en-US', { maximumFractionDigits: 2 });
+/** Ad-hoc lucide icon resolver — keeps the TILES table above readable
+ *  as data instead of inline JSX. */
+function lucide(name: string): ReactNode {
+  const map: Record<string, ReactNode> = {
+    briefcase: <Briefcase className="w-5 h-5" />,
+    'list-checks': <ListChecks className="w-5 h-5" />,
+    'shield-check': <ShieldCheck className="w-5 h-5" />,
+    mail: <Mail className="w-5 h-5" />,
+    facebook: <Facebook className="w-5 h-5" />,
+    'play-circle': <PlayCircle className="w-5 h-5" />,
+    newspaper: <Newspaper className="w-5 h-5" />,
+    smartphone: <Smartphone className="w-5 h-5" />,
+    key: <Key className="w-5 h-5" />,
+    'trending-up': <TrendingUp className="w-5 h-5" />,
+    'shopping-bag': <ShoppingBag className="w-5 h-5" />,
+    users: <Users className="w-5 h-5" />,
+    zap: <Zap className="w-5 h-5" />,
+    'gamepad-2': <Gamepad2 className="w-5 h-5" />,
+    'share-2': <Share2 className="w-5 h-5" />,
+  };
+  return map[name];
 }
 
 export function HomeView({
   user,
   setView,
   onOpenNotifications,
+  onOpenSidebar,
   enabledCards,
   isAdmin,
   telegramLink,
   facebookLink,
   whatsappLink,
 }: Props) {
-  const [balanceHidden, setBalanceHidden] = useState(false);
   const [copied, setCopied] = useState<'code' | 'link' | null>(null);
 
   const hasUnreadNotifications = user.notifications.length > 0;
@@ -279,105 +242,43 @@ export function HomeView({
 
   return (
     <div className="min-h-screen pb-28">
-      {/* 1. Top bar — English brand on the left, icon buttons on the right */}
-      <header className="sticky top-0 z-30 backdrop-blur-xl bg-white/40 border-b border-white/40">
-        <div className="max-w-md mx-auto flex items-center gap-3 px-4 py-3">
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <span className="inline-flex w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white items-center justify-center shadow-md">
-              <Wallet className="w-5 h-5" />
-            </span>
-            <span className="text-lg font-bold tracking-tight text-slate-900">
-              Top Earning
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onOpenNotifications}
-            aria-label="Notifications"
-            className="relative w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <Bell className="w-5 h-5" />
-            {hasUnreadNotifications && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-rose-500 ring-2 ring-white" />
-            )}
-          </button>
-          <button
-            type="button"
-            onClick={() => setView('profile')}
-            aria-label="Profile"
-            className="w-10 h-10 inline-flex items-center justify-center rounded-full text-slate-700 bg-white/60 backdrop-blur border border-white/60 hover:bg-white/80 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-          >
-            <UserIcon className="w-5 h-5" />
-          </button>
-        </div>
-      </header>
+      <TopHeader
+        title="Top Earning"
+        onMenu={onOpenSidebar}
+        onNotifications={onOpenNotifications}
+        hasUnreadNotifications={hasUnreadNotifications}
+        onProfile={() => setView('profile')}
+      />
 
       <main className="max-w-md mx-auto px-4 py-4 space-y-4">
-        {/* 2. Balance card */}
+        {/* 1. Hero banner — replaces the old balance hero (balance now
+            lives on the Wallet tab per the restructure plan). */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
         >
-          <Card variant="gradient" glow padded className="p-6">
-            <div className="relative z-10">
-              <div className="flex items-center justify-between gap-3 mb-2">
-                <div className="flex items-center gap-2 text-indigo-100/90">
-                  <Wallet className="w-4 h-4" />
-                  <span className="text-sm font-medium">মেইন ব্যালেন্স</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setBalanceHidden((v) => !v)}
-                  aria-label={balanceHidden ? 'ব্যালেন্স দেখান' : 'ব্যালেন্স লুকান'}
-                  className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-white/15 hover:bg-white/25 text-white transition-colors"
-                >
-                  {balanceHidden ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+          <Card variant="gradient" glow padded className="p-6 relative">
+            <div className="relative z-10 flex items-center gap-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] uppercase tracking-[0.2em] text-indigo-100/80">
+                  সুপার অ্যাপ
+                </p>
+                <h1 className="text-2xl font-bold mt-1 leading-tight">
+                  আপনাকে স্বাগতম<span className="text-indigo-100/90">,</span>
+                </h1>
+                <p className="text-sm text-indigo-100/90 mt-1 truncate">
+                  {user.name || 'প্রিয় সদস্য'}
+                </p>
               </div>
-              <p className="text-4xl font-bold tracking-tight tabular-nums">
-                {balanceHidden ? '••••••' : (
-                  <>
-                    <span className="text-indigo-100/80 text-2xl mr-1 align-top">৳</span>
-                    {formatBdt(user.mainBalance)}
-                  </>
-                )}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] tracking-wide text-indigo-100/70">মোট ইনকাম</p>
-                  <p className="text-base font-semibold tabular-nums mt-0.5">
-                    ৳{balanceHidden ? '••••' : formatBdt(user.totalEarned)}
-                  </p>
-                </div>
-                <div className="rounded-xl glass-highlight px-3 py-2.5">
-                  <p className="text-[11px] tracking-wide text-indigo-100/70">পেন্ডিং</p>
-                  <p className="text-base font-semibold tabular-nums mt-0.5">
-                    ৳{balanceHidden ? '••••' : formatBdt(user.pendingPayout)}
-                  </p>
-                </div>
-              </div>
-              <div className="mt-4 flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setView('finance')}
-                  className="flex-1 h-11 rounded-xl bg-white text-indigo-700 font-semibold text-sm shadow-sm hover:shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-                >
-                  <Wallet className="w-4 h-4" /> উইথড্র
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView('finance')}
-                  className="flex-1 h-11 rounded-xl bg-white/15 text-white font-semibold text-sm border border-white/20 hover:bg-white/25 active:scale-[0.98] transition-all flex items-center justify-center gap-1.5"
-                >
-                  <TrendingUp className="w-4 h-4" /> ডিপোজিট
-                </button>
+              <div className="shrink-0 w-14 h-14 rounded-2xl bg-white/15 border border-white/30 flex items-center justify-center text-white shadow-md">
+                <Sparkles className="w-7 h-7" />
               </div>
             </div>
           </Card>
         </motion.div>
 
-        {/* 3. Social row */}
+        {/* 2. Social row */}
         <Card padded>
           <p className="text-sm font-semibold text-slate-700 mb-3">
             আমাদের কমিউনিটিতে যোগ দিন
@@ -410,72 +311,42 @@ export function HomeView({
           </div>
         </Card>
 
-        {/* 4. Refer + verified */}
+        {/* 3. Referral card — dashed-border treatment with copy button. */}
         <Card padded>
           <div className="flex items-center justify-between gap-3 mb-3">
             <div className="min-w-0">
-              <p className="text-base font-semibold text-slate-900">রেফার করুন, ইনকাম বাড়ান</p>
+              <p className="text-base font-semibold text-slate-900">
+                রেফার করুন, ইনকাম বাড়ান
+              </p>
               <p className="text-sm text-slate-600 mt-0.5">
                 আপনার রেফারেল কোড শেয়ার করুন
               </p>
             </div>
-            {user.isActive ? (
-              <span className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 text-xs font-semibold border border-emerald-200/60">
-                <ShieldCheck className="w-3.5 h-3.5" />
-                ভেরিফায়েড
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setView('account-activation')}
-                className="shrink-0 inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/15 text-rose-700 text-xs font-semibold border border-rose-200/60 hover:bg-rose-500/20 transition-colors"
-              >
-                <ShieldAlert className="w-3.5 h-3.5" />
-                অ্যাক্টিভেট করুন
-              </button>
-            )}
           </div>
 
-          <div className="flex items-stretch gap-2">
+          <div className="flex items-stretch gap-2 rounded-2xl border-2 border-dashed border-indigo-300 bg-gradient-to-br from-indigo-500/5 to-violet-500/5 p-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                রেফারেল কোড
+              </p>
+              <p className="text-xl font-bold tracking-wider bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tabular-nums mt-0.5 truncate">
+                {user.numericId || '——'}
+              </p>
+            </div>
             <button
               type="button"
               onClick={() => user.numericId && handleCopy(user.numericId, 'code')}
               disabled={!user.numericId}
-              className="flex-1 inline-flex items-center justify-between gap-2 px-4 py-3 rounded-xl bg-gradient-to-br from-indigo-500/10 to-violet-500/10 border border-indigo-200/60 hover:from-indigo-500/15 hover:to-violet-500/15 transition-all disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
+              className="shrink-0 inline-flex items-center gap-1.5 px-4 h-11 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 text-white text-sm font-semibold shadow-sm hover:shadow-md active:scale-95 transition-all disabled:opacity-50"
             >
-              <span className="text-left">
-                <span className="block text-[11px] uppercase tracking-wide text-slate-500">
-                  রেফারেল কোড
-                </span>
-                <span className="block text-lg font-bold tracking-wider bg-gradient-to-r from-indigo-600 to-violet-600 bg-clip-text text-transparent tabular-nums">
-                  {user.numericId || '——'}
-                </span>
-              </span>
-              <span className="inline-flex w-9 h-9 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-sm">
-                {copied === 'code' ? (
-                  <CheckCircle2 className="w-4 h-4" />
-                ) : (
-                  <Copy className="w-4 h-4" />
-                )}
-              </span>
-            </button>
-            <button
-              type="button"
-              disabled={!user.numericId}
-              onClick={() => {
-                if (!user.numericId) return;
-                handleCopy(
-                  `${window.location.origin}?ref=${user.numericId}`,
-                  'link',
-                );
-              }}
-              aria-label="রেফারেল লিংক কপি করুন"
-              className="shrink-0 w-12 inline-flex items-center justify-center rounded-xl bg-white/70 border border-white/60 hover:bg-white transition-colors disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500"
-            >
-              {copied === 'link' ? (
-                <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+              {copied === 'code' ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4" /> কপি!
+                </>
               ) : (
-                <Share2 className="w-5 h-5 text-indigo-600" />
+                <>
+                  <Copy className="w-4 h-4" /> কপি
+                </>
               )}
             </button>
           </div>
@@ -490,12 +361,44 @@ export function HomeView({
           </button>
         </Card>
 
-        {/* 5. Task tiles — individual categories like the old version */}
+        {/* 4. Account-status banner — only visible when not active. */}
+        {!user.isActive && (
+          <motion.button
+            type="button"
+            onClick={() => setView('account-activation')}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="w-full text-left rounded-2xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-4 shadow-[0_12px_28px_-12px_rgba(99,102,241,0.6)] hover:shadow-[0_18px_36px_-12px_rgba(99,102,241,0.7)] transition-all active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-xl bg-white/15 border border-white/20 flex items-center justify-center text-amber-300 shrink-0">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-200">
+                  আপনার অ্যাকাউন্ট এখনও অ্যাক্টিভ নয়
+                </p>
+                <p className="text-xs text-indigo-100/90 mt-0.5">
+                  উইথড্র সুবিধা পেতে অ্যাকাউন্ট ভেরিফাই করুন
+                </p>
+              </div>
+              <span className="shrink-0 px-3 h-9 inline-flex items-center rounded-lg bg-white text-indigo-700 text-xs font-bold">
+                ভেরিফাই করুন
+              </span>
+            </div>
+          </motion.button>
+        )}
+
+        {/* 5. Services grid — 3 columns to match competitor density. */}
         <section>
           <div className="flex items-end justify-between mb-3">
             <div>
-              <h2 className="text-base font-semibold text-slate-900">ইনকাম শুরু করুন</h2>
-              <p className="text-sm text-slate-600 mt-0.5">যেকোনো ক্যাটাগরি থেকে কাজ শুরু করুন</p>
+              <h2 className="text-base font-semibold text-slate-900">
+                ইনকাম শুরু করুন
+              </h2>
+              <p className="text-sm text-slate-600 mt-0.5">
+                যেকোনো ক্যাটাগরি থেকে কাজ শুরু করুন
+              </p>
             </div>
           </div>
           {visibleTiles.length === 0 ? (
@@ -505,7 +408,7 @@ export function HomeView({
               </p>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               {visibleTiles.map((tile, i) => (
                 <motion.button
                   key={`${tile.gateTitle}-${i}`}
@@ -515,19 +418,15 @@ export function HomeView({
                   whileTap={{ scale: 0.97 }}
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22, delay: 0.02 + i * 0.025 }}
-                  className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_6px_18px_-8px_rgba(15,23,42,0.12)] p-4 flex flex-col items-center gap-2 text-center transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[120px]"
+                  transition={{ duration: 0.22, delay: 0.02 + i * 0.02 }}
+                  className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_6px_18px_-8px_rgba(15,23,42,0.12)] p-3 flex flex-col items-center gap-1.5 text-center transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[96px]"
                 >
                   <span
-                    aria-hidden="true"
-                    className={`pointer-events-none absolute inset-0 bg-gradient-to-br ${tile.cardTint}`}
-                  />
-                  <span
-                    className={`relative shrink-0 w-12 h-12 rounded-2xl bg-gradient-to-br ${tile.iconBg} text-white inline-flex items-center justify-center shadow-md`}
+                    className={`shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br ${tile.iconBg} text-white inline-flex items-center justify-center shadow-md`}
                   >
                     {tile.icon}
                   </span>
-                  <span className="relative text-sm font-semibold text-slate-900 leading-tight">
+                  <span className="text-[11px] font-semibold text-slate-900 leading-tight">
                     {tile.label}
                   </span>
                 </motion.button>
@@ -575,8 +474,5 @@ function SocialButton({ label, icon, gradient, href, onClick }: SocialButtonProp
   );
 }
 
-// `INCOME_CARDS` is intentionally not used by the home tile grid above
-// (the new TILES list is the source of truth) but is re-exported as a
-// `void` reference so a future audit can still find that this file
-// participates in the income-card surface area.
+// Re-export `INCOME_CARDS` participation marker — see previous comment.
 void INCOME_CARDS;
