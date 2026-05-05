@@ -430,17 +430,16 @@ export function HomeView({
             </Card>
           ) : (
             <div className="grid grid-cols-3 gap-3">
+              {/* Plain `<button>` instead of `motion.button` here.
+                  This grid renders 15+ tiles; using a motion component
+                  per tile cost a noticeable chunk of mobile main-thread
+                  time on first paint. CSS handles the press / hover. */}
               {visibleTiles.map((tile, i) => (
-                <motion.button
+                <button
                   key={`${tile.gateTitle}-${i}`}
                   type="button"
                   onClick={() => setView(tile.destination)}
-                  whileHover={{ y: -2 }}
-                  whileTap={{ scale: 0.97 }}
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.22, delay: 0.02 + i * 0.02 }}
-                  className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_6px_18px_-8px_rgba(15,23,42,0.12)] p-3 flex flex-col items-center gap-1.5 text-center transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18)] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[96px]"
+                  className="relative overflow-hidden bg-white/70 backdrop-blur-xl border border-white/60 rounded-2xl shadow-[0_6px_18px_-8px_rgba(15,23,42,0.12)] p-3 flex flex-col items-center gap-1.5 text-center transition-shadow hover:shadow-[0_10px_28px_-8px_rgba(15,23,42,0.18)] active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 min-h-[96px]"
                 >
                   <span
                     className={`shrink-0 w-10 h-10 rounded-xl bg-gradient-to-br ${tile.iconBg} text-white inline-flex items-center justify-center shadow-md`}
@@ -450,7 +449,7 @@ export function HomeView({
                   <span className="text-[11px] font-semibold text-slate-900 leading-tight">
                     {tile.label}
                   </span>
-                </motion.button>
+                </button>
               ))}
             </div>
           )}
