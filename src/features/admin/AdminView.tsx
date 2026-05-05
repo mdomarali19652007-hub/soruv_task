@@ -365,7 +365,13 @@ export function AdminView(props: AdminViewProps) {
       return;
     }
 
-    if (!confirm(`Are you sure you want to reactivate ALL ${suspendedUsers.length} suspended/banned accounts?`)) return;
+    const ok = await requestReason({
+      title: 'Reactivate all',
+      description: `Are you sure you want to reactivate ALL ${suspendedUsers.length} suspended/banned accounts?`,
+      confirmLabel: 'Reactivate',
+      destructive: true,
+    });
+    if (ok === null) return;
 
     setIsSubmitting(true);
     setSubmissionProgress(0);
@@ -788,7 +794,13 @@ export function AdminView(props: AdminViewProps) {
   };
 
   const deleteProduct = async (id: string) => {
-    if (!confirm('Delete this product?')) return;
+    const ok = await requestReason({
+      title: 'Delete product',
+      description: 'This will permanently remove the product from the catalog.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (ok === null) return;
     try {
       await adminDelete('products', id);
     } catch (e) {
@@ -1853,12 +1865,17 @@ export function AdminView(props: AdminViewProps) {
                       </div>
                       <button
                         onClick={async () => {
-                          if (confirm('Delete this post?')) {
-                            try {
-                              await adminDelete('newsPosts', post.id);
-                            } catch (e) {
-                              handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
-                            }
+                          const ok = await requestReason({
+                            title: 'Delete post',
+                            description: 'This removes the post from the news feed.',
+                            confirmLabel: 'Delete',
+                            destructive: true,
+                          });
+                          if (ok === null) return;
+                          try {
+                            await adminDelete('newsPosts', post.id);
+                          } catch (e) {
+                            handleFirestoreError(e, OperationType.DELETE, `newsPosts/${post.id}`);
                           }
                         }}
                         className="p-2 text-rose-500 hover:bg-rose-50 rounded-xl transition-colors"

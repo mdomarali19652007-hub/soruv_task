@@ -14,6 +14,7 @@ import { ArrowLeft, Check, ShieldCheck } from 'lucide-react';
 import { activateAccount } from '../../lib/database';
 import { SuccessView } from '../../components/SuccessView';
 import type { UserProfile, View } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 interface Props {
   user: Pick<UserProfile, 'id' | 'mainBalance' | 'activationExpiry'>;
@@ -36,13 +37,14 @@ export function AccountActivationView({
   referralCommissionRate,
   handleSubmission,
 }: Props) {
+  const fb = useFeedback();
   // Preserved from the original (setter was unused; kept to match behaviour).
   const [isActivating] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
 
   const handleActivate = async () => {
     if (user.mainBalance < activationFee) {
-      alert(`Insufficient balance. You need ৳ ${activationFee} to activate.`);
+      fb.showToast(`Insufficient balance. You need ৳ ${activationFee} to activate.`, 'error');
       return;
     }
 

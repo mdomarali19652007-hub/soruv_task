@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { SuccessView } from '../../components/SuccessView';
 import type { SubscriptionRequest, UserProfile, View } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 type Step = 'list' | 'youtube' | 'telegram' | 'meta' | 'success';
 
@@ -49,6 +50,7 @@ export function SubscriptionBoostingView({
   insertRow,
   updateRow,
 }: Props) {
+  const fb = useFeedback();
   const [step, setStep] = useState<Step>('list');
   const [email, setEmail] = useState('');
   const [telegramId, setTelegramId] = useState('');
@@ -57,15 +59,15 @@ export function SubscriptionBoostingView({
 
   const handleSubscribe = async (type: 'youtube' | 'telegram', price: number) => {
     if (user.mainBalance < price) {
-      alert('Insufficient balance');
+      fb.showToast('Insufficient balance', 'error');
       return;
     }
     if (type === 'youtube' && !email.trim()) {
-      alert('Please enter your email');
+      fb.showToast('Please enter your email', 'error');
       return;
     }
     if (type === 'telegram' && !telegramId.trim()) {
-      alert('Please enter your Telegram User ID');
+      fb.showToast('Please enter your Telegram User ID', 'error');
       return;
     }
 

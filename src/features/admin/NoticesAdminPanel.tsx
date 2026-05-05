@@ -13,12 +13,14 @@ import { adminInsert, adminUpdate, adminDelete } from '../../lib/admin-api';
 import { handleListenerError as handleFirestoreError } from '../../utils/db-errors';
 import { OperationType } from '../../types';
 import type { Notice, NoticeLanguage } from '../../types';
+import { useFeedback } from '../../components/feedback/FeedbackProvider';
 
 interface Props {
   notices: Notice[];
 }
 
 export function NoticesAdminPanel({ notices }: Props) {
+  const fb = useFeedback();
   const [text, setText] = useState('');
   const [language, setLanguage] = useState<NoticeLanguage>('bn');
   const [isActive, setIsActive] = useState(true);
@@ -63,11 +65,19 @@ export function NoticesAdminPanel({ notices }: Props) {
   };
 
   const remove = async (n: Notice) => {
-    if (!confirm('Delete this notice?')) return;
+    const ok = await fb.confirm({
+      title: 'Delete notice',
+      description: 'This permanently removes the notice from the marquee.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!ok) return;
     try {
       await adminDelete('notices', n.id);
+      fb.showToast('Notice deleted.', 'success');
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, `notices/${n.id}`);
+      fb.showToast('Failed to delete notice.', 'error');
     }
   };
 
